@@ -36,7 +36,16 @@ class Course(db.Model):
 
     creator = db.relationship("User", back_populates="courses_created", lazy="joined")
     enrollments = db.relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
-
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "code": self.code,
+            "name": self.name,
+            "description": self.description,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+        
 # Enrollment Table
 class Enrollment(db.Model):
     __tablename__ = "enrollments"
