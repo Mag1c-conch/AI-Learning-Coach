@@ -13,7 +13,8 @@ def register():
     last_name=data.get('last_name')
     username=data.get('username')
     password=data.get('password')
-    exist_user = User.query.filter_by(username=username).first()
+    role=data.get('role')
+    exist_user = User.query.filter_by(username=username, role = role).first()
     if exist_user:
         return jsonify({
             "error": "The username has been registered!"
@@ -23,6 +24,7 @@ def register():
     user.last_name = last_name
     user.password = password
     user.username = username
+    user.role = role
     db.session.add(user)
     db.session.flush()
     db.session.refresh(user)
@@ -31,6 +33,7 @@ def register():
         "first_name": first_name,
         "last_name": last_name,
         "username": username,
+        "role": role,
         "id": user.id
     }), 201
 
@@ -38,13 +41,15 @@ def register():
 def login():
     data=request.json
     username=data.get('username')
+    role=data.get('role')
     password=data.get('password')
-    user = User.query.filter_by(username=username, password=password).first()
+    user = User.query.filter_by(username=username, password=password, role = role).first()
     if user:
         return jsonify({
             "first_name": user.first_name,
             "last_name": user.last_name,
             "username": username,
+            "role": user.role,
             "id": user.id
         }), 201
     else:
