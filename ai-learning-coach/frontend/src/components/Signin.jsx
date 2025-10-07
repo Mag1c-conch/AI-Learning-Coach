@@ -49,7 +49,7 @@ const Signin = ({ setToken }) => {
             mb={2}>
             <Link href="#" underline="always" sx={{color: "#6F6C6C"}}>Forgot password?</Link>
             </Box>
-          <Button variant="contained" fullWidth sx={{backgroundColor:"#142E4F"}}><Link href="/Dashboard" sx={{color: "#ffffffff"}}>Sign In</Link></Button>
+          <Button variant="contained" fullWidth sx={{backgroundColor:"#142E4F"}}><Link href="/Sidebar" sx={{color: "#ffffffff"}}>Sign In</Link></Button>
           <Typography variant="body2" mt={2}>Don’t have an account? <Link href="#" underline="always" sx={{color: "#6F6C6C"}}>Sign Up</Link></Typography>
         </Box>
         <Box flex={1}>

@@ -1,0 +1,27 @@
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.wordslink {
+  background-color: #142e4f;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;         
+  width: 10%;          
+ 
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;        
+  margin-top: auto;            
+  margin-bottom: auto;         
+}
+
+.logout-icon {
+  margin-top: auto;            
+}
