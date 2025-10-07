@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Signin from './components/Signin';
 import AUTH from './Constant.js';
+import Sidebar from './components/Sidebar.jsx';
 import { dividerClasses } from '@mui/material';
 
 
@@ -10,11 +11,17 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Signin setToken={setToken} />} />
-        <Route path="/signin" element={<Signin setToken={setToken} />} />
-        {/* <Route path="/dashboard" element={<Dashboard />}/> */}
-      </Routes>
+      <div className="app-container">
+        
+        <div className="main-container">
+          <Routes>
+            <Route path="/" element={<Signin setToken={setToken} />} />
+            <Route path="/signin" element={<Signin setToken={setToken} />} />
+            {/* <Route path="/dashboard" element={<Dashboard />} /> */}
+            <Route path="/sidebar" element={<Sidebar />} />
+          </Routes>
+        </div>
+      </div>
     </BrowserRouter>
   );
 }
