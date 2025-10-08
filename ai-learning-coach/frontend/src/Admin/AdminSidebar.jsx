@@ -1,53 +1,46 @@
 // src/admin/AdminSidebar.jsx
-import * as React from 'react';
-import { Box, Divider, List, ListItemButton, ListItemText } from '@mui/material';
-import { NavLink } from 'react-router-dom';
+import React from 'react';
+import '../App.css';
+import { Button, Link } from '@mui/material';
+import LogoutIcon from '@mui/icons-material/Logout';
 import DesignServicesIcon from '@mui/icons-material/DesignServices';
-
-const navItems = [
-  { label: 'Dashboard',     to: '/admin/dashboard' },
-  { label: 'AI Assistance', to: '/admin/assistant' },
-  { label: 'Time Table',    to: '/admin/timetable' },
-];
 
 export default function AdminSidebar() {
   return (
-    <aside
-      className="wordslink adminSidebar"
-      role="navigation"
-      aria-label="Admin Sidebar"
-      style={{ width: 240, minHeight: '100vh' }}
-    >
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1, color: '#fff' }}>
-        <DesignServicesIcon sx={{ fontSize: 28 }} />
-        <span style={{ fontWeight: 600 }}>Admin</span>
-      </Box>
-      <Divider sx={{ borderColor: 'rgba(255,255,255,0.2)' }} />
+    <div className="wordslink">
+      <div className="logo">
+        <DesignServicesIcon sx={{ fontSize: 30 }} />
+        <hr />
+      </div>
 
-      <List sx={{ py: 1 }}>
-        {navItems.map(item => (
-          <ListItemButton
-            key={item.to}
-            component={NavLink}
-            to={item.to}
-            sx={{
-              width: 180,
-              mx: 'auto',
-              justifyContent: 'center',
-              textAlign: 'center',
+      <div className="menu">
+        <Button fullWidth>
+          <Link href="/admin/dashboard" sx={{ color: '#fff', textDecoration: 'none' }}>
+            Dashboard
+          </Link>
+        </Button>
+        <Button fullWidth>
+          <Link href="/admin/assistant" sx={{ color: '#fff', textDecoration: 'none' }}>
+            AI Assistance
+          </Link>
+        </Button>
+        <Button fullWidth>
+          <Link href="/admin/timetable" sx={{ color: '#fff', textDecoration: 'none' }}>
+            Time Table
+          </Link>
+        </Button>
+      </div>
 
-              color: '#fff',
-              '&.active': { bgcolor: 'rgba(255,255,255,0.16)' },
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
-            }}
+      <div className="logout-icon">
+        <Button fullWidth>
+          <Link
+            href="/signin"
+            sx={{ color: '#fff', display: 'flex', gap: 1, alignItems: 'center', textDecoration: 'none' }}
           >
-            <ListItemText
-              primary={item.label}
-              primaryTypographyProps={{ fontSize: 14, textAlign: 'center' }}
-            />
-          </ListItemButton>
-        ))}
-      </List>
-    </aside>
+            <LogoutIcon sx={{ fontSize: 18 }} /> Log Out
+          </Link>
+        </Button>
+      </div>
+    </div>
   );
 }
