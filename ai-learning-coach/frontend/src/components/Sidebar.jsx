@@ -2,10 +2,16 @@ import React from 'react';
 import '../App.css';
 import { Button, Link } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
+import DesignServicesIcon from '@mui/icons-material/DesignServices';
 
 const Sidebar = () => {
   return (
     <div className="wordslink">
+      <div className="logo">
+        <DesignServicesIcon sx={{ fontSize: 30}} />
+        <hr />
+      </div>
+      
       <div className="menu">
         <Button fullWidth><Link href="#" sx={{ color: '#fff', textDecoration: 'none' }}>Courses</Link></Button>
         <Button fullWidth><Link href="#" sx={{ color: '#fff', textDecoration: 'none' }}>Exercises</Link></Button>

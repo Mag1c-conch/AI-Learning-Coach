@@ -25,3 +25,9 @@ body {
 .logout-icon {
   margin-top: auto;            
 }
+
+.logo {
+    text-align: center;
+    color: white;
+    padding: 20px 0;
+}
