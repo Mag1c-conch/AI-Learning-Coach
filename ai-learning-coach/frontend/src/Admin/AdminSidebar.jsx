@@ -13,7 +13,7 @@ const navItems = [
 export default function AdminSidebar() {
   return (
     <aside
-      className="adminSidebar"
+      className="wordslink adminSidebar"
       role="navigation"
       aria-label="Admin Sidebar"
       style={{ width: 240, minHeight: '100vh' }}
@@ -31,12 +31,20 @@ export default function AdminSidebar() {
             component={NavLink}
             to={item.to}
             sx={{
+              width: 180,
+              mx: 'auto',
+              justifyContent: 'center',
+              textAlign: 'center',
+
               color: '#fff',
               '&.active': { bgcolor: 'rgba(255,255,255,0.16)' },
               '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
             }}
           >
-            <ListItemText primaryTypographyProps={{ fontSize: 14 }} primary={item.label} />
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{ fontSize: 14, textAlign: 'center' }}
+            />
           </ListItemButton>
         ))}
       </List>
