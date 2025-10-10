@@ -1,4 +1,5 @@
 # app/routes/auth.py
+import re
 from flask import Blueprint, request, jsonify
 from ..models import User
 from ..extensions import db
@@ -14,6 +15,18 @@ def register():
     username=data.get('username')
     password=data.get('password')
     role=data.get('role')
+    Pattern = re.compile(r'^[a-zA-Z0-9_-]{4,16}$')
+    result = Pattern.match(username)
+    if not result:
+        return jsonify({
+            "error": "The username is invalid!"
+        }), 201
+    Pattern = re.compile(r'^[a-zA-Z0-9_-]{6,16}$')
+    result = Pattern.match(password)
+    if not result:
+        return jsonify({
+            "error": "The password is invalid!"
+        }), 201
     exist_user = User.query.filter_by(username=username, role = role).first()
     if exist_user:
         return jsonify({
@@ -43,6 +56,18 @@ def login():
     username=data.get('username')
     role=data.get('role')
     password=data.get('password')
+    Pattern = re.compile(r'^[a-zA-Z0-9_-]{4,16}$')
+    result = Pattern.match(username)
+    if not result:
+        return jsonify({
+            "error": "The username is invalid!"
+        }), 201
+    Pattern = re.compile(r'^[a-zA-Z0-9_-]{6,16}$')
+    result = Pattern.match(password)
+    if not result:
+        return jsonify({
+            "error": "The password is invalid!"
+        }), 201
     user = User.query.filter_by(username=username, password=password, role = role).first()
     if user:
         return jsonify({
