@@ -10,7 +10,7 @@ def create_course():
     course_name=data.get('course_name')
     course_code=data.get('course_code')
     description=data.get('description')
-    created_by=data.get('created_by')
+    created_by=data.get('created_by')     # admin user id
     # check if course code already exists
     if Course.query.filter_by(code=course_code).first():
         abort(409, description="course code already exists")
@@ -34,7 +34,26 @@ def create_course():
     except Exception as e:
         db.session.rollback()
         abort(500, description=str(e))
-# TODO: delete a course
+# TODO: Delete a course
+@bp.route("/<int:course_id>",methods=['DELETE'])
+def delete_course(course_id):
+    data=request.json or {}
+    deleted_by=data.get('deleted_by')    # admin user id
+    if not deleted_by:
+        abort(400, description="missing required fields")
+    admin=User.query.get_or_404(deleted_by)
+    if admin.role != UserRole.ADMIN:
+        abort(403, description="only administrators may delete courses")
+    course=Course.query.get_or_404(course_id)
+    try:
+        db.session.delete(course)
+        db.session.commit()
+        return jsonify({
+            "message": f"Course {course_id} deleted successfully."
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        abort(500, description=str(e))
 
 # list all courses
 @bp.route("",methods=['GET'])
@@ -42,6 +61,7 @@ def list_courses():
     # Fetch all courses from the database, ordered by creation date
     courses = Course.query.order_by(Course.created_at.desc()).all()
     return jsonify([course.to_dict() for course in courses]), 200
+
 # Enroll a student in a course
 @bp.route("/<int:course_id>/enroll",methods=['POST'])
 def enroll_student(course_id):
