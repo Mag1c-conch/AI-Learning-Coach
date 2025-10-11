@@ -1,5 +1,6 @@
 // src/pages/admin/Dashboard.jsx
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -85,6 +86,7 @@ const recentCourses = [
     org: "COMPSC - School of CSE",
     image:
       "https://images.unsplash.com/photo-1518779578993-ec3579fee39f?q=80&w=800&auto=format&fit=crop",
+    studentCount: 45,
   },
   {
     id: "5259_00428",
@@ -92,6 +94,7 @@ const recentCourses = [
     org: "COMPSC - School of CSE",
     image:
       "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800&auto=format&fit=crop",
+    studentCount: 38,
   },
   {
     id: "5253_00881",
@@ -99,6 +102,7 @@ const recentCourses = [
     org: "ENG - Faculty of Engineering",
     image:
       "https://images.unsplash.com/photo-1498050108023-c5249f4df085?q=80&w=800&auto=format&fit=crop",
+    studentCount: 52,
   },
   {
     id: "5253_00002",
@@ -106,6 +110,7 @@ const recentCourses = [
     org: "CSE",
     image:
       "https://images.unsplash.com/photo-1518085250887-2f903c200fee?q=80&w=800&auto=format&fit=crop",
+    studentCount: 29,
   },
   {
     id: "5253_00003",
@@ -113,11 +118,12 @@ const recentCourses = [
     org: "CSE",
     image:
       "https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=800&auto=format&fit=crop",
+    studentCount: 41,
   },
 ];
 
 /* ---------- 230×210 课程卡片 ---------- */
-const CourseCard = ({ course }) => (
+const CourseCard = ({ course, navigate }) => (
   <Box
     sx={{
       width: 230,
@@ -136,23 +142,31 @@ const CourseCard = ({ course }) => (
         backgroundImage: `url(${course.image})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
+        cursor: "pointer",
+        "&:hover": {
+          opacity: 0.9,
+        },
+      }}
+      onClick={() => {
+        // 跳转到课程页面
+        navigate(`/admin/course/${course.id}`);
       }}
     />
     {/* 下半：信息 */}
-    <Box sx={{ p: 1.2 }}>
-      <Typography variant="caption" color="text.secondary" noWrap>
-        {course.id}
-      </Typography>
+    <Box sx={{ p: 1.2, textAlign: "center" }}>
       <Typography
         variant="subtitle2"
-        sx={{ fontWeight: 700, lineHeight: 1.15 }}
+        sx={{ fontWeight: 700, lineHeight: 1.15, mb: 1 }}
         noWrap
         title={course.title}
       >
         {course.title}
       </Typography>
-      <Typography variant="caption" color="text.secondary" noWrap title={course.org}>
-        {course.org}
+      <Typography
+        variant="caption"
+        sx={{ color: "text.secondary" }}
+      >
+        {course.studentCount || 0} 人
       </Typography>
     </Box>
   </Box>
@@ -160,6 +174,7 @@ const CourseCard = ({ course }) => (
 
 export default function Dashboard() {
   const name = useDisplayName();
+  const navigate = useNavigate();
 
   // —— 翻页（固定显示 3 张）
   const CARDS_PER_PAGE = 3;
@@ -261,7 +276,7 @@ export default function Dashboard() {
             sx={{ px: 2.5 }}
             onClick={() => setOpenDel(true)}
           >
-            – Delete Courses
+            - Delete Courses
           </Button>
         </Box>
       </Box>
@@ -279,21 +294,21 @@ export default function Dashboard() {
       >
         {/* LEFT: label + carousel + dots */}
         <Box sx={{ flex: "1 1 730px", minWidth: 730 }}>
-          {/* Label */}
-          <Box
-            sx={{
-              bgcolor: "#ffeb3b",
-              color: "#1a1a1a",
-              fontWeight: 800,
-              px: 2,
-              py: 1.2,
-              borderRadius: 1,
-              mb: 2,
-              display: "inline-flex",
-            }}
-          >
-            Recently accessed courses
-          </Box>
+           {/* Label */}
+           <Box
+             sx={{
+               bgcolor: "#ffeb3b",
+               color: "#1a1a1a",
+               fontWeight: 800,
+               px: 2,
+               py: 1.2,
+               borderRadius: 1,
+               mb: 1.5,
+               display: "inline-flex",
+             }}
+           >
+             <Typography variant="h6" sx={{ m: 0 }}>Recently accessed courses</Typography>
+           </Box>
 
           {/* Carousel row (left arrow + window + right arrow) */}
           <Box
@@ -334,7 +349,7 @@ export default function Dashboard() {
                   return (
                     <Box key={pi} sx={{ display: "flex", gap: 2, width: 730 }}>
                       {slice.map((c) => (
-                        <CourseCard key={c.id} course={c} />
+                        <CourseCard key={c.id} course={c} navigate={navigate} />
                       ))}
                       {Array.from({ length: Math.max(0, CARDS_PER_PAGE - slice.length) }).map(
                         (_, i) => <Box key={`ph-${i}`} sx={{ width: 230, height: 210 }} />
@@ -387,7 +402,20 @@ export default function Dashboard() {
 
       {/* Student Progress */}
       <Box sx={{ mt: 0, mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 1.5 }}>Student Progress</Typography>
+        <Box
+          sx={{
+            bgcolor: "#ffeb3b",
+            color: "#1a1a1a",
+            fontWeight: 800,
+            px: 2,
+            py: 1.2,
+            borderRadius: 1,
+            mb: 1.5,
+            display: "inline-flex",
+          }}
+        >
+          <Typography variant="h6" sx={{ m: 0 }}>Student Progress</Typography>
+        </Box>
         <StudentProgress
           rows={[
             { name: 'Jack',   studentId: 'zXXXXXXXX', course: 'Math101', percent: 30 },

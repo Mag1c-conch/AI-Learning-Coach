@@ -9,6 +9,7 @@ import AdminLayout from './Admin/AdminLayout.jsx';
 import AdminDashboard from './Admin/Pages/Admin/Dashboard.jsx';
 import AiAssistance   from './Admin/Pages/Admin/AiAssistance.jsx';
 import TimeTable      from './Admin/Pages/Admin/TimeTable.jsx';
+import Course         from './Admin/Pages/Admin/Course.jsx';
 
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="assistant" element={<AiAssistance />} />
             <Route path="timetable" element={<TimeTable />} />
+            <Route path="course/:courseId" element={<Course />} />
           </Route>
           </Routes>
         </div>
