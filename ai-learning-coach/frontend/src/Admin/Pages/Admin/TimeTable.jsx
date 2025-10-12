@@ -151,7 +151,7 @@ export default function TimeTable() {
       >
         {/* 左：标题组 */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1 }}>
-          <Typography variant="h6">Time Table</Typography>
+          <Typography variant="h6">TimeTable</Typography>
           <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
           <Typography variant="subtitle1" sx={{ color: "#7a7a7a" }}>
             Admin

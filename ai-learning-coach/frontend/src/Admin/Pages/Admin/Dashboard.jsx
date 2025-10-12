@@ -307,7 +307,7 @@ export default function Dashboard() {
                display: "inline-flex",
              }}
            >
-             <Typography variant="h6" sx={{ m: 0 }}>Recently accessed courses</Typography>
+             <Typography variant="h6" sx={{ m: 0 }}>All Courses</Typography>
            </Box>
 
           {/* Carousel row (left arrow + window + right arrow) */}
