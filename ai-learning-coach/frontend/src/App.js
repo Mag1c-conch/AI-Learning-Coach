@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Signin from './components/Signin';
+import Signup from './components/Signup.jsx';
 import AUTH from './Constant.js';
 import Sidebar from './components/Sidebar.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -23,6 +24,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Signin setToken={setToken} />} />
             <Route path="/signin" element={<Signin setToken={setToken} />} />
+            <Route path="/signup" element={<Signup />} /> 
             <Route path="/sidebar" element={<Sidebar />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<AdminLayout />}>
