@@ -1,6 +1,6 @@
 # app/routes/auth.py
 from flask import Blueprint, request, jsonify
-from ..models import User
+from ..models import User, UserRole
 from ..extensions import db
 
 bp=Blueprint('auth', __name__, url_prefix='/auth')
@@ -41,15 +41,26 @@ def register():
 def login():
     data=request.json
     username=data.get('username')
-    role=data.get('role')
+    role_str=data.get('role')
     password=data.get('password')
-    user = User.query.filter_by(username=username, password=password, role = role).first()
+    
+    # Convert string role to UserRole enum
+    if role_str == 'student':
+        role_enum = UserRole.STUDENT
+    elif role_str == 'admin':
+        role_enum = UserRole.ADMIN
+    else:
+        return jsonify({
+            "error": 'Invalid role!'
+        }), 400
+    
+    user = User.query.filter_by(username=username, password=password, role=role_enum).first()
     if user:
         return jsonify({
             "first_name": user.first_name,
             "last_name": user.last_name,
             "username": username,
-            "role": user.role,
+            "role": user.role.value,  # Return string value instead of enum
             "id": user.id
         }), 201
     else:
