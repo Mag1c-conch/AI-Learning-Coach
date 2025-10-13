@@ -67,8 +67,14 @@ const Signin = ({ setToken }) => {
           </Button>
 
           <Typography variant="body2" mt={2}>
-            Don’t have an account?{" "}
-            <Link href="#" underline="always" sx={{ color: "#6F6C6C" }}>
+            Don't have an account?{" "}
+            <Link 
+              component="button" 
+              variant="body2" 
+              onClick={() => navigate('/signup')}
+              underline="always" 
+              sx={{ color: "#6F6C6C" }}
+            >
               Sign Up
             </Link>
           </Typography>

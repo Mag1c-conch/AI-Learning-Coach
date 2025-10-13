@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Signin from './components/Signin';
-import Signup from './components/Signup.jsx';
+import Signup from './Sign-up/App.jsx';
 import AUTH from './Constant.js';
 import Sidebar from './components/Sidebar.jsx';
 import Dashboard from './components/Dashboard.jsx';

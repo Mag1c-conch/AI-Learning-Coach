@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ConfigProvider,
   Form,
@@ -13,6 +14,7 @@ import "./App.css";
 export default function App() {
   const [form] = Form.useForm();
   const { Title, Text } = Typography;
+  const navigate = useNavigate();
 
   const themeTokens = useMemo(
     () => ({
@@ -56,7 +58,7 @@ export default function App() {
     // 前端模拟成功
     message.success("注册成功！（前端模拟）即将跳转 /dashboard");
     setTimeout(() => {
-      window.location.href = "/dashboard"; // 若使用 react-router-dom 可改为 navigate('/dashboard')
+      navigate('/dashboard'); // 使用 React Router 导航
     }, 900);
   };
 
@@ -117,6 +119,19 @@ export default function App() {
                 </Button>
               </Form.Item>
             </Form>
+            
+            <div style={{ textAlign: 'center', marginTop: '16px' }}>
+              <Text>
+                Already have an account?{" "}
+                <Button 
+                  type="link" 
+                  onClick={() => navigate('/signin')}
+                  style={{ padding: 0, height: 'auto', color: '#193359' }}
+                >
+                  Sign In
+                </Button>
+              </Text>
+            </div>
           </section>
 
           {/* 右侧背景色块 */}
