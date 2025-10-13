@@ -3,12 +3,15 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Signin from './components/Signin';
 import AUTH from './Constant.js';
 import Sidebar from './components/Sidebar.jsx';
-import Dashboard from './components/Dashboard.jsx';
+import Dashboard from './Student/Dashboard.jsx';
+import CoursesPage from "./Student/CoursesPage";
+import CoursePage from "./Student/CoursePage";
 import { dividerClasses } from '@mui/material';
 import AdminLayout from './Admin/AdminLayout.jsx';
 import AdminDashboard from './Admin/Pages/Admin/Dashboard.jsx';
 import AiAssistance   from './Admin/Pages/Admin/AiAssistance.jsx';
 import TimeTable      from './Admin/Pages/Admin/TimeTable.jsx';
+import Registercourse from './Student/Registercourse.jsx';
 
 
 function App() {
@@ -24,6 +27,9 @@ function App() {
             <Route path="/signin" element={<Signin setToken={setToken} />} />
             <Route path="/sidebar" element={<Sidebar />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/courses" element={<CoursesPage />} />
+            <Route path="/course/:code" element={<CoursePage />} />
+             <Route path="/registercourse" element={<Registercourse />} />
             <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />

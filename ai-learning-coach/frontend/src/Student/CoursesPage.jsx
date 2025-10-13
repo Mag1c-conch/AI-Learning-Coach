@@ -7,6 +7,7 @@ import {
   Typography,
   Paper,
   IconButton,
+  Link,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import InputBase from "@mui/material/InputBase";
@@ -189,7 +190,7 @@ const Courses = () => {
               }}
               onClick={() => console.log("Register Courses")}
             >
-              Register Courses
+            <Link href="/registercourse" sx={{ color: '#fff', textDecoration: 'none' }}> Register Courses</Link>
             </Button>
           </Box>
 
