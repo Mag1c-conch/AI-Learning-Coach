@@ -7,35 +7,51 @@ bp=Blueprint('auth', __name__, url_prefix='/auth')
 
 @bp.route('/register',methods=['POST'])
 def register():
-    #TODO: Add user to database
-    data=request.json
-    first_name=data.get('first_name')
-    last_name=data.get('last_name')
-    username=data.get('username')
-    password=data.get('password')
-    role=data.get('role')
-    exist_user = User.query.filter_by(username=username, role = role).first()
-    if exist_user:
+    try:
+        data=request.json
+        first_name=data.get('first_name')
+        last_name=data.get('last_name')
+        username=data.get('username')
+        password=data.get('password')
+        role_str=data.get('role')
+        
+        # Convert string role to UserRole enum
+        if role_str == 'student':
+            role_enum = UserRole.STUDENT
+        elif role_str == 'admin':
+            role_enum = UserRole.ADMIN
+        else:
+            return jsonify({
+                "error": 'Invalid role!'
+            }), 400
+        
+        exist_user = User.query.filter_by(username=username, role=role_enum).first()
+        if exist_user:
+            return jsonify({
+                "error": "The username has been registered!"
+            }), 400
+        
+        user = User()
+        user.first_name = first_name
+        user.last_name = last_name
+        user.password = password
+        user.username = username
+        user.role = role_enum
+        db.session.add(user)
+        db.session.flush()
+        db.session.refresh(user)
+        db.session.commit()
         return jsonify({
-            "error": "The username has been registered!"
+            "first_name": first_name,
+            "last_name": last_name,
+            "username": username,
+            "role": role_enum.value,
+            "id": user.id
         }), 201
-    user = User()
-    user.first_name = first_name
-    user.last_name = last_name
-    user.password = password
-    user.username = username
-    user.role = role
-    db.session.add(user)
-    db.session.flush()
-    db.session.refresh(user)
-    db.session.commit()
-    return jsonify({
-        "first_name": first_name,
-        "last_name": last_name,
-        "username": username,
-        "role": role,
-        "id": user.id
-    }), 201
+    except Exception as e:
+        return jsonify({
+            "error": f"Registration failed: {str(e)}"
+        }), 500
 
 @bp.route('/login',methods=['POST'])
 def login():
