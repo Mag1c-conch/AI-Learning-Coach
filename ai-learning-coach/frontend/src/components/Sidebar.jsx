@@ -13,7 +13,8 @@ const Sidebar = () => {
       </div>
       
       <div className="menu">
-        <Button fullWidth><Link href="#" sx={{ color: '#fff', textDecoration: 'none' }}>Courses</Link></Button>
+        <Button fullWidth><Link href="/dashboard" sx={{ color: '#fff', textDecoration: 'none' }}>Dashboard</Link></Button>
+        <Button fullWidth><Link href="/courses" sx={{ color: '#fff', textDecoration: 'none' }}>Courses</Link></Button>
         <Button fullWidth><Link href="#" sx={{ color: '#fff', textDecoration: 'none' }}>Exercises</Link></Button>
         <Button fullWidth><Link href="#" sx={{ color: '#fff', textDecoration: 'none' }}>Study Progress</Link></Button>
         <Button fullWidth><Link href="#" sx={{ color: '#fff', textDecoration: 'none' }}>AI Assistant</Link></Button>

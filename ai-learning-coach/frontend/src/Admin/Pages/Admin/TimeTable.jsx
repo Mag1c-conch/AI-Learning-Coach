@@ -138,7 +138,7 @@ export default function TimeTable() {
   };
 
   return (
-    <Box sx={{ height: "100%", position: "relative" }}>
+    <Box sx={{ p: 3, position: "relative" }}>
       {/* ======= 页头（与Dashboard相同） ======= */}
       <Box
         sx={{

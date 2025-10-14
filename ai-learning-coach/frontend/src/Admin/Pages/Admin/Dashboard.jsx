@@ -189,7 +189,7 @@ export default function Dashboard() {
   const [courseName, setCourseName] = useState("");
 
   return (
-    <Box sx={{ height: "100%", position: "relative" }}>
+    <Box sx={{ p: 3, position: "relative" }}>
       {/* ======= 你的页头（不改布局） ======= */}
       <Box
         sx={{

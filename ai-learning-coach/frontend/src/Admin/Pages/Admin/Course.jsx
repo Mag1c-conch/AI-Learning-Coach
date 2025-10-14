@@ -196,7 +196,7 @@ export default function Course() {
   }, [selectedFiles]);
 
   return (
-    <Box sx={{ height: "100%", position: "relative" }}>
+    <Box sx={{ p: 3, position: "relative" }}>
       {/* ======= 标题栏 ======= */}
       <Box
         sx={{

@@ -1,7 +1,8 @@
-import * as React from 'react';
-import { Box } from '@mui/material';
+import React from 'react';
 import { Outlet } from 'react-router-dom';
+import { Box } from '@mui/material';
 import AdminSidebar from './AdminSidebar';
+import '../App.css';
 
 export default function AdminLayout() {
   return (
@@ -9,13 +10,10 @@ export default function AdminLayout() {
       <AdminSidebar />
       <Box
         component="main"
-        className="main-content"
         sx={{
           flex: 1,
           backgroundColor: '#f5f6fa',
-          p: 3,
           overflowY: 'auto',
-          position: 'relative',
         }}
       >
         <Outlet />
