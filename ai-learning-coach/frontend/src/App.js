@@ -10,6 +10,7 @@ import CoursePage from "./Student/CoursePage";
 import { dividerClasses } from '@mui/material';
 import AdminLayout from './Admin/AdminLayout.jsx';
 import AdminDashboard from './Admin/Pages/Admin/Dashboard.jsx';
+import AdminCourse from './Admin/Pages/Admin/Course.jsx';
 import AiAssistance   from './Admin/Pages/Admin/AiAssistance.jsx';
 import TimeTable      from './Admin/Pages/Admin/TimeTable.jsx';
 import Registercourse from './Student/Registercourse.jsx';
@@ -35,6 +36,7 @@ function App() {
             <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="course/:courseId" element={<AdminCourse />} />
             <Route path="assistant" element={<AiAssistance />} />
             <Route path="timetable" element={<TimeTable />} />
           </Route>

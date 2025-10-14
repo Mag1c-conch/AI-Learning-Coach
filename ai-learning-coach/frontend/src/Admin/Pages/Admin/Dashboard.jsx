@@ -1,5 +1,5 @@
 // src/pages/admin/Dashboard.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -12,6 +12,13 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
@@ -60,6 +67,16 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 /* ---------- 名字从 localStorage 读取 ---------- */
 function useDisplayName() {
   return useMemo(() => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const userData = JSON.parse(token);
+        return userData.first_name || "Admin";
+      }
+    } catch (error) {
+      console.error("Error parsing user data:", error);
+    }
+
     const fromStorage =
       localStorage.getItem("displayName") ||
       localStorage.getItem("username") ||
@@ -75,6 +92,20 @@ function useDisplayName() {
       return head ? head.charAt(0).toUpperCase() + head.slice(1) : "Admin";
     }
     return "Admin";
+  }, []);
+}
+
+/* ---------- 根据时间获取问候语 ---------- */
+function useGreeting() {
+  return useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return "Good morning";
+    } else if (hour < 18) {
+      return "Good afternoon";
+    } else {
+      return "Good evening";
+    }
   }, []);
 }
 
@@ -174,19 +205,223 @@ const CourseCard = ({ course, navigate }) => (
 
 export default function Dashboard() {
   const name = useDisplayName();
+  const greeting = useGreeting();
   const navigate = useNavigate();
+
+  // —— 课程列表状态
+  const [courses, setCourses] = useState(recentCourses);
+  const [coursesLoading, setCoursesLoading] = useState(false);
 
   // —— 翻页（固定显示 3 张）
   const CARDS_PER_PAGE = 3;
   const [page, setPage] = useState(0);
-  const totalPages = Math.max(1, Math.ceil(recentCourses.length / CARDS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(courses.length / CARDS_PER_PAGE));
   const start = page * CARDS_PER_PAGE;
-  const visible = recentCourses.slice(start, start + CARDS_PER_PAGE);
+  const visible = courses.slice(start, start + CARDS_PER_PAGE);
 
   // —— 弹窗
   const [openAdd, setOpenAdd] = useState(false);
   const [openDel, setOpenDel] = useState(false);
-  const [courseName, setCourseName] = useState("");
+  
+  // —— 创建课程表单数据
+  const [courseForm, setCourseForm] = useState({
+    course_name: "",
+    course_code: "",
+    description: ""
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  
+  // —— 删除课程相关状态
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  // —— 从后端获取课程列表
+  const fetchCourses = async () => {
+    setCoursesLoading(true);
+    try {
+      const response = await fetch('http://localhost:5001/courses');
+      if (response.ok) {
+        const data = await response.json();
+        // 将后端数据转换为前端格式
+        const formattedCourses = data.map(course => ({
+          id: course.code,
+          title: `${course.code} - ${course.name}`,
+          org: course.description || "COMPSC - School of CSE",
+          image: "https://images.unsplash.com/photo-1518779578993-ec3579fee39f?q=80&w=800&auto=format&fit=crop",
+          studentCount: 0, // TODO: 从enrollments计算
+        }));
+        setCourses(formattedCourses);
+      }
+    } catch (err) {
+      console.error("Failed to fetch courses:", err);
+    } finally {
+      setCoursesLoading(false);
+    }
+  };
+
+  // —— 组件挂载时获取课程列表
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  // —— 处理表单输入
+  const handleFormChange = (field, value) => {
+    setCourseForm(prev => ({ ...prev, [field]: value }));
+    setError(""); // Clear error when user types
+  };
+
+  // —— 创建课程
+  const handleAddCourse = async () => {
+    // 验证必填字段
+    if (!courseForm.course_name || !courseForm.course_code) {
+      setError("Course name and code are required");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // 从localStorage获取当前用户ID
+      const token = localStorage.getItem('token');
+      let adminId = null;
+      
+      if (token) {
+        const userData = JSON.parse(token);
+        adminId = userData.id;
+      }
+
+      if (!adminId) {
+        setError("Unable to get user information. Please login again.");
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch('http://localhost:5001/courses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          course_name: courseForm.course_name,
+          course_code: courseForm.course_code,
+          description: courseForm.description,
+          created_by: adminId
+        }),
+      });
+
+      if (response.ok) {
+        // 成功创建
+        setOpenAdd(false);
+        setCourseForm({ course_name: "", course_code: "", description: "" });
+        alert("Course created successfully!");
+        // 刷新课程列表
+        fetchCourses();
+      } else {
+        const data = await response.json();
+        setError(data.message || "Failed to create course");
+      }
+    } catch (err) {
+      setError("Network error. Please check if the backend server is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // —— 关闭弹窗时重置表单
+  const handleCloseAdd = () => {
+    setOpenAdd(false);
+    setCourseForm({ course_name: "", course_code: "", description: "" });
+    setError("");
+  };
+
+  // —— 删除课程
+  const handleDeleteCourse = async () => {
+    if (!selectedCourseId) {
+      setDeleteError("Please select a course to delete");
+      return;
+    }
+
+    setDeleteLoading(true);
+    setDeleteError("");
+
+    try {
+      // 从localStorage获取当前用户ID
+      const token = localStorage.getItem('token');
+      let adminId = null;
+      
+      if (token) {
+        const userData = JSON.parse(token);
+        adminId = userData.id;
+      }
+
+      if (!adminId) {
+        setDeleteError("Unable to get user information. Please login again.");
+        setDeleteLoading(false);
+        return;
+      }
+
+      // 找到选中课程的后端ID
+      const selectedCourse = courses.find(c => c.id === selectedCourseId);
+      if (!selectedCourse) {
+        setDeleteError("Course not found");
+        setDeleteLoading(false);
+        return;
+      }
+
+      // 需要从后端获取课程的数据库ID
+      const coursesResponse = await fetch('http://localhost:5001/courses');
+      if (!coursesResponse.ok) {
+        setDeleteError("Failed to fetch course information");
+        setDeleteLoading(false);
+        return;
+      }
+      
+      const coursesData = await coursesResponse.json();
+      const courseToDelete = coursesData.find(c => c.code === selectedCourseId);
+      
+      if (!courseToDelete) {
+        setDeleteError("Course not found in database");
+        setDeleteLoading(false);
+        return;
+      }
+
+      const response = await fetch(`http://localhost:5001/courses/${courseToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deleted_by: adminId
+        }),
+      });
+
+      if (response.ok) {
+        // 成功删除
+        setOpenDel(false);
+        setSelectedCourseId(null);
+        alert("Course deleted successfully!");
+        // 刷新课程列表
+        fetchCourses();
+      } else {
+        const data = await response.json();
+        setDeleteError(data.message || "Failed to delete course");
+      }
+    } catch (err) {
+      setDeleteError("Network error. Please check if the backend server is running.");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // —— 关闭删除弹窗时重置状态
+  const handleCloseDel = () => {
+    setOpenDel(false);
+    setSelectedCourseId(null);
+    setDeleteError("");
+  };
 
   return (
     <Box sx={{ p: 3, position: "relative" }}>
@@ -259,7 +494,7 @@ export default function Dashboard() {
           variant="h3"
           sx={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 1 }}
         >
-          Good morning, {name}! <span role="img" aria-label="wave">👋</span>
+          {greeting}, {name}! <span role="img" aria-label="wave">👋</span>
         </Typography>
 
         <Box sx={{ display: "flex", gap: 2 }}>
@@ -345,7 +580,7 @@ export default function Dashboard() {
               >
                 {Array.from({ length: totalPages }).map((_, pi) => {
                   const s = pi * CARDS_PER_PAGE;
-                  const slice = recentCourses.slice(s, s + CARDS_PER_PAGE);
+                  const slice = courses.slice(s, s + CARDS_PER_PAGE);
                   return (
                     <Box key={pi} sx={{ display: "flex", gap: 2, width: 730 }}>
                       {slice.map((c) => (
@@ -433,48 +668,120 @@ export default function Dashboard() {
       </Box>
 
       {/* Model：Add  */}
-      <Dialog open={openAdd} onClose={() => setOpenAdd(false)} fullWidth maxWidth="xs">
+      <Dialog open={openAdd} onClose={handleCloseAdd} fullWidth maxWidth="sm">
         <DialogTitle>Add Course</DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <TextField
-            fullWidth
-            label="Course name"
-            value={courseName}
-            onChange={(e) => setCourseName(e.target.value)}
-          />
+        <DialogContent sx={{ pt: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              fullWidth
+              required
+              label="Course Code"
+              placeholder="e.g., COMP9417"
+              value={courseForm.course_code}
+              onChange={(e) => handleFormChange('course_code', e.target.value)}
+              error={error && !courseForm.course_code}
+              helperText={error && !courseForm.course_code ? "Course code is required" : ""}
+            />
+            <TextField
+              fullWidth
+              required
+              label="Course Name"
+              placeholder="e.g., Machine Learning"
+              value={courseForm.course_name}
+              onChange={(e) => handleFormChange('course_name', e.target.value)}
+              error={error && !courseForm.course_name}
+              helperText={error && !courseForm.course_name ? "Course name is required" : ""}
+            />
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Description (Optional)"
+              placeholder="Enter course description..."
+              value={courseForm.description}
+              onChange={(e) => handleFormChange('description', e.target.value)}
+            />
+            {error && (
+              <Typography color="error" variant="body2">
+                {error}
+              </Typography>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenAdd(false)}>Cancel</Button>
+          <Button onClick={handleCloseAdd} disabled={loading}>
+            Cancel
+          </Button>
           <Button
             variant="contained"
-            onClick={() => {
-              // TODO: 新增课程逻辑
-              setOpenAdd(false);
-              setCourseName("");
-            }}
+            onClick={handleAddCourse}
+            disabled={loading}
           >
-            Add
+            {loading ? "Creating..." : "Add Course"}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ======= 弹窗：Delete ======= */}
-      <Dialog open={openDel} onClose={() => setOpenDel(false)} fullWidth maxWidth="xs">
+      <Dialog open={openDel} onClose={handleCloseDel} fullWidth maxWidth="sm">
         <DialogTitle>Delete Course</DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <Typography>Are you sure you want to delete the selected course?</Typography>
+        <DialogContent sx={{ pt: 2 }}>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Select a course to delete:
+          </Typography>
+          
+          {courses.length === 0 ? (
+            <Typography color="text.secondary">No courses available</Typography>
+          ) : (
+            <List sx={{ maxHeight: 400, overflow: 'auto', border: '1px solid #e0e0e0', borderRadius: 1 }}>
+              {courses.map((course) => (
+                <ListItem key={course.id} disablePadding>
+                  <ListItemButton
+                    selected={selectedCourseId === course.id}
+                    onClick={() => {
+                      setSelectedCourseId(course.id);
+                      setDeleteError("");
+                    }}
+                  >
+                    <Radio
+                      checked={selectedCourseId === course.id}
+                      sx={{ mr: 1 }}
+                    />
+                    <ListItemText
+                      primary={course.title}
+                      secondary={`Students: ${course.studentCount}`}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          )}
+
+          {selectedCourseId && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 1 }}>
+              <Typography variant="body2" color="warning.main">
+                ⚠️ Warning: This action cannot be undone. All related enrollments will also be deleted.
+              </Typography>
+            </Box>
+          )}
+
+          {deleteError && (
+            <Typography color="error" variant="body2" sx={{ mt: 2 }}>
+              {deleteError}
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDel(false)}>Cancel</Button>
+          <Button onClick={handleCloseDel} disabled={deleteLoading}>
+            Cancel
+          </Button>
           <Button
             color="error"
             variant="contained"
-            onClick={() => {
-              // TODO: 删除课程逻辑
-              setOpenDel(false);
-            }}
+            onClick={handleDeleteCourse}
+            disabled={deleteLoading || !selectedCourseId}
           >
-            Delete
+            {deleteLoading ? "Deleting..." : "Delete Course"}
           </Button>
         </DialogActions>
       </Dialog>

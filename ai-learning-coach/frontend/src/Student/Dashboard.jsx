@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import "../App.css";
@@ -395,6 +395,32 @@ const Dashboard = () => {
   });
   const navigate = useNavigate();  // Route change
   
+  // Get greeting based on current time
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return "Good morning";
+    } else if (hour < 18) {
+      return "Good afternoon";
+    } else {
+      return "Good evening";
+    }
+  }, []);
+
+  // Get user's first name from localStorage
+  const firstName = useMemo(() => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const userData = JSON.parse(token);
+        return userData.first_name || "Student";
+      }
+    } catch (error) {
+      console.error("Error parsing user data:", error);
+    }
+    return "Student";
+  }, []);
+  
   return (
     <Box 
       sx={{ 
@@ -483,7 +509,7 @@ const Dashboard = () => {
           }}
         >
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>
-            Good morning, John! 👋
+            {greeting}, {firstName}! 👋
           </Typography>
 
           {/* Reward title */}
