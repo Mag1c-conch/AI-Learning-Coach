@@ -121,8 +121,14 @@ const assignments = [
 
 function CourseDetail() {
     return (
-      <Box sx={{ display: "flex", height: "100vh" }}>
+      <Box 
+        sx={{ 
+          display: "flex", 
+          height: "100vh" 
+        }}
+      >
         <Sidebar />
+        {/* Right content */}
         <Box
           sx={{
             flex: 1,

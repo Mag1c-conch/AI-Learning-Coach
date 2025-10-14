@@ -83,8 +83,15 @@ const Courses = () => {
   }, [courses, page]);
 
   return (
-    <Box sx={{ display: "flex", height: "100vh" }}>
+    <Box 
+      sx={{ 
+        display: "flex", 
+        height: "100vh" 
+      }}
+    >
       <Sidebar />
+
+      {/* Right content */}
       <Box
         className="main-content"
         sx={{

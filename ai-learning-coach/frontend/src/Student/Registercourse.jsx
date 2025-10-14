@@ -126,6 +126,8 @@ const Registercourse = () => {
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
+
+      {/* sidebar */}
       <Box
         className="main-content"
         sx={{
