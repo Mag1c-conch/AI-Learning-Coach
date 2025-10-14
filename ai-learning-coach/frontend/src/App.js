@@ -11,6 +11,7 @@ import AdminLayout from './Admin/AdminLayout.jsx';
 import AdminDashboard from './Admin/Pages/Admin/Dashboard.jsx';
 import AiAssistance   from './Admin/Pages/Admin/AiAssistance.jsx';
 import TimeTable      from './Admin/Pages/Admin/TimeTable.jsx';
+import Registercourse from './Student/Registercourse.jsx';
 
 
 function App() {
