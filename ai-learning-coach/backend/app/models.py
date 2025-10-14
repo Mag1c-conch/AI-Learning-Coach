@@ -31,7 +31,7 @@ class Course(db.Model):
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
 
     creator = db.relationship("User", back_populates="courses_created", lazy="joined")
@@ -53,7 +53,7 @@ class Enrollment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=False)
-    enrolled_at = db.Column(db.DateTime, default=datetime.utcnow)
+    enrolled_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     student = db.relationship("User", back_populates="enrollments", lazy="joined")
     course = db.relationship("Course", back_populates="enrollments", lazy="joined")
