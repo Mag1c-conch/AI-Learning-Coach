@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from "react";
+import React, { useRef, useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import "../App.css";
@@ -26,6 +26,7 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
+import http from "../api/http";
 
 // Search box format
 const Search = styled("div")(({ theme }) => ({
@@ -288,8 +289,9 @@ function ProgressSlider({ items = [] }) {
   );
 }
 
-// Local data 
-const coursesData = [
+
+// static course data
+const defaultCoursesData = [
   { code: "COMP9814", name: "Artificial Intelligence", dueText: "Due in 2 days", meta: "· 2 assignments" },
   { code: "COMP9517", name: "Computer Vision",        dueText: "Due in 5 days", meta: "· 4 labs" },
   { code: "COMP9024", name: "Data Structures",        dueText: "Due in 1 week", meta: "· 1 project" },
@@ -297,19 +299,19 @@ const coursesData = [
 ];
 
 const exerciseData = [
-  { title: "Artificial Intelligence", items: ["Exercise 1", "Exercise 2"]},
-  { title: "Computer Vision",         item: "Lab 1" },
-  { title: "Big data",                item: "Lab 5" },
-  { title: "Data Structures",         item: "Assignment 1" },
-  { title: "Database Systems",        item: "Tutorial 1" },
-]
+  { title: "Artificial Intelligence", items: ["Exercise 1", "Exercise 2"] },
+  { title: "Computer Vision", item: "Lab 1" },
+  { title: "Big data", item: "Lab 5" },
+  { title: "Data Structures", item: "Assignment 1" },
+  { title: "Database Systems", item: "Tutorial 1" },
+];
 
 const progressData = [
   { course: "Artificial Intelligence", percent: 73 },
-  { course: "Computer Vision",         percent: 85 },
-  { course: "Data Structures",         percent: 60 },
-  { course: "Big data",                percent: 45 },
-  { course: "Database Systems",        percent: 29 },
+  { course: "Computer Vision", percent: 85 },
+  { course: "Data Structures", percent: 60 },
+  { course: "Big data", percent: 45 },
+  { course: "Database Systems", percent: 29 },
 ];
 
 function ProgressCircular({ value = 80, size = 150, thickness = 5}) {
@@ -370,13 +372,71 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5}) {
     </Box>
   );
 }
+// read user id from localstorage
+function getCurrentUserId() {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    const u = JSON.parse(token);
+    return u?.id || u?.user_id || null;
+  } catch {
+    return null;
+  }
+}
+
+function mapEnrollmentToCard(e) {
+  return {
+    code: e.code,
+    name: e.name || e.title || e.code,   // see name than title
+    dueText: "Enrolled",
+    meta: e.description ? `· ${e.description}` : "",
+  };
+}
+
+function mergeCourses(base, enrolledCards) {
+  // put enrolled courses in front
+  const codes = new Set(enrolledCards.map((c) => c.code));
+  const rest = base.filter((b) => !codes.has(b.code));
+  return [...enrolledCards, ...rest];
+}
+
+function readLocalEnrollments(userId) {
+  if (!userId) return [];
+  try {
+    const key = `enrolledCourses:${userId}`;
+    const list = JSON.parse(localStorage.getItem(key) || "[]");
+    if (!Array.isArray(list)) return [];
+    return list.map((c) => ({
+      code: c.code,
+      name: c.name || c.code,
+      dueText: "Enrolled",
+      meta: c.description ? `· ${c.description}` : "",
+    }));
+  } catch {
+    return [];
+  }
+}
 
 const Dashboard = () => {
-  // Local data
-  const [exercises, setExercises] = useState(exerciseData);
-  // Progress data
-  const [progress, setProgress] = useState(progressData);
-  const [courses, setCourses] = useState([
+  const [sliderCourses, setSliderCourses] = useState(defaultCoursesData);
+  const [uid, setUid] = useState(getCurrentUserId());
+  useEffect(() => {
+  const onStorage = () => setUid(getCurrentUserId());
+  const onLogin = () => setUid(getCurrentUserId()); 
+
+  window.addEventListener("storage", onStorage);
+  window.addEventListener("login:success", onLogin);
+
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener("login:success", onLogin);
+  };
+}, []);
+
+  // static exercise & progress data
+  const [exercises] = useState(exerciseData);
+  const [progress] = useState(progressData);
+  const [courses] = useState([
     { code: "COMP9814", name: "Artificial Intelligence", badges: 1 },
     { code: "COMP9820", name: "Project Management", badges: 0 },
     { code: "COMP9517", name: "Computer Vision", badges: 3 },
@@ -388,271 +448,116 @@ const Dashboard = () => {
     { code: "COMP6448", name: "Web Application Development", badges: 0 },
   ]);
 
-  // Calculate total rewards
-  let totalRewards = 0;
-  courses.forEach(course => {
-    totalRewards += course.badges || 0;
-  });
-  const navigate = useNavigate();  // Route change
-  
-  // Get greeting based on current time
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) {
-      return "Good morning";
-    } else if (hour < 18) {
-      return "Good afternoon";
-    } else {
-      return "Good evening";
-    }
-  }, []);
+  const totalRewards = courses.reduce((s, c) => s + (c.badges || 0), 0);
 
-  // Get user's first name from localStorage
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  }, []);
   const firstName = useMemo(() => {
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const userData = JSON.parse(token);
-        return userData.first_name || "Student";
-      }
-    } catch (error) {
-      console.error("Error parsing user data:", error);
+      const token = localStorage.getItem("token");
+      return token ? (JSON.parse(token)?.first_name || "Student") : "Student";
+    } catch {
+      return "Student";
     }
-    return "Student";
   }, []);
-  
+
+  useEffect(() => {
+  const load = async () => {
+    if (!uid) {
+      setSliderCourses(defaultCoursesData);
+      return;
+    }
+    try {
+      const { data } = await http.get(`/courses/users/${uid}/enrollments`);
+      const enrolledCards = Array.isArray(data) ? data.map(mapEnrollmentToCard) : [];
+      const fallback = enrolledCards.length ? [] : readLocalEnrollments(uid);
+      setSliderCourses(
+        mergeCourses(defaultCoursesData, enrolledCards.length ? enrolledCards : fallback)
+      );
+    } catch (e) {
+      console.error("加载个人选课失败：", e?.response?.data || e.message);
+      const fallback = readLocalEnrollments(uid);
+      setSliderCourses(mergeCourses(defaultCoursesData, fallback));
+    }
+  };
+
+  load();
+  const onUpdated = (ev) => {
+  if (!ev?.detail?.user_id || ev.detail.user_id === uid) load();
+  };
+  window.addEventListener("enrollment:updated", onUpdated);
+  return () => window.removeEventListener("enrollment:updated", onUpdated);
+}, [uid]); 
+
+
   return (
-    <Box 
-      sx={{ 
-        display: "flex", 
-        height: "100vh" 
-      }}
-    >
+    <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
 
-      {/* Right content */}
-      <Box
-        className="main-content"
-        sx={{
-          flex: 1,
-          backgroundColor: "#f5f6fa",
-          p: 3,
-          overflowY: "auto",
-          position: "relative",
-        }}
-      >
-        {/* Top divider line */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: "63px",
-            left: 0,
-            width: "100%",
-            height: "2px",
-            backgroundColor: "rgba(21, 19, 19, 0.3)",
-          }}
-        />
-        {/* Upper right corner: Search + Notifications */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: 1,
-            position: "absolute",
-            top: 10,
-            right: 20,
-          }}
-        >
+      <Box className="main-content" sx={{ flex: 1, backgroundColor: "#f5f6fa", p: 3, overflowY: "auto", position: "relative" }}>
+        {/* line */}
+        <Box sx={{ position: "absolute", top: "63px", left: 0, width: "100%", height: "2px", backgroundColor: "rgba(21, 19, 19, 0.3)" }} />
+
+        {/* search & notification */}
+        <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 1, position: "absolute", top: 10, right: 20 }}>
           <Search>
-            <SearchIconWrapper>
-              <SearchIcon />
-            </SearchIconWrapper>
+            <SearchIconWrapper><SearchIcon /></SearchIconWrapper>
             <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
           </Search>
-          <IconButton>
-            <NotificationsIcon />
-          </IconButton>
+          <IconButton><NotificationsIcon /></IconButton>
         </Box>
 
-        {/* Page title */}
-        <Box 
-          sx={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: 1, 
-            mt: -1, 
-            mb: 2 
-          }}
-        >
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            Dashboard
-          </Typography>
-          <CircleIcon 
-            sx={{ 
-              ml: "15%", 
-              fontSize: 10, 
-              color: "#B3B3B3" 
-            }} 
-          />
-          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
-            Student
-          </Typography>
+        {/* Title */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>Dashboard</Typography>
+          <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
+          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>Student</Typography>
         </Box>
 
-        <Box
-          sx={{
-            display: 'flex',       
-            alignItems: 'baseline',  
-            gap: 5,                   
-            mb: 2
-          }}
-        >
+        {/* Greating & total rewards & ai button */}
+        <Box sx={{ display: "flex", alignItems: "baseline", gap: 5, mb: 2 }}>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>
             {greeting}, {firstName}! 👋
           </Typography>
-
-          {/* Reward title */}
           <Typography variant="h7" sx={{ fontWeight: 700 }}>
             Total Rewards:
-            <Box component="span" sx={{ fontWeight: 800, ml: 1 }}>
-              {totalRewards}
-            </Box>
+            <Box component="span" sx={{ fontWeight: 800, ml: 1 }}>{totalRewards}</Box>
           </Typography>
-
-          <Paper
-            elevation={1}
-            sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 2, 
-              px: 1.5, 
-              py: 0.5, 
-              ml: 'auto'
-            }}
-          >
+          <Paper elevation={1} sx={{ display: "flex", alignItems: "center", gap: 2, px: 1.5, py: 0.5, ml: "auto" }}>
             <SmartToyIcon fontSize="small" />
             <Typography variant="body1">AI</Typography>
           </Paper>
         </Box>
 
-        {/* Courses card design */}
-        <Box 
-          sx={{ 
-            mt: 2, 
-            pb: 2, 
-            width: "100%", 
-            height: "100%" 
-          }}
-        >
-          <Grid
-            container
-            spacing={3}
-            sx={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "stretch",
-              height: "100%",
-              width: "100%",
-            }}
-          >
-            {/* Courses card scrolling: y */}
-            <Grid
-              item
-              sx={{
-                flexGrow: 0,
-                flexShrink: 0,
-                flexBasis: { xs: "100%", sm: "50%", md: "60%" },
-                maxWidth: { xs: "100%", sm: "50%", md: "60%" },
-              }}
-            >
-              <Paper
-                sx={{
-                  p: 3,
-                  height: "85%",
-                  width: "97.5%",
-                  borderRadius: 2,
-                  boxShadow: 2,
-                }}
-              >
-                <Typography component={Link} to="/courses" variant="h5" 
-                  sx={{ 
-                    fontWeight: 700, 
-                    mb: 2,
-                    textDecoration: "none",
-                    color: "inherit",
-                    "&:hover": { textDecoration: "underline" }
-                  }}
-                >
+        <Box sx={{ mt: 2, pb: 2, width: "100%", height: "100%" }}>
+          <Grid container spacing={3} sx={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", height: "100%", width: "100%" }}>
+            {/* Courses */}
+            <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "60%" }, maxWidth: { xs: "100%", sm: "50%", md: "60%" } }}>
+              <Paper sx={{ p: 3, height: "85%", width: "97.5%", borderRadius: 2, boxShadow: 2 }}>
+                <Typography component={Link} to="/courses" variant="h5" sx={{ fontWeight: 700, mb: 2, textDecoration: "none", color: "inherit", "&:hover": { textDecoration: "underline" } }}>
                   Courses
                 </Typography>
-                <CoursesSlider courses={coursesData} />
+                <CoursesSlider courses={sliderCourses} />
               </Paper>
             </Grid>
 
             {/* Exercise Materials */}
-            <Grid
-              item
-              sx={{
-                flexGrow: 0,
-                flexShrink: 0,
-                flexBasis: { xs: "100%", sm: "50%", md: "30%" },
-                maxWidth:  { xs: "100%", sm: "50%", md: "30%" },
-                ml:{ md: "45px" }, 
-              }}
-            >
-              <Paper
-                variant="outlined"
-                sx={{
-                  flex: 1,
-                  p: 2,
-                  width: "100%",
-                  borderRadius: 2,
-                  boxShadow: 2,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  height: { md: '38vh' },
-                }}
-              >
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-                  Exercise Materials
-                </Typography>
-
-                <Box
-                  sx={{
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 2,
-                    p: 1,
-                    maxHeight: '70%',  
-                    overflowY: 'auto',
-                  }}
-                >
+            <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "30%" }, maxWidth: { xs: "100%", sm: "50%", md: "30%" }, ml: { md: "45px" } }}>
+              <Paper variant="outlined" sx={{ flex: 1, p: 2, width: "100%", borderRadius: 2, boxShadow: 2, border: "1px solid", borderColor: "divider", height: { md: "38vh" } }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Exercise Materials</Typography>
+                <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1, maxHeight: "70%", overflowY: "auto" }}>
                   {exercises.length === 0 ? (
                     <Typography>No materials</Typography>
                   ) : (
-                    exercises.map((e, i) => {  // special case
-                      let items = [];
-                      if (e.items) {
-                        items = e.items;
-                      } else if (e.item) {
-                        items = [e.item];
-                      }
+                    exercises.map((e, i) => {
+                      const items = e.items || (e.item ? [e.item] : []);
                       return (
-                        <Box 
-                          key={i} 
-                          sx={{ 
-                            pb: 2, 
-                            "&:last-child": { pb: 0 } 
-                          }}
-                        >
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 1 }}>
-                            {e.title}
-                          </Typography>
-                          {items.map((item, idx) => (
-                            <Typography key={idx} variant="body1" display="block" sx={{ pb: 1, lineHeight: 1.2 }}>
-                              {item}
-                            </Typography>
+                        <Box key={i} sx={{ pb: 2, "&:last-child": { pb: 0 } }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 1 }}>{e.title}</Typography>
+                          {items.map((it, idx) => (
+                            <Typography key={idx} variant="body1" display="block" sx={{ pb: 1, lineHeight: 1.2 }}>{it}</Typography>
                           ))}
                           {i < exercises.length - 1 && <Divider sx={{ mt: 1 }} />}
                         </Box>
@@ -716,26 +621,8 @@ const Dashboard = () => {
             </Grid>
 
             {/* Calendar */}
-            <Grid
-              item
-              sx={{
-                flexGrow: 0,
-                flexShrink: 0,
-                flexBasis: { xs: "100%", sm: "50%", md: "30%" },
-                maxWidth: { xs: "100%", sm: "50%", md: "30%" },
-                mt: { md: "2px" },
-                ml: { md: "15px" },
-              }}
-            >
-              <Paper
-                sx={{
-                  p: 2,
-                  height: "85%",
-                  width: "100%",
-                  borderRadius: 2,
-                  boxShadow: 2,
-                }}
-              >
+            <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "30%" }, maxWidth: { xs: "100%", sm: "50%", md: "30%" }, mt: { md: "2px" }, ml: { md: "15px" } }}>
+              <Paper sx={{ p: 2, height: "85%", width: "100%", borderRadius: 2, boxShadow: 2 }}>
                 <LocalizationProvider dateAdapter={AdapterDayjs}>
                   <DateCalendar />
                 </LocalizationProvider>

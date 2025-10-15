@@ -3,7 +3,7 @@ from ..extensions import db
 from ..models import User, UserRole, Course, Enrollment
 from sqlalchemy.exc import IntegrityError
 bp=Blueprint('course', __name__, url_prefix='/courses')
-# Create a new course
+# Create a new course (only admin)
 @bp.route("",methods=['POST'])
 def create_course():
     data=request.json
@@ -92,3 +92,30 @@ def enroll_student(course_id):
     except Exception as e:
         db.session.rollback()
         abort(500, description=str(e))
+        
+# list all courses a student is enrolled in 
+@bp.route("/users/<int:user_id>/enrollments", methods=["GET"])
+def list_user_enrollments(user_id):
+    # ensure user esists
+    user = User.query.get_or_404(user_id)
+
+    # select courses user is enrolled in 
+    courses = (
+        db.session.query(Course)
+        .join(Enrollment, Enrollment.course_id == Course.id)
+        .filter(Enrollment.user_id == user_id)
+        .order_by(Course.created_at.desc())
+        .all()
+    )
+
+    # return courses as list of dicts
+    def to_dict(c: Course):
+        return {
+            "id": c.id,
+            "code": c.code,
+            "name": getattr(c, "name", "") or "",
+            "title": getattr(c, "name", "") or "",  
+            "description": getattr(c, "description", "") or "",
+        }
+
+    return jsonify([to_dict(c) for c in courses]), 200

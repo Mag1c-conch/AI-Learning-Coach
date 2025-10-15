@@ -9,8 +9,27 @@ import os
 def create_app():
     load_dotenv()  # Load environment variables from .env file
     app = Flask(__name__)
-    CORS(app)
-    
+#     CORS(
+#     app,
+#     resources={r"/*": {
+#         "origins": [
+#             re.compile(r"http://localhost:\d+"),
+#             re.compile(r"http://127\.0\.0\.1:\d+"),
+#         ],
+#         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+#         "allow_headers": ["Content-Type", "Authorization"],
+#     }},
+#     supports_credentials=False,
+# )
+    CORS(
+        app,
+        resources={r"/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+        }},
+        supports_credentials=False,
+    )
     # Ensure instance directory exists
     instance_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance')
     os.makedirs(instance_dir, exist_ok=True)
