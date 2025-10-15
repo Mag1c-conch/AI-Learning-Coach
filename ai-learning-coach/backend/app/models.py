@@ -35,6 +35,7 @@ class Course(db.Model):
     code = db.Column(db.String(20), unique=True, nullable=False)
     name = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.String(500), nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
@@ -47,6 +48,7 @@ class Course(db.Model):
             "code": self.code,
             "name": self.name,
             "description": self.description,
+            "image_url": self.image_url,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -10,6 +10,7 @@ def create_course():
     course_name=data.get('course_name')
     course_code=data.get('course_code')
     description=data.get('description')
+    image_url=data.get('image_url')  # optional image URL
     created_by=data.get('created_by')     # admin user id
     # check if course code already exists
     if Course.query.filter_by(code=course_code).first():
@@ -25,6 +26,7 @@ def create_course():
         name=course_name,
         code=course_code,
         description=description,
+        image_url=image_url,
         created_by=created_by
         )
     try:

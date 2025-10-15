@@ -227,7 +227,8 @@ export default function Dashboard() {
   const [courseForm, setCourseForm] = useState({
     course_name: "",
     course_code: "",
-    description: ""
+    description: "",
+    image_url: ""
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -237,6 +238,15 @@ export default function Dashboard() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  // —— 默认学习相关图片
+  const defaultCourseImages = [
+    "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", // 书本和笔记本
+    "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=800&auto=format&fit=crop", // 课堂学习
+    "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=800&auto=format&fit=crop", // 大学生活
+    "https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=800&auto=format&fit=crop", // 图书馆
+    "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=800&auto=format&fit=crop", // 笔记本电脑学习
+  ];
+
   // —— 从后端获取课程列表
   const fetchCourses = async () => {
     setCoursesLoading(true);
@@ -245,11 +255,11 @@ export default function Dashboard() {
       if (response.ok) {
         const data = await response.json();
         // 将后端数据转换为前端格式
-        const formattedCourses = data.map(course => ({
+        const formattedCourses = data.map((course, index) => ({
           id: course.code,
           title: `${course.code} - ${course.name}`,
           org: course.description || "COMPSC - School of CSE",
-          image: "https://images.unsplash.com/photo-1518779578993-ec3579fee39f?q=80&w=800&auto=format&fit=crop",
+          image: course.image_url || defaultCourseImages[index % defaultCourseImages.length],
           studentCount: 0, // TODO: 从enrollments计算
         }));
         setCourses(formattedCourses);
@@ -308,6 +318,7 @@ export default function Dashboard() {
           course_name: courseForm.course_name,
           course_code: courseForm.course_code,
           description: courseForm.description,
+          image_url: courseForm.image_url || null,
           created_by: adminId
         }),
       });
@@ -315,7 +326,7 @@ export default function Dashboard() {
       if (response.ok) {
         // 成功创建
         setOpenAdd(false);
-        setCourseForm({ course_name: "", course_code: "", description: "" });
+        setCourseForm({ course_name: "", course_code: "", description: "", image_url: "" });
         alert("Course created successfully!");
         // 刷新课程列表
         fetchCourses();
@@ -333,7 +344,7 @@ export default function Dashboard() {
   // —— 关闭弹窗时重置表单
   const handleCloseAdd = () => {
     setOpenAdd(false);
-    setCourseForm({ course_name: "", course_code: "", description: "" });
+    setCourseForm({ course_name: "", course_code: "", description: "", image_url: "" });
     setError("");
   };
 
@@ -700,6 +711,14 @@ export default function Dashboard() {
               placeholder="Enter course description..."
               value={courseForm.description}
               onChange={(e) => handleFormChange('description', e.target.value)}
+            />
+            <TextField
+              fullWidth
+              label="Image URL (Optional)"
+              placeholder="e.g., https://example.com/image.jpg"
+              value={courseForm.image_url}
+              onChange={(e) => handleFormChange('image_url', e.target.value)}
+              helperText="Leave blank to use default learning image"
             />
             {error && (
               <Typography color="error" variant="body2">
