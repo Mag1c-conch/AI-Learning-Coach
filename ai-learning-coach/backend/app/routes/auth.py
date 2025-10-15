@@ -9,11 +9,31 @@ bp=Blueprint('auth', __name__, url_prefix='/auth')
 def register():
     try:
         data=request.json
+        
+        # Validate required fields
         first_name=data.get('first_name')
         last_name=data.get('last_name')
         username=data.get('username')
         password=data.get('password')
         role_str=data.get('role')
+        
+        # Check for missing fields
+        missing_fields = []
+        if not first_name:
+            missing_fields.append('first_name')
+        if not last_name:
+            missing_fields.append('last_name')
+        if not username:
+            missing_fields.append('username')
+        if not password:
+            missing_fields.append('password')
+        if not role_str:
+            missing_fields.append('role')
+            
+        if missing_fields:
+            return jsonify({
+                "error": f"Missing required fields: {', '.join(missing_fields)}"
+            }), 400
         
         # Convert string role to UserRole enum
         if role_str == 'student':
@@ -22,7 +42,7 @@ def register():
             role_enum = UserRole.ADMIN
         else:
             return jsonify({
-                "error": 'Invalid role!'
+                "error": 'Invalid role! Must be either "student" or "admin".'
             }), 400
         
         # Check if the email is already registered with the same role

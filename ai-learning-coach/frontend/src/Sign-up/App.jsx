@@ -8,6 +8,7 @@ import {
   Button,
   Typography,
   message,
+  Alert,
 } from "antd";
 import "./App.css";
 import signinImage from "../components/signin.jpg";
@@ -17,6 +18,7 @@ export default function App() {
   const { Title, Text } = Typography;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const themeTokens = useMemo(
     () => ({
@@ -48,23 +50,29 @@ export default function App() {
 
   const onFinish = async (values) => {
     setLoading(true);
+    setError(""); // Clear previous errors
     
     try {
+      const requestBody = {
+        username: values.email,
+        password: values.password,
+        role: values.role,
+        first_name: values.firstName,
+        last_name: values.lastName,
+      };
+      
+      console.log('Sending registration request:', requestBody);
+      
       const response = await fetch('http://localhost:5001/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          username: values.email,
-          password: values.password,
-          role: values.role,
-          first_name: values.firstName,
-          last_name: values.lastName,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
+      console.log('Server response:', { status: response.status, data });
 
       if (response.ok && !data.error) {
         message.success('Registration successful! Redirecting...');
@@ -81,10 +89,16 @@ export default function App() {
           }
         }, 1000);
       } else {
-        message.error(data.error || 'Registration failed. Please try again.');
+        // Display error message
+        const errorMsg = data.error || 'Registration failed. Please try again.';
+        console.error('Registration failed:', errorMsg);
+        setError(errorMsg);
+        message.error(errorMsg);
       }
     } catch (err) {
-      message.error('Network error. Please check if the backend server is running.');
+      const errorMsg = 'Network error. Please check if the backend server is running.';
+      setError(errorMsg);
+      message.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -98,6 +112,17 @@ export default function App() {
             <Title id="signup-title" level={1} style={{ margin: "6px 0 18px" }}>
               Sign Up
             </Title>
+
+            {error && (
+              <Alert 
+                message="Registration Error" 
+                description={error}
+                type="error" 
+                closable
+                onClose={() => setError("")}
+                style={{ marginBottom: 16 }}
+              />
+            )}
 
             <Text strong className="section-label">User</Text>
             <Form 
