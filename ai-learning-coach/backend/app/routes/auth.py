@@ -49,6 +49,7 @@ def register():
             "id": user.id
         }), 201
     except Exception as e:
+        db.session.rollback()
         return jsonify({
             "error": f"Registration failed: {str(e)}"
         }), 500
