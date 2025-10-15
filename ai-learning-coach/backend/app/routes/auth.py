@@ -25,10 +25,12 @@ def register():
                 "error": 'Invalid role!'
             }), 400
         
+        # Check if the email is already registered with the same role
         exist_user = User.query.filter_by(username=username, role=role_enum).first()
         if exist_user:
+            role_name = "student" if role_enum == UserRole.STUDENT else "admin"
             return jsonify({
-                "error": "The username has been registered!"
+                "error": f"This email is already registered as a {role_name}. Please use a different email or sign in."
             }), 400
         
         user = User()

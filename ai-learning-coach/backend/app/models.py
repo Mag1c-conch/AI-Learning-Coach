@@ -11,7 +11,7 @@ class User(db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), nullable=False)
     password = db.Column(db.String(120), nullable=False)
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
@@ -21,6 +21,11 @@ class User(db.Model):
     # 反向关系
     courses_created = db.relationship("Course", back_populates="creator", lazy="selectin")
     enrollments = db.relationship("Enrollment", back_populates="student", lazy="selectin")
+    
+    # 组合唯一约束：同一个邮箱不能注册相同角色
+    __table_args__ = (
+        db.UniqueConstraint("username", "role", name="uq_user_username_role"),
+    )
 
 # Course Table
 class Course(db.Model):
