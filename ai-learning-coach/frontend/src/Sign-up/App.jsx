@@ -47,11 +47,6 @@ export default function App() {
   ];
 
   const onFinish = async (values) => {
-    if (values.role === "admin") {
-      message.warning("Admin registration requires a separate process.");
-      return;
-    }
-
     setLoading(true);
     
     try {
