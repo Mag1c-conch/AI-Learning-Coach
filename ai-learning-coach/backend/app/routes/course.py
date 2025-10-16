@@ -62,7 +62,17 @@ def delete_course(course_id):
 def list_courses():
     # Fetch all courses from the database, ordered by creation date
     courses = Course.query.order_by(Course.created_at.desc()).all()
-    return jsonify([course.to_dict() for course in courses]), 200
+    result = []
+    for c in courses:
+        user = User.query.get(c.created_by)
+        if user:
+            name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        else:
+            name = None
+        d = c.to_dict()
+        d["creator_name"] = name
+        result.append(d)
+    return jsonify(result), 200
 
 # Enroll a student in a course
 @bp.route("/<int:course_id>/enroll",methods=['POST'])
