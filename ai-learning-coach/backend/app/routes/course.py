@@ -58,19 +58,37 @@ def delete_course(course_id):
         abort(500, description=str(e))
 
 # list all courses
-@bp.route("",methods=['GET'])
+@bp.route("", methods=['GET'])
 def list_courses():
-    # Fetch all courses from the database, ordered by creation date
     courses = Course.query.order_by(Course.created_at.desc()).all()
     result = []
     for c in courses:
-        user = User.query.get(c.created_by)
+        user = User.query.get(c.created_by) if getattr(c, "created_by", None) else None
         if user:
-            name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+            first = (getattr(user, "first_name", "") or "").strip()
+            last = (getattr(user, "last_name", "") or "").strip()
+            teacher_name = (f"{first} {last}").strip() or None
         else:
-            name = None
+            teacher_name = None
+        teacher_email = None
+        if user:
+            candidates = [
+                getattr(user, "email", None),
+                getattr(user, "email_address", None),
+                getattr(user, "mail", None),
+            ]
+            uname = getattr(user, "username", None)
+            if uname and isinstance(uname, str) and "@" in uname:
+                candidates.append(uname)
+
+            for v in candidates:
+                if v and isinstance(v, str) and "@" in v:
+                    teacher_email = v.strip()
+                    break
         d = c.to_dict()
-        d["creator_name"] = name
+        d["creator_name"] = teacher_name
+        d["teacher"] = teacher_name
+        d["email"] = teacher_email
         result.append(d)
     return jsonify(result), 200
 

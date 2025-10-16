@@ -102,7 +102,7 @@ const Registercourse = () => {
           .filter((r) => Number.isInteger(r.id)); 
         setRows(normalized);
       } catch (e) {
-        alert(`加载课程失败：${e?.response?.data?.description || e.message}`);
+        alert(`load unsuccessful: ${e?.response?.data?.description || e.message}`);
       } finally {
         setLoading(false);
       }
@@ -123,7 +123,7 @@ const Registercourse = () => {
   const handleSubmit = async () => {
     if (!selected) return;
     const uid = getCurrentUserId();
-    if (!uid) return alert("未登录或缺少用户信息");
+    if (!uid) return alert("user not logged in or session expired");
 
     try {
       // call backend api to entoll
