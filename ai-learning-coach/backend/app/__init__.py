@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
 from .extensions import db, migrate
-from .routes import auth,course
+from .routes import auth,course, material
 import os
 
 
@@ -38,7 +38,9 @@ def create_app():
     db_path = os.path.join(instance_dir, 'app.db')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
+    # Ensure upload folder exists
+    os.makedirs(os.path.join(instance_dir, 'uploads'), exist_ok=True)
+    app.config['UPLOAD_FOLDER'] = os.path.join(instance_dir, 'uploads')
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
@@ -56,5 +58,6 @@ def create_app():
     app.register_blueprint(auth.bp)
     # course blueprint
     app.register_blueprint(course.bp)
-    
+    # material blueprint
+    app.register_blueprint(material.bp)
     return app
