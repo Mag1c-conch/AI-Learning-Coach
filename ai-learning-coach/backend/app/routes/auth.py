@@ -1,4 +1,5 @@
 # app/routes/auth.py
+import re
 from flask import Blueprint, request, jsonify
 from ..models import User, UserRole
 from ..extensions import db

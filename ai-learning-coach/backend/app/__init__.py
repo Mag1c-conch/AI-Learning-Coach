@@ -58,6 +58,8 @@ def create_app():
     app.register_blueprint(auth.bp)
     # course blueprint
     app.register_blueprint(course.bp)
+    app.register_blueprint(assignment.bp)
+    
     # material blueprint
     app.register_blueprint(material.bp)
     return app
