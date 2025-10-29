@@ -61,7 +61,6 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(auth.bp)
-    # course blueprint
     app.register_blueprint(course.bp)
     # assignment blueprint
     app.register_blueprint(assignment.bp)
