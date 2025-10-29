@@ -1,0 +1,59 @@
+:root{
+  --bg:#fff7f7; --card:#fff; --ink:#0f172a; --line:#e2e8f0;
+  --primary:#193359; --illustration:#f4e8c6; --radius:16px;
+}
+
+*{ box-sizing: border-box; }
+html, body, #root { height: 100%; width: 100%; }
+
+body{
+  margin:0;
+  background:var(--bg);
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,
+    Noto Sans,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+  color:var(--ink);
+}
+
+/* 占满视口并把卡片居中 */
+.container{
+  min-height: 100vh;      /* 桌面 */
+  min-height: 100dvh;     /* 移动端更精准 */
+  display: flex;
+  align-items: center;     /* 垂直居中 */
+  justify-content: center; /* 水平居中 */
+  padding: 24px;
+  width: 100%;
+}
+
+/* 卡片 */
+.card{
+  width: min(1040px, 95vw);
+  margin: 0 auto;             /* 双保险：水平居中 */
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:0 10px 30px rgba(2,6,23,.08);
+  display:grid;
+  grid-template-columns:1.1fr 1fr;
+  gap:32px;
+  padding:32px;
+}
+
+/* 响应式：窄屏隐藏右侧色块 */
+@media (max-width:880px){
+  .card{ grid-template-columns:1fr; }
+  .illustration{ display:none; }
+}
+
+/* 小分组标题 */
+.section-label{
+  display:block;
+  margin:18px 0 8px;
+  font-weight:600;
+}
+
+/* 右侧背景色块 */
+.illustration{
+  background:var(--illustration);
+  border-radius:14px;
+  min-height:520px;   /* 需要更高/更矮可调这里 */
+}

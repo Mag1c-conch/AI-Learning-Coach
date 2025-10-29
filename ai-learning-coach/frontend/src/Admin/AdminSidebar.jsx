@@ -1,4 +1,4 @@
-// src/admin/AdminSidebar.jsx
+// src/Admin/AdminSidebar.jsx
 import React from 'react';
 import '../App.css';
 import { Button, Link } from '@mui/material';
