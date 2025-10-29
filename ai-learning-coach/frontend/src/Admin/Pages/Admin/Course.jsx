@@ -24,6 +24,7 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Chip,
+  CircularProgress,
 } from "@mui/material";
 import CircleIcon from "@mui/icons-material/Circle";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -112,6 +113,15 @@ const fileData = {
   ],
 };
 
+// 默认学习相关图片（与Dashboard保持一致）
+const defaultCourseImages = [
+  "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", // 书本和笔记本
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=800&auto=format&fit=crop", // 课堂学习
+  "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=800&auto=format&fit=crop", // 大学生活
+  "https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=800&auto=format&fit=crop", // 图书馆
+  "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=800&auto=format&fit=crop", // 笔记本电脑学习
+];
+
 // Hook to get user display name (consistent with Dashboard)
 function useDisplayName() {
   const [name, setName] = useState("Admin");
@@ -129,8 +139,49 @@ export default function Course() {
   // 从URL参数获取课程ID
   const { courseId } = useParams();
   
-  // 根据courseId找到对应的课程信息
-  const course = courses.find(c => c.id === courseId);
+  // 状态管理
+  const [course, setCourse] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // 从后端获取课程信息
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('http://localhost:5001/courses');
+        if (response.ok) {
+          const data = await response.json();
+          // 根据courseId（course.code）找到对应的课程
+          const foundCourse = data.find(c => c.code === courseId);
+          if (foundCourse) {
+            // 转换为前端格式
+            setCourse({
+              id: foundCourse.code,
+              title: `${foundCourse.code} - ${foundCourse.name}`,
+              org: foundCourse.description || "COMPSC - School of CSE",
+              image: foundCourse.image_url || defaultCourseImages[0],
+              studentCount: 0, // TODO: 从enrollments计算
+              ...foundCourse // 保留后端原始数据
+            });
+          } else {
+            setError(`Course with code "${courseId}" not found`);
+          }
+        } else {
+          setError('Failed to fetch course data');
+        }
+      } catch (err) {
+        console.error('Error fetching course:', err);
+        setError('Network error. Please check if the backend server is running.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (courseId) {
+      fetchCourse();
+    }
+  }, [courseId]);
   
   // Modal state management
   const [openAddFile, setOpenAddFile] = useState(false);
@@ -246,7 +297,37 @@ export default function Course() {
 
       {/* ======= 课程内容区域 ======= */}
       <Box sx={{ height: "100%", overflowY: "hidden" }}>
-        {course ? (
+        {loading ? (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              height: "400px",
+              flexDirection: "column",
+              gap: 2,
+            }}
+          >
+            <CircularProgress />
+            <Typography variant="body1" color="text.secondary">
+              Loading course information...
+            </Typography>
+          </Box>
+        ) : error ? (
+          <Box
+            sx={{
+              p: 3,
+              bgcolor: "#ffebee",
+              borderRadius: 2,
+              textAlign: "center",
+              color: "error.main",
+            }}
+          >
+            <Typography variant="body1">
+              {error}
+            </Typography>
+          </Box>
+        ) : course ? (
           <>
             {/* Course title */}
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
@@ -414,7 +495,7 @@ export default function Course() {
             }}
           >
             <Typography variant="body1">
-              未找到课程信息 (ID: {courseId})
+              Course not found (ID: {courseId})
             </Typography>
           </Box>
         )}
