@@ -42,6 +42,8 @@ class Course(db.Model):
 
     creator = db.relationship("User", back_populates="courses_created", lazy="joined")
     enrollments = db.relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
+    
+    materials= db.relationship("Material", backref="course", cascade="all, delete-orphan", lazy="selectin")
     def to_dict(self):
         return {
             "id": self.id,
@@ -68,3 +70,25 @@ class Enrollment(db.Model):
     __table_args__ = (
         db.UniqueConstraint("user_id", "course_id", name="uq_enrollment_user_course"),
     )
+    
+# Material Table
+class Material(db.Model):
+    __tablename__ = "materials"
+
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=False)
+    stored_name= db.Column(db.String(255), nullable=False)
+    original_name = db.Column(db.String(255), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    file_size = db.Column(db.Integer)
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "course_id": self.course_id,
+            "stored_name": self.stored_name,
+            "original_name": self.original_name,
+            "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
+            "uploaded_by": self.uploaded_by,
+            "file_size": self.file_size,
+        }
