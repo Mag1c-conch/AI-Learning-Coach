@@ -26,6 +26,11 @@ import {
   Chip,
   CircularProgress,
 } from "@mui/material";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import dayjs from "dayjs";
+import "dayjs/locale/en";
 import CircleIcon from "@mui/icons-material/Circle";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import AddIcon from "@mui/icons-material/Add";
@@ -92,26 +97,6 @@ const studentData = [
   { name: 'Diana', studentId: 'zXXXXXXXX', course: 'Math101', percent: 75 },
 ];
 
-// File management data (example)
-const fileData = {
-  "Week 1": [
-    { id: 1, name: "Lecture 1 - Introduction.pdf", type: "lecture_slide", uploadDate: "2024-01-15", size: "2.3 MB" },
-    { id: 2, name: "Assignment 1 - Basic Concepts.docx", type: "assignment", uploadDate: "2024-01-16", size: "1.1 MB", deadline: "2024-01-30" },
-  ],
-  "Week 2": [
-    { id: 3, name: "Lecture 2 - Advanced Topics.pdf", type: "lecture_slide", uploadDate: "2024-01-22", size: "3.1 MB" },
-    { id: 4, name: "Quiz 1 - Chapter 1-2.pdf", type: "quiz", uploadDate: "2024-01-23", size: "0.8 MB", deadline: "2024-01-25" },
-    { id: 5, name: "Lab Exercise 1.pdf", type: "lab", uploadDate: "2024-01-24", size: "1.5 MB", deadline: "2024-01-28" },
-  ],
-  "Week 3": [
-    { id: 6, name: "Reading Material - Chapter 3.pdf", type: "learning_material", uploadDate: "2024-01-29", size: "4.2 MB" },
-    { id: 7, name: "Practice Problems Set 1.pdf", type: "practice", uploadDate: "2024-01-30", size: "1.8 MB" },
-  ],
-  "Week 4": [
-    { id: 8, name: "Lecture 3 - Case Studies.pdf", type: "lecture_slide", uploadDate: "2024-02-05", size: "2.7 MB" },
-    { id: 9, name: "Assignment 2 - Implementation.docx", type: "assignment", uploadDate: "2024-02-06", size: "1.9 MB", deadline: "2024-02-20" },
-  ],
-};
 
 // 默认学习相关图片（与Dashboard保持一致）
 const defaultCourseImages = [
@@ -155,9 +140,10 @@ export default function Course() {
           // 根据courseId（course.code）找到对应的课程
           const foundCourse = data.find(c => c.code === courseId);
           if (foundCourse) {
-            // 转换为前端格式
+            // 转换为前端格式，保留后端的id字段用于API调用
             setCourse({
-              id: foundCourse.code,
+              id: foundCourse.id, // 使用后端的数据库ID，用于API调用
+              code: foundCourse.code, // 保留课程代码用于显示
               title: `${foundCourse.code} - ${foundCourse.name}`,
               org: foundCourse.description || "COMPSC - School of CSE",
               image: foundCourse.image_url || defaultCourseImages[0],
@@ -186,6 +172,7 @@ export default function Course() {
   // Modal state management
   const [openAddFile, setOpenAddFile] = useState(false);
   
+  
   // File form state
   const [fileName, setFileName] = useState("");
   const [fileDescription, setFileDescription] = useState("");
@@ -194,14 +181,165 @@ export default function Course() {
   // Detailed file description state
   const [fileType, setFileType] = useState("");
   const [weekNumber, setWeekNumber] = useState("");
-  const [deadline, setDeadline] = useState("");
+  const [deadline, setDeadline] = useState(null); // Change to dayjs object or null
   const [additionalNotes, setAdditionalNotes] = useState("");
   
   // File management state
-  const [files, setFiles] = useState(fileData);
+  const [files, setFiles] = useState({});
+  const [materials, setMaterials] = useState([]);
+  const [filesLoading, setFilesLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [expandedWeeks, setExpandedWeeks] = useState(new Set(["Week 1", "Week 2"]));
   
+  // 从localStorage获取当前用户信息
+  const getCurrentUser = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        return JSON.parse(token);
+      }
+    } catch (e) {
+      console.error('Error parsing token:', e);
+    }
+    return null;
+  };
+
+  // 格式化文件大小为可读格式
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
+  // 从后端获取文件列表
+  const fetchMaterials = async () => {
+    if (!course || !course.id) return;
+    
+    setFilesLoading(true);
+    try {
+      const response = await fetch(`http://localhost:5001/materials?course_id=${course.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setMaterials(data);
+        
+        // 将材料按周分组：优先使用用户选择的周次（localStorage 持久化），没有则回退到按上传日期估算
+        const grouped = {};
+        // 读取本地的 materialId -> weekNumber 映射
+        let weekMap = {};
+        try {
+          const raw = localStorage.getItem('materialWeekMap');
+          if (raw) weekMap = JSON.parse(raw) || {};
+        } catch (e) {
+          console.warn('Failed to parse materialWeekMap:', e);
+        }
+        // 读取本地的 materialId -> type 映射
+        let typeMap = {};
+        try {
+          const raw = localStorage.getItem('materialTypeMap');
+          if (raw) typeMap = JSON.parse(raw) || {};
+        } catch (e) {
+          console.warn('Failed to parse materialTypeMap:', e);
+        }
+        
+        if (data.length > 0) {
+          // 找到最早的上传日期作为基准
+          const dates = data
+            .map(m => m.uploaded_at ? new Date(m.uploaded_at) : null)
+            .filter(d => d !== null)
+            .sort((a, b) => a - b);
+          
+          const earliestDate = dates[0];
+          
+          data.forEach((material) => {
+            // 优先使用后端 week_number，其次使用本地选择
+            const chosenWeek = (material.week_number && Number(material.week_number) > 0)
+              ? Number(material.week_number)
+              : weekMap[String(material.id)];
+            let weekKey;
+            if (chosenWeek && Number(chosenWeek) > 0) {
+              weekKey = `Week ${chosenWeek}`;
+            } else if (material.uploaded_at) {
+              // 回退：按上传日期估算周次（保持原有兼容逻辑）
+              const uploadDate = new Date(material.uploaded_at);
+              const diffTime = earliestDate ? (uploadDate - earliestDate) : 0;
+              const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+              const weekIndex = Math.max(1, Math.floor(diffDays / 7) + 1);
+              weekKey = `Week ${weekIndex}`;
+            } else {
+              // 最后回退：没有上传日期
+              weekKey = "其他";
+            }
+            
+            if (!grouped[weekKey]) {
+              grouped[weekKey] = [];
+            }
+            grouped[weekKey].push({
+              id: material.id,
+              name: material.original_name,
+              // 类型优先使用后端 file_type，其次本地映射，最后默认
+              type: material.file_type || typeMap[String(material.id)] || 'learning_material',
+              uploadDate: material.uploaded_at ? formatDate(material.uploaded_at) : '',
+              size: formatFileSize(material.file_size),
+              material: material // 保留原始数据用于下载和删除
+            });
+          });
+          
+          // 按周数排序（Week 1, Week 2, ... 其他）
+          const sortedGrouped = {};
+          const weekKeys = Object.keys(grouped).sort((a, b) => {
+            if (a === "其他") return 1;
+            if (b === "其他") return -1;
+            const numA = parseInt(a.replace("Week ", ""));
+            const numB = parseInt(b.replace("Week ", ""));
+            return numA - numB;
+          });
+          weekKeys.forEach(key => {
+            sortedGrouped[key] = grouped[key];
+          });
+          
+          Object.assign(grouped, sortedGrouped);
+        }
+        
+        // 如果没有文件，保持默认结构
+        if (Object.keys(grouped).length === 0) {
+          setFiles({});
+        } else {
+          setFiles(grouped);
+          // 默认展开第一个周
+          if (Object.keys(grouped).length > 0) {
+            setExpandedWeeks(new Set([Object.keys(grouped)[0]]));
+          }
+        }
+      } else {
+        console.error('Failed to fetch materials');
+      }
+    } catch (err) {
+      console.error('Error fetching materials:', err);
+    } finally {
+      setFilesLoading(false);
+    }
+  };
+
+  // 当课程信息加载完成后，获取文件列表
+  useEffect(() => {
+    if (course && course.id) {
+      fetchMaterials();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course?.id]);
+
   // File management functions
   const handleWeekToggle = (week) => {
     const newExpanded = new Set(expandedWeeks);
@@ -223,15 +361,46 @@ export default function Course() {
     setSelectedFiles(newSelected);
   };
   
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     if (selectedFiles.size === 0) return;
     
-    const newFiles = { ...files };
-    Object.keys(newFiles).forEach(week => {
-      newFiles[week] = newFiles[week].filter(file => !selectedFiles.has(file.id));
-    });
-    setFiles(newFiles);
-    setSelectedFiles(new Set());
+    const user = getCurrentUser();
+    if (!user || user.role !== 'admin') {
+      alert('只有管理员可以删除文件');
+      return;
+    }
+
+    const confirmDelete = window.confirm(`确定要删除选中的 ${selectedFiles.size} 个文件吗？`);
+    if (!confirmDelete) return;
+
+    try {
+      // 逐个删除选中的文件
+      const deletePromises = Array.from(selectedFiles).map(async (fileId) => {
+        const response = await fetch(`http://localhost:5001/materials/${fileId}?deleted_by=${user.id}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.description || '删除失败');
+        }
+        return response.json();
+      });
+
+      await Promise.all(deletePromises);
+      
+      // 刷新文件列表
+      await fetchMaterials();
+      setSelectedFiles(new Set());
+      alert('文件删除成功');
+    } catch (err) {
+      console.error('Error deleting materials:', err);
+      alert('删除文件时出错: ' + err.message);
+    }
+  };
+
+  // 处理文件下载
+  const handleDownload = (materialId, fileName) => {
+    window.open(`http://localhost:5001/materials/${materialId}/download`, '_blank');
   };
   
   // Keyboard event handler for delete key
@@ -348,7 +517,7 @@ export default function Course() {
                   }}
                 >
                   <Typography variant="body1" sx={{ mb: 1 }}>
-                    <strong>Course ID:</strong> {course.id}
+                    <strong>Course ID:</strong> {course.code || course.id}
                   </Typography>
                   <Typography variant="body1" sx={{ mb: 1 }}>
                     <strong>Facility:</strong> {course.org}
@@ -415,71 +584,87 @@ export default function Course() {
                     p: 2,
                   }}
                 >
-                  {Object.keys(files).map((week) => (
-                    <Accordion
-                      key={week}
-                      expanded={expandedWeeks.has(week)}
-                      onChange={() => handleWeekToggle(week)}
-                      sx={{ mb: 1, boxShadow: 1 }}
-                    >
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon />}
-                        sx={{
-                          bgcolor: "#f5f5f5",
-                          "&:hover": { bgcolor: "#e0e0e0" },
-                        }}
+                  {filesLoading ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 4 }}>
+                      <CircularProgress size={40} />
+                    </Box>
+                  ) : Object.keys(files).length === 0 ? (
+                    <Box sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
+                      <Typography variant="body2">暂无文件</Typography>
+                    </Box>
+                  ) : (
+                    Object.keys(files).map((week) => (
+                      <Accordion
+                        key={week}
+                        expanded={expandedWeeks.has(week)}
+                        onChange={() => handleWeekToggle(week)}
+                        sx={{ mb: 1, boxShadow: 1 }}
                       >
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                          {week} ({files[week].length} files)
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ p: 0 }}>
-                        <List dense>
-                          {files[week].map((file) => (
-                            <ListItem
-                              key={file.id}
-                              sx={{
-                                borderBottom: "1px solid rgba(0,0,0,0.1)",
-                                "&:hover": { bgcolor: "#f9f9f9" },
-                              }}
-                            >
-                              <Checkbox
-                                checked={selectedFiles.has(file.id)}
-                                onChange={() => handleFileSelect(file.id)}
-                                size="small"
-                              />
-                              <InsertDriveFileIcon sx={{ mr: 1, color: "#666" }} />
-                              <ListItemText
-                                primary={
-                                  <Box>
-                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                      {file.name}
-                                    </Typography>
-                                    <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
-                                      <Chip
-                                        label={file.type.replace('_', ' ')}
-                                        size="small"
-                                        variant="outlined"
-                                        sx={{ fontSize: "0.7rem", height: 20 }}
-                                      />
-                                      <Typography variant="caption" color="text.secondary">
-                                        {file.size}
+                        <AccordionSummary
+                          expandIcon={<ExpandMoreIcon />}
+                          sx={{
+                            bgcolor: "#f5f5f5",
+                            "&:hover": { bgcolor: "#e0e0e0" },
+                          }}
+                        >
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {week} ({files[week].length} files)
+                          </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ p: 0 }}>
+                          <List dense>
+                            {files[week].map((file) => (
+                              <ListItem
+                                key={file.id}
+                                sx={{
+                                  borderBottom: "1px solid rgba(0,0,0,0.1)",
+                                  "&:hover": { bgcolor: "#f9f9f9" },
+                                  cursor: "pointer"
+                                }}
+                                onClick={() => handleDownload(file.id, file.name)}
+                              >
+                                <Checkbox
+                                  checked={selectedFiles.has(file.id)}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    handleFileSelect(file.id);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  size="small"
+                                />
+                                <InsertDriveFileIcon sx={{ mr: 1, color: "#666" }} />
+                                <ListItemText
+                                  primary={
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                        {file.name}
                                       </Typography>
-                                      {file.deadline && (
-                                        <Typography variant="caption" color="error">
-                                          Due: {file.deadline}
+                                      <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
+                                        <Chip
+                                          label={file.type ? file.type.replace('_', ' ') : '文件'}
+                                          size="small"
+                                          variant="outlined"
+                                          sx={{ fontSize: "0.7rem", height: 20 }}
+                                        />
+                                        <Typography variant="caption" color="text.secondary">
+                                          {file.size}
                                         </Typography>
-                                      )}
+                                        {file.uploadDate && (
+                                          <Typography variant="caption" color="text.secondary">
+                                            {file.uploadDate}
+                                          </Typography>
+                                        )}
+                                      </Box>
                                     </Box>
-                                  </Box>
-                                }
-                              />
-                            </ListItem>
-                          ))}
-                        </List>
-                      </AccordionDetails>
-                    </Accordion>
-                  ))}
+                                  }
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </AccordionDetails>
+                      </Accordion>
+                    ))
+                  )}
                 </Box>
               </Box>
             </Box>
@@ -507,6 +692,7 @@ export default function Course() {
         onClose={() => setOpenAddFile(false)}
         maxWidth="sm"
         fullWidth
+        lang="en"
         PaperProps={{
           sx: {
             borderRadius: 2,
@@ -642,22 +828,19 @@ export default function Course() {
 
             {/* Deadline (only for assignment, quiz, lab) */}
             {(fileType === 'assignment' || fileType === 'quiz' || fileType === 'lab') && (
-              <TextField
-                fullWidth
-                type="datetime-local"
-                label="Deadline"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                InputLabelProps={{
-                  shrink: true,
-                }}
-                inputProps={{
-                  style: { 
-                    colorScheme: 'light' // Ensure date picker uses English
-                  }
-                }}
-                sx={{ mb: 2 }}
-              />
+              <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="en">
+                <DateTimePicker
+                  label="Deadline"
+                  value={deadline}
+                  onChange={(newValue) => setDeadline(newValue)}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      sx: { mb: 2 }
+                    }
+                  }}
+                />
+              </LocalizationProvider>
             )}
 
             {/* Additional Notes */}
@@ -682,26 +865,139 @@ export default function Course() {
         <DialogActions sx={{ p: 3, justifyContent: "center" }}>
           <Button
             variant="contained"
-            onClick={() => {
-              // Here you can add the logic to save the file
-              console.log("Saving file:", { 
-                fileName, 
-                fileDescription, 
-                selectedFile,
-                fileType,
-                weekNumber,
-                deadline,
-                additionalNotes
-              });
-              setOpenAddFile(false);
-              // Reset all form states
-              setFileName("");
-              setFileDescription("");
-              setSelectedFile(null);
-              setFileType("");
-              setWeekNumber("");
-              setDeadline("");
-              setAdditionalNotes("");
+            onClick={async () => {
+              // 验证表单
+              if (!selectedFile) {
+                alert('请选择要上传的文件');
+                return;
+              }
+
+              if (!course || !course.id) {
+                alert('课程信息不完整');
+                return;
+              }
+
+              const user = getCurrentUser();
+              if (!user || user.role !== 'admin') {
+                alert('只有管理员可以上传文件');
+                return;
+              }
+
+              try {
+                // 创建FormData对象
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('course_id', course.id);
+                formData.append('uploaded_by', user.id);
+                if (fileType) formData.append('file_type', String(fileType));
+                if (weekNumber) formData.append('week_number', Number(weekNumber));
+
+                // 上传文件
+                const response = await fetch('http://localhost:5001/materials', {
+                  method: 'POST',
+                  body: formData
+                });
+
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log('File uploaded successfully:', data);
+
+                  // 若为需要截止时间的类型且已选择截止时间，则创建对应的 assignment，用于 TimeTable 显示
+                  try {
+                    const isTaskType = fileType === 'assignment' || fileType === 'quiz' || fileType === 'lab';
+                    if (isTaskType && deadline) {
+                      const titleBase = fileName?.trim() || selectedFile?.name || 'Untitled';
+                      const titlePrefix = fileType === 'assignment' ? 'Assignment' : (fileType === 'quiz' ? 'Quiz' : 'Lab');
+                      const payload = {
+                        course_id: course.id,
+                        title: `${titlePrefix}: ${titleBase}`,
+                        description: additionalNotes || '',
+                        due_date: (typeof deadline?.toISOString === 'function') ? deadline.toISOString() : String(deadline),
+                        teacher_id: user.id,
+                        optional: false,
+                      };
+                      const createRes = await fetch('http://localhost:5001/assignments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                      });
+                      if (!createRes.ok) {
+                        const errData = await createRes.json().catch(() => ({}));
+                        console.warn('Failed to create assignment:', errData);
+                      }
+                    }
+                  } catch (e) {
+                    console.warn('Create assignment error:', e);
+                  }
+
+                  // 若为需要截止时间的类型且已选择截止时间，则创建对应的 assignment，用于 TimeTable 显示
+                  try {
+                    const isTaskType = fileType === 'assignment' || fileType === 'quiz' || fileType === 'lab';
+                    if (isTaskType && deadline) {
+                      const titleBase = fileName?.trim() || selectedFile?.name || 'Untitled';
+                      const titlePrefix = fileType === 'assignment' ? 'Assignment' : (fileType === 'quiz' ? 'Quiz' : 'Lab');
+                      const payload = {
+                        course_id: course.id,
+                        title: `${titlePrefix}: ${titleBase}`,
+                        description: additionalNotes || '',
+                        due_date: (typeof deadline?.toISOString === 'function') ? deadline.toISOString() : String(deadline),
+                        teacher_id: user.id,
+                        optional: false,
+                      };
+                      const createRes = await fetch('http://localhost:5001/assignments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                      });
+                      if (!createRes.ok) {
+                        const errData = await createRes.json().catch(() => ({}));
+                        console.warn('Failed to create assignment:', errData);
+                      }
+                    }
+                  } catch (e) {
+                    console.warn('Create assignment error:', e);
+                  }
+
+                  // 将用户选择的周次与后端返回的 material.id 进行持久化映射，便于后续分组
+                  try {
+                    if (weekNumber) {
+                      const raw = localStorage.getItem('materialWeekMap');
+                      const map = raw ? (JSON.parse(raw) || {}) : {};
+                      map[String(data.id)] = Number(weekNumber);
+                      localStorage.setItem('materialWeekMap', JSON.stringify(map));
+                    }
+                    if (fileType) {
+                      const typeRaw = localStorage.getItem('materialTypeMap');
+                      const typeMap = typeRaw ? (JSON.parse(typeRaw) || {}) : {};
+                      typeMap[String(data.id)] = String(fileType);
+                      localStorage.setItem('materialTypeMap', JSON.stringify(typeMap));
+                    }
+                  } catch (e) {
+                    console.warn('Persist week number failed:', e);
+                  }
+
+                  alert('文件上传成功');
+                  
+                  // 刷新文件列表
+                  await fetchMaterials();
+                  
+                  // Close dialog and reset form
+                  setOpenAddFile(false);
+                  setFileName("");
+                  setFileDescription("");
+                  setSelectedFile(null);
+                  setFileType("");
+                  setWeekNumber("");
+                  setDeadline(null);
+                  setAdditionalNotes("");
+                } else {
+                  const error = await response.json();
+                  alert('上传失败: ' + (error.description || '未知错误'));
+                }
+              } catch (err) {
+                console.error('Error uploading file:', err);
+                alert('上传文件时出错: ' + err.message);
+              }
             }}
             sx={{
               bgcolor: "#1976d2",

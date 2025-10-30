@@ -93,6 +93,9 @@ class Material(db.Model):
     uploaded_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     uploaded_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     file_size = db.Column(db.Integer)
+    # New fields for stronger file management semantics
+    file_type = db.Column(db.String(50), nullable=True)  # e.g. assignment, quiz, lab, lecture_slide, learning_material, practice
+    week_number = db.Column(db.Integer, nullable=True)   # 1-based week number within term
 
     course = db.relationship("Course", back_populates="materials", lazy="joined")
 
@@ -105,6 +108,8 @@ class Material(db.Model):
             "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
             "uploaded_by": self.uploaded_by,
             "file_size": self.file_size,
+            "file_type": self.file_type,
+            "week_number": self.week_number,
         }
 
 

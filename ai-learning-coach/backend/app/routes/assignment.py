@@ -8,6 +8,24 @@ from ..models import Assignment, Course, User, UserRole
 bp = Blueprint("assignment", __name__, url_prefix="/assignments")
 
 
+@bp.route("", methods=["GET"])
+def list_assignments():
+    """
+    Optional query parameters:
+    - course_id: int, filter assignments by course
+    Returns 200 with an array of assignment JSON objects.
+    """
+    course_id = request.args.get("course_id", type=int)
+
+    query = Assignment.query
+    if course_id is not None:
+        Course.query.get_or_404(course_id)
+        query = query.filter_by(course_id=course_id)
+
+    assignments = query.order_by(Assignment.due_date.asc()).all()
+    return jsonify([assignment.to_dict() for assignment in assignments]), 200
+
+
 @bp.route("", methods=["POST"])
 def create_assignment():
     data = request.get_json(silent=True) or {}

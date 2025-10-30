@@ -35,6 +35,9 @@ def upload_material():
     - file: binary file object to upload
     - course_id: int, target course ID
     - uploaded_by: int, admin user ID performing the upload
+    Optional form fields (if provided will be saved):
+    - file_type: str, one of {assignment, quiz, lab, lecture_slide, learning_material, practice}
+    - week_number: int, 1-based week index
     Returns 201 with the created material JSON on success.
     """
     if "file" not in request.files:
@@ -66,12 +69,22 @@ def upload_material():
     file_path = os.path.join(course_dir, stored_name)
     file.save(file_path)
 
+    file_type = request.form.get("file_type")
+    week_number = request.form.get("week_number", type=int)
+
+    # normalize file_type to a small whitelist if present
+    _allowed_types = {"assignment", "quiz", "lab", "lecture_slide", "learning_material", "practice"}
+    if file_type and file_type not in _allowed_types:
+        abort(400, description="invalid file_type")
+
     material = Material(
         course_id=course_id,
         original_name=original_name,
         stored_name=stored_name,
         uploaded_by=user.id,
         file_size=os.path.getsize(file_path),
+        file_type=file_type,
+        week_number=week_number,
     )
     try:
         db.session.add(material)

@@ -1,16 +1,18 @@
 // src/Admin/Pages/Admin/TimeTable.jsx
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import {
   Box,
   Typography,
   IconButton,
   InputBase,
+  CircularProgress,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import CircleIcon from "@mui/icons-material/Circle";
 import { Badge, Calendar } from 'antd';
+import dayjs from 'dayjs';
 
 /* ---------- 搜索栏样式 ---------- */
 const Search = styled("div")(({ theme }) => ({
@@ -49,6 +51,16 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 /* ---------- 名字从 localStorage 读取 ---------- */
 function useDisplayName() {
   return useMemo(() => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const userData = JSON.parse(token);
+        return userData.first_name || "Admin";
+      }
+    } catch (error) {
+      console.error("Error parsing user data:", error);
+    }
+
     const fromStorage =
       localStorage.getItem("displayName") ||
       localStorage.getItem("username") ||
@@ -67,53 +79,93 @@ function useDisplayName() {
   }, []);
 }
 
-/* ---------- 日历数据 ---------- */
-const getListData = (value) => {
-  let listData = [];
-  switch (value.date()) {
-    case 8:
-      listData = [
-        { type: 'warning', content: 'This is warning event.' },
-        { type: 'success', content: 'This is usual event.' },
-      ];
-      break;
-    case 10:
-      listData = [
-        { type: 'warning', content: 'This is warning event.' },
-        { type: 'success', content: 'This is usual event.' },
-        { type: 'error', content: 'This is error event.' },
-      ];
-      break;
-    case 15:
-      listData = [
-        { type: 'warning', content: 'This is warning event' },
-        { type: 'success', content: 'This is very long usual event......' },
-        { type: 'error', content: 'This is error event 1.' },
-        { type: 'error', content: 'This is error event 2.' },
-        { type: 'error', content: 'This is error event 3.' },
-        { type: 'error', content: 'This is error event 4.' },
-      ];
-      break;
-    default:
-  }
-  return listData || [];
-};
-
-const getMonthData = (value) => {
-  if (value.month() === 8) {
-    return 1394;
-  }
-};
-
 export default function TimeTable() {
   const name = useDisplayName();
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch all assignments
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('http://localhost:5001/assignments');
+        if (response.ok) {
+          const data = await response.json();
+          setAssignments(data);
+        } else {
+          console.error('Failed to fetch assignments');
+        }
+      } catch (err) {
+        console.error('Error fetching assignments:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAssignments();
+  }, []);
+
+  // Get events for a specific date
+  const getListData = (value) => {
+    const dateStr = value.format('YYYY-MM-DD');
+    let listData = [];
+
+    assignments.forEach((assignment) => {
+      if (assignment.due_date) {
+        const dueDate = dayjs(assignment.due_date);
+        const dueDateStr = dueDate.format('YYYY-MM-DD');
+        
+        if (dueDateStr === dateStr) {
+          // Determine badge type based on assignment title or description
+          let badgeType = 'success'; // default
+          const title = assignment.title?.toLowerCase() || '';
+          const desc = assignment.description?.toLowerCase() || '';
+          
+          if (title.includes('quiz') || desc.includes('quiz')) {
+            badgeType = 'warning';
+          } else if (title.includes('lab') || desc.includes('lab')) {
+            badgeType = 'processing';
+          } else if (title.includes('assignment') || desc.includes('assignment')) {
+            badgeType = 'error';
+          }
+
+          listData.push({
+            type: badgeType,
+            content: assignment.title || 'Assignment',
+            assignment: assignment,
+          });
+        }
+      }
+    });
+
+    return listData || [];
+  };
+
+  const getMonthData = (value) => {
+    // Count assignments in the month
+    let count = 0;
+    const month = value.month();
+    const year = value.year();
+
+    assignments.forEach((assignment) => {
+      if (assignment.due_date) {
+        const dueDate = dayjs(assignment.due_date);
+        if (dueDate.month() === month && dueDate.year() === year) {
+          count++;
+        }
+      }
+    });
+
+    return count > 0 ? count : null;
+  };
 
   const monthCellRender = (value) => {
     const num = getMonthData(value);
     return num ? (
       <div className="notes-month">
         <section>{num}</section>
-        <span>Backlog number</span>
+        <span>Assignments</span>
       </div>
     ) : null;
   };
@@ -122,8 +174,8 @@ export default function TimeTable() {
     const listData = getListData(value);
     return (
       <ul className="events" style={{ textAlign: "left", paddingLeft: "0", margin: "0" }}>
-        {listData.map((item) => (
-          <li key={item.content} style={{ textAlign: "left", listStyle: "none" }}>
+        {listData.map((item, index) => (
+          <li key={`${item.content}-${index}`} style={{ textAlign: "left", listStyle: "none" }}>
             <Badge status={item.type} text={item.content} />
           </li>
         ))}
@@ -136,6 +188,14 @@ export default function TimeTable() {
     if (info.type === 'month') return monthCellRender(current);
     return info.originNode;
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3, position: "relative" }}>
