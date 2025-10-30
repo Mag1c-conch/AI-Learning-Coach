@@ -28,7 +28,7 @@ const Sidebar = () => {
         <Button fullWidth component={NavLink} to="/exercises" style={buttonStyle}>Exercises</Button>
         <Button fullWidth component={NavLink} to="/progress"  style={buttonStyle}>Study Progress</Button>
         <Button fullWidth component={NavLink} to="/assistant" style={buttonStyle}>AI Assistant</Button>
-        <Button fullWidth component={NavLink} to="/timetable" style={buttonStyle}>Time Table</Button>
+        <Button fullWidth component={NavLink} to="/calendar" style={buttonStyle}>Time Table</Button>
       </div>
 
       <div className="logout-icon">

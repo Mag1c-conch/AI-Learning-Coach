@@ -293,9 +293,9 @@ function ProgressSlider({ items = [] }) {
 // static course data
 const defaultCoursesData = [
   { code: "COMP9814", name: "Artificial Intelligence", dueText: "Due in 2 days", meta: "· 2 assignments" },
-  { code: "COMP9517", name: "Computer Vision",        dueText: "Due in 5 days", meta: "· 4 labs" },
-  { code: "COMP9024", name: "Data Structures",        dueText: "Due in 1 week", meta: "· 1 project" },
-  { code: "COMP9315", name: "Database Systems",       dueText: "Due tomorrow",  meta: "· exam review" },
+  // { code: "COMP9517", name: "Computer Vision",        dueText: "Due in 5 days", meta: "· 4 labs" },
+  // { code: "COMP9024", name: "Data Structures",        dueText: "Due in 1 week", meta: "· 1 project" },
+  // { code: "COMP9315", name: "Database Systems",       dueText: "Due tomorrow",  meta: "· exam review" },
 ];
 
 const exerciseData = [
