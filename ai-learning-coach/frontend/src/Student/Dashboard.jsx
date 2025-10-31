@@ -546,7 +546,7 @@ const Dashboard = () => {
             {/* Exercise Materials */}
             <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "30%" }, maxWidth: { xs: "100%", sm: "50%", md: "30%" }, ml: { md: "45px" } }}>
               <Paper variant="outlined" sx={{ flex: 1, p: 2, width: "100%", borderRadius: 2, boxShadow: 2, border: "1px solid", borderColor: "divider", height: { md: "38vh" } }}>
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Exercise Materials</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Todo List</Typography>
                 <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1, maxHeight: "70%", overflowY: "auto" }}>
                   {exercises.length === 0 ? (
                     <Typography>No materials</Typography>

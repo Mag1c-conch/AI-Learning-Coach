@@ -25,7 +25,6 @@ const Sidebar = () => {
       <div className="menu">
         <Button fullWidth component={NavLink} to="/dashboard" style={buttonStyle}>Dashboard</Button>
         <Button fullWidth component={NavLink} to="/courses"   style={buttonStyle}>Courses</Button>
-        <Button fullWidth component={NavLink} to="/exercises" style={buttonStyle}>Exercises</Button>
         <Button fullWidth component={NavLink} to="/progress"  style={buttonStyle}>Study Progress</Button>
         <Button fullWidth component={NavLink} to="/assistant" style={buttonStyle}>AI Assistant</Button>
         <Button fullWidth component={NavLink} to="/calendar" style={buttonStyle}>Time Table</Button>

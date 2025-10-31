@@ -1,29 +1,23 @@
-﻿from flask import Blueprint, abort, current_app, jsonify, request
+﻿# app/routes/ai_assistant.py
+from flask import Blueprint, request, jsonify
+import traceback, sys
 
-from ..services.ai import generate_reply
+bp = Blueprint("ai_assistant", __name__)
 
-bp = Blueprint("ai_assistant", __name__, url_prefix="/assistant")
-
-
-@bp.route("/chat", methods=["POST"])
+@bp.route("/assistant/chat", methods=["POST", "OPTIONS"])
 def chat():
-    payload = request.get_json(silent=True) or {}
-    messages = payload.get("messages")
-    system_prompt = payload.get("system_prompt")
+    if request.method == "OPTIONS":
+        return "", 200
 
-    if not isinstance(messages, list) or not messages:
-        abort(400, description="messages must be a non-empty list")
-
+    data = request.get_json(force=True, silent=True) or {}
+    print(data) 
     try:
+        messages = data.get("messages", [])
+        system_prompt = data.get("system_prompt")
+        from ..services.ai import generate_reply
         reply = generate_reply(messages, system_prompt=system_prompt)
-    except ValueError as err:
-        abort(400, description=str(err))
-    except RuntimeError as err:
-        abort(502, description=str(err))
-
-    return jsonify(
-        {
-            "reply": reply,
-            "model": current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash"),
-        }
-    ), 200
+        return jsonify({"text": reply}), 200
+    except Exception as e:
+        print("ERROR in /assistant/chat:", e, file=sys.stderr)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500

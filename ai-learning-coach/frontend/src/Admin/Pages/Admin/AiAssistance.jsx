@@ -18,7 +18,8 @@ export default function AiAssistance() {
   const [messages, setMessages] = useState([
     {
       role: 'model',
-      content: 'Hello! I\'m your AI teaching assistant. I can help you answer course-related questions, assist in creating teaching plans, analyze student progress, and more. How can I help you today?',
+      content:
+        "Hello! I'm your AI teaching assistant. I can help you answer course-related questions, assist in creating teaching plans, analyze student progress, and more. How can I help you today?",
     },
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -27,16 +28,13 @@ export default function AiAssistance() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Auto scroll to latest message
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Get current user display name
   const getDisplayName = () => {
     try {
       const token = localStorage.getItem('token');
@@ -44,13 +42,12 @@ export default function AiAssistance() {
         const userData = JSON.parse(token);
         return userData.first_name || userData.username || 'Teacher';
       }
-    } catch (error) {
-      console.error('Error parsing user data:', error);
+    } catch (err) {
+      console.error('Error parsing user data:', err);
     }
     return 'Teacher';
   };
 
-  // Send message
   const handleSend = async () => {
     if (!inputValue.trim() || loading) return;
 
@@ -58,25 +55,19 @@ export default function AiAssistance() {
     setInputValue('');
     setError(null);
 
-    // Add user message to list
-    const newMessages = [
+    const draft = [
       ...messages,
-      {
-        role: 'user',
-        content: userMessage,
-      },
+      { role: 'user', content: userMessage },
     ];
-    setMessages(newMessages);
+    setMessages(draft);
     setLoading(true);
 
     try {
-      // Format messages for backend
-      const formattedMessages = newMessages.map((msg) => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        content: msg.content,
+      const formattedMessages = draft.map((m) => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        content: m.content,
       }));
 
-      // Set system prompt for teacher role
       const systemPrompt = `You are a professional AI teaching assistant, primarily helping teachers with:
 1. Answering course content and teaching-related questions
 2. Assisting in creating teaching plans and course schedules
@@ -86,72 +77,75 @@ export default function AiAssistance() {
 
 Please answer teachers' questions in a professional, friendly, and clear manner.`;
 
-      const response = await fetch('http://localhost:5001/assistant/chat', {
+      const res = await fetch('http://localhost:5001/assistant/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: formattedMessages,
           system_prompt: systemPrompt,
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ description: 'Network error' }));
-        throw new Error(errorData.description || `Request failed: ${response.status}`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${res.statusText}${text ? `: ${text}` : ''}`);
       }
 
-      const data = await response.json();
-      
-      // Add AI reply to message list
-      setMessages([
-        ...newMessages,
-        {
-          role: 'model',
-          content: data.reply,
-        },
+      const data = await res.json();
+      const replyText =
+        typeof data?.text === 'string'
+          ? data.text
+          : typeof data?.reply === 'string'
+          ? data.reply
+          : null;
+
+      if (!replyText) {
+        throw new Error('Invalid response from server');
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        { role: 'model', content: replyText },
       ]);
     } catch (err) {
       console.error('Error sending message:', err);
-      setError(err.message || 'Error sending message, please try again later');
-      
-      // Remove the user message if API call failed
-      setMessages(messages);
+      setError(err instanceof Error ? err.message : 'Error sending message');
+      setMessages((prev) => prev.slice(0, -1));
     } finally {
       setLoading(false);
       inputRef.current?.focus();
     }
   };
 
-  // Handle Enter key to send
-  const handleKeyPress = (e) => {
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
-  // Format message content (preserve line breaks)
   const formatMessage = (content) => {
-    return content.split('\n').map((line, index) => (
-      <React.Fragment key={index}>
+    const safe = typeof content === 'string' ? content : String(content ?? '');
+    const lines = safe.split('\n');
+    return lines.map((line, idx) => (
+      <React.Fragment key={idx}>
         {line}
-        {index < content.split('\n').length - 1 && <br />}
+        {idx < lines.length - 1 && <br />}
       </React.Fragment>
     ));
   };
 
   return (
-    <Box sx={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: 'calc(100vh - 64px)', 
-      bgcolor: '#f5f6fa',
-      p: 3,
-      overflow: 'hidden'
-    }}>
-      {/* Chat container - not full page, centered */}
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: 'calc(100vh - 64px)',
+        bgcolor: '#f5f6fa',
+        p: 3,
+        overflow: 'hidden',
+      }}
+    >
       <Box
         sx={{
           maxWidth: '1200px',
@@ -166,7 +160,7 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
           overflow: 'hidden',
         }}
       >
-        {/* Simplified header */}
+        {/* Header */}
         <Box
           sx={{
             p: 2,
@@ -190,7 +184,6 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
           </Box>
         </Box>
 
-        {/* Error alert */}
         {error && (
           <Box sx={{ p: 2 }}>
             <Alert severity="error" onClose={() => setError(null)}>
@@ -199,7 +192,6 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
           </Box>
         )}
 
-        {/* Message list */}
         <Box
           sx={{
             flex: 1,
@@ -210,169 +202,128 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
             gap: 2,
           }}
         >
-        {messages.map((message, index) => (
-          <Box
-            key={index}
-            sx={{
-              display: 'flex',
-              justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
-              gap: 2,
-            }}
-          >
-            {message.role === 'model' && (
+          {messages.map((message, index) => (
+            <Box
+              key={index}
+              sx={{
+                display: 'flex',
+                justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
+                gap: 2,
+              }}
+            >
+              {message.role === 'model' && (
+                <Avatar sx={{ bgcolor: '#1976d2', width: 40, height: 40 }}>
+                  <SmartToyIcon />
+                </Avatar>
+              )}
+              <Box sx={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                    {message.role === 'user' ? getDisplayName() : 'AI Assistant'}
+                  </Typography>
+                  <Chip
+                    label={message.role === 'user' ? 'Teacher' : 'AI'}
+                    size="small"
+                    sx={{
+                      height: 16,
+                      fontSize: '0.65rem',
+                      bgcolor: message.role === 'user' ? '#e3f2fd' : '#f3e5f5',
+                      color: message.role === 'user' ? '#1976d2' : '#7b1fa2',
+                    }}
+                  />
+                </Box>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    bgcolor: message.role === 'user' ? '#1976d2' : '#fff',
+                    color: message.role === 'user' ? '#fff' : '#000',
+                    borderRadius: 2,
+                    border: message.role === 'model' ? '1px solid rgba(0,0,0,0.1)' : 'none',
+                  }}
+                >
+                  <Typography
+                    variant="body1"
+                    sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}
+                  >
+                    {formatMessage(message.content ?? '')}
+                  </Typography>
+                </Paper>
+              </Box>
+              {message.role === 'user' && (
+                <Avatar sx={{ bgcolor: '#f44336', width: 40, height: 40 }}>
+                  <PersonIcon />
+                </Avatar>
+              )}
+            </Box>
+          ))}
+
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 2 }}>
               <Avatar sx={{ bgcolor: '#1976d2', width: 40, height: 40 }}>
                 <SmartToyIcon />
               </Avatar>
-            )}
-            <Box
-              sx={{
-                maxWidth: '70%',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 0.5,
-              }}
-            >
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  mb: 0.5,
-                }}
-              >
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                  {message.role === 'user' ? getDisplayName() : 'AI Assistant'}
-                </Typography>
-                <Chip
-                  label={message.role === 'user' ? 'Teacher' : 'AI'}
-                  size="small"
-                  sx={{
-                    height: 16,
-                    fontSize: '0.65rem',
-                    bgcolor: message.role === 'user' ? '#e3f2fd' : '#f3e5f5',
-                    color: message.role === 'user' ? '#1976d2' : '#7b1fa2',
-                  }}
-                />
-              </Box>
               <Paper
                 elevation={0}
                 sx={{
                   p: 2,
-                  bgcolor: message.role === 'user' ? '#1976d2' : '#fff',
-                  color: message.role === 'user' ? '#fff' : '#000',
+                  bgcolor: '#fff',
                   borderRadius: 2,
-                  border: message.role === 'model' ? '1px solid rgba(0,0,0,0.1)' : 'none',
+                  border: '1px solid rgba(0,0,0,0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
                 }}
               >
-                <Typography
-                  variant="body1"
-                  sx={{
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {formatMessage(message.content)}
+                <CircularProgress size={16} />
+                <Typography variant="body2" color="text.secondary">
+                  AI is thinking...
                 </Typography>
               </Paper>
             </Box>
-            {message.role === 'user' && (
-              <Avatar sx={{ bgcolor: '#f44336', width: 40, height: 40 }}>
-                <PersonIcon />
-              </Avatar>
-            )}
-          </Box>
-        ))}
-
-        {/* Loading indicator */}
-        {loading && (
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'flex-start',
-              gap: 2,
-            }}
-          >
-            <Avatar sx={{ bgcolor: '#1976d2', width: 40, height: 40 }}>
-              <SmartToyIcon />
-            </Avatar>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                bgcolor: '#fff',
-                borderRadius: 2,
-                border: '1px solid rgba(0,0,0,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-              }}
-            >
-              <CircularProgress size={16} />
-              <Typography variant="body2" color="text.secondary">
-                AI is thinking...
-              </Typography>
-            </Paper>
-          </Box>
-        )}
+          )}
 
           <div ref={messagesEndRef} />
         </Box>
 
-        {/* Input area */}
-        <Box
-          sx={{
-            p: 2,
-            bgcolor: '#fff',
-            borderTop: '1px solid rgba(0,0,0,0.1)',
-          }}
-        >
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-          <TextField
-            ref={inputRef}
-            fullWidth
-            multiline
-            maxRows={4}
-            variant="outlined"
-            placeholder="Type your question..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={loading}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                bgcolor: '#f5f5f5',
-                '&:hover': {
-                  bgcolor: '#eeeeee',
+        <Box sx={{ p: 2, bgcolor: '#fff', borderTop: '1px solid rgba(0,0,0,0.1)' }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+            <TextField
+              ref={inputRef}
+              fullWidth
+              multiline
+              maxRows={4}
+              variant="outlined"
+              placeholder="Type your question..."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}  
+              disabled={loading}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  bgcolor: '#f5f5f5',
+                  '&:hover': { bgcolor: '#eeeeee' },
+                  '&.Mui-focused': { bgcolor: '#fff' },
                 },
-                '&.Mui-focused': {
-                  bgcolor: '#fff',
-                },
-              },
-            }}
-          />
-          <IconButton
-            color="primary"
-            onClick={handleSend}
-            disabled={!inputValue.trim() || loading}
-            sx={{
-              bgcolor: '#1976d2',
-              color: '#fff',
-              width: 48,
-              height: 48,
-              '&:hover': {
-                bgcolor: '#1565c0',
-              },
-              '&:disabled': {
-                bgcolor: '#e0e0e0',
-                color: '#9e9e9e',
-              },
-            }}
-          >
-            <SendIcon />
-          </IconButton>
-        </Box>
+              }}
+            />
+            <IconButton
+              color="primary"
+              onClick={handleSend}
+              disabled={!inputValue.trim() || loading}
+              sx={{
+                bgcolor: '#1976d2',
+                color: '#fff',
+                width: 48,
+                height: 48,
+                '&:hover': { bgcolor: '#1565c0' },
+                '&:disabled': { bgcolor: '#e0e0e0', color: '#9e9e9e' },
+              }}
+            >
+              <SendIcon />
+            </IconButton>
+          </Box>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
             Press Enter to send, Shift + Enter for new line
           </Typography>
