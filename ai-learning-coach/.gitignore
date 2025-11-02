@@ -7,3 +7,4 @@ __pycache__/
 migrations/__pycache__/
 backend/app/routes/README.md
 backend/test_scripts/
+backend/instance/
