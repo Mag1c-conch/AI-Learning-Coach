@@ -1,4 +1,4 @@
-from google import genai
+﻿from google import genai
 from flask import current_app
 
 # Roles accepted by the Gemini chat endpoint.
