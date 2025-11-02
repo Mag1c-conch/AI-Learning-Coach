@@ -14,6 +14,8 @@ import AdminCourse from './Admin/Pages/Admin/Course.jsx';
 import AiAssistance   from './Admin/Pages/Admin/AiAssistance.jsx';
 import TimeTable      from './Admin/Pages/Admin/TimeTable.jsx';
 import Registercourse from './Student/Registercourse.jsx';
+// import { Calendar } from 'antd';
+import Calendar from './Student/Calendar.jsx';
 
 
 function App() {
@@ -33,6 +35,7 @@ function App() {
             <Route path="/courses" element={<CoursesPage />} />
             <Route path="/course/:code" element={<CoursePage />} />
             <Route path="/registercourse" element={<Registercourse />} />
+            <Route path="calendar" element={<Calendar />} />
             <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />
