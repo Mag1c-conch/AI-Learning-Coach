@@ -37,7 +37,7 @@ def create_app():
 
     # load ai api key
     app.config["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY", "")
-    app.config["GEMINI_MODEL"] = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    #app.config["GEMINI_MODEL"] = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
 
     # Set database URI - use environment variable if available, otherwise use default SQLite
     db_path = os.path.join(instance_dir, "app.db")

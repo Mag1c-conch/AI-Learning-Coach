@@ -1,15 +1,19 @@
-﻿# app/services/ai.py
-from google import genai
+﻿from google import genai
 from flask import current_app
 
+# Roles accepted by the Gemini chat endpoint.
 _SUPPORTED_ROLES = {"user", "model"}
 
+
+# Build a Gemini client using Flask configuration.
 def _get_client() -> genai.Client:
     api_key = current_app.config.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
     return genai.Client(api_key=api_key)
 
+
+# Convert incoming chat messages to the Gemini request schema.
 def _format_messages(messages):
     formatted = []
     for m in messages:
@@ -20,17 +24,18 @@ def _format_messages(messages):
         formatted.append({"role": role, "parts": [{"text": content}]})
     return formatted
 
+
+# Submit the formatted conversation and return the model's text reply.
 def generate_reply(messages, system_prompt=None, **generation_kwargs) -> str:
     client = _get_client()
     model_name = current_app.config.get("GEMINI_MODEL", "gemini-2.5-flash")
     contents = _format_messages(messages)
 
-    # 把 system_prompt 和采样参数放进 config
     config = {}
     if system_prompt:
         config["system_instruction"] = system_prompt
 
-    # 可选：把常见采样参数并入 config（其余 kwargs 你也可自行映射）
+    # Include optional tuning parameters in the Gemini config payload.
     for k in ("temperature", "top_p", "top_k", "max_output_tokens", "candidate_count"):
         if k in generation_kwargs:
             config[k] = generation_kwargs.pop(k)
