@@ -1,10 +1,12 @@
-# app/routes/ai_assistant.py
+﻿# app/routes/ai_assistant.py
+import json
+
 from flask import Blueprint, abort, current_app, jsonify, request
-from app.models import Assignment, Course, Enrollment, User, UserRole
+from app.models import Assignment, Course, Enrollment, Material, User, UserRole
 
 from ..extensions import db
 from ..services import chat_storage
-from ..services.assistant import process_assistant_request
+from ..services.assistant import _load_material_text, process_assistant_request
 from ..services.ai import generate_reply
 
 bp = Blueprint("ai_assistant", __name__)
@@ -99,6 +101,150 @@ def get_conversation(conversation_id: int):
         return jsonify({"error": "forbidden"}), 403
 
     return jsonify(data), 200
+
+
+def _parse_json_reply(text: str):
+    if not text:
+        return None
+    candidate = text.strip()
+    if candidate.startswith("```"):
+        candidate = candidate[3:]
+        candidate = candidate.lstrip()
+        if candidate.lower().startswith("json"):
+            candidate = candidate[4:]
+        candidate = candidate.lstrip("\n")
+        candidate = candidate.rsplit("```", 1)[0]
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+
+
+@bp.route("/assistant/grade_submission", methods=["POST"])
+def grade_submission():
+    payload = request.get_json(silent=True) or {}
+
+    material_id_raw = payload.get("material_id")
+    teacher_id_raw = payload.get("teacher_id")
+    rubric = payload.get("rubric")
+    additional_instructions = payload.get("instructions")
+    max_score_raw = payload.get("max_score", 100)
+
+    try:
+        material_id = int(material_id_raw)
+    except (TypeError, ValueError):
+        abort(400, description="material_id must be an integer")
+
+    try:
+        teacher_id = int(teacher_id_raw)
+    except (TypeError, ValueError):
+        abort(400, description="teacher_id must be an integer")
+
+    try:
+        max_score = int(max_score_raw)
+    except (TypeError, ValueError):
+        abort(400, description="max_score must be an integer")
+
+    if max_score <= 0:
+        abort(400, description="max_score must be a positive integer")
+
+    teacher = User.query.get_or_404(teacher_id)
+    if teacher.role != UserRole.ADMIN:
+        abort(403, description="only administrators may grade submissions")
+
+    material = Material.query.get_or_404(material_id)
+    if material.assignment_id is None:
+        abort(400, description="material is not an assignment submission")
+
+    assignment = material.assignment or Assignment.query.get_or_404(material.assignment_id)
+    if assignment.teacher_id != teacher.id:
+        abort(403, description="only the assignment owner may grade this submission")
+
+    course = assignment.course or Course.query.get(assignment.course_id)
+    student = User.query.get(material.uploaded_by)
+
+    try:
+        submission_text = _load_material_text(material, limit=4000)
+    except FileNotFoundError:
+        abort(404, description="submission file not found on server")
+    except ValueError as exc:
+        abort(422, description=str(exc))
+
+    if not submission_text.strip():
+        abort(422, description="submission file is empty or unreadable")
+
+    course_info = f"{course.name} ({course.code})" if course else f"Course ID {assignment.course_id}"
+    student_name = f"{student.first_name} {student.last_name}".strip() if student else "Unknown student"
+
+    context_parts = [
+        f"Course: {course_info}",
+        f"Assignment title: {assignment.title}",
+        f"Assignment description: {assignment.description or 'No description provided'}",
+        f"Due date: {assignment.due_date.isoformat() if assignment.due_date else 'Not set'}",
+        f"Student: {student_name} (ID {material.uploaded_by})",
+        f"Maximum score: {max_score}",
+    ]
+    if rubric:
+        context_parts.append(f"Rubric or grading criteria:\n{rubric}")
+    if additional_instructions:
+        context_parts.append(f"Additional teacher instructions:\n{additional_instructions}")
+
+    grading_context = "\n".join(context_parts)
+    submission_block = f"Student submission (truncated to 4000 chars):\n{submission_text}"
+
+    user_message = f"{grading_context}\n\n{submission_block}"
+
+    system_prompt = (
+        "You are an experienced instructor grading a student's assignment submission. "
+        "Analyze the assignment details and the student's work. "
+        "Respond with a strict JSON object (no extra commentary) matching this schema:\n"
+        "{\n"
+        '  "score": {"value": <number>, "max": ' + str(max_score) + ', "explanation": "<short summary>"},\n'
+        '  "strengths": ["<positive observation>", ...],\n'
+        '  "mistakes": [\n'
+        '    {\n'
+        '      "issue": "<concise description of the mistake>",\n'
+        '      "hint": "<actionable guidance to correct it>",\n'
+        '      "follow_up_question": {\n'
+        '         "question": "<new practice question targeting the mistake>",\n'
+        '         "answer": "<correct answer or outline>"\n'
+        "      }\n"
+        "    }\n"
+        "  ],\n"
+        '  "next_steps": "<overall advice for the student>"\n'
+        "}\n"
+        f"The numeric score must be between 0 and {max_score}. "
+        "Provide at least one mistake entry when issues are found; if the work is excellent, return an empty list and explain why. "
+        "Use concise Simplified Chinese for all text values. "
+        "Do not include markdown or additional prose outside the JSON object."
+    )
+
+    messages = [{"role": "user", "content": user_message}]
+
+    try:
+        reply = generate_reply(messages, system_prompt=system_prompt, temperature=0.2)
+    except ValueError as err:
+        abort(400, description=str(err))
+    except RuntimeError as err:
+        abort(502, description=str(err))
+
+    parsed = _parse_json_reply(reply)
+    response_payload = {
+        "grading": parsed,
+        "raw_reply": reply,
+        "model": current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash"),
+        "metadata": {
+            "material_id": material.id,
+            "assignment_id": assignment.id,
+            "student_id": material.uploaded_by,
+            "max_score": max_score,
+        },
+    }
+
+    if parsed is None:
+        response_payload["parse_error"] = "model response was not valid JSON"
+
+    return jsonify(response_payload), 200
 @bp.route("/get_plan", methods=["POST"])
 def get_plan():
     payload = request.get_json(silent=True) or {}
@@ -143,4 +289,3 @@ def get_plan():
             "model": current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash"),
         }
     ), 200
-
