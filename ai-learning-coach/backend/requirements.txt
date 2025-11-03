@@ -7,3 +7,4 @@ python-dotenv>=1.0
 alembic>=1.13
 google-genai
 python-docx>=0.8
+redis>=5.0
