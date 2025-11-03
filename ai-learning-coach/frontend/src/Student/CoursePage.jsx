@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Paper,
@@ -18,7 +18,7 @@ import { CircularProgress, circularProgressClasses } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
 import http from "../api/http";
 
-/** ========= Enrollment helpers (最小侵入，无需新文件) ========= */
+/** ========= Enrollment helpers ========= */
 const ENROLL_EVENT = "enrollment:updated";
 
 function getCurrentUserId() {
@@ -299,9 +299,9 @@ function CourseDetail() {
         const payload = Array.isArray(res.data) ? res.data : [];
         const mapped = payload.map((item) => ({
           id: item?.id,
-          title: item?.original_name || item?.stored_name || "Course material",
+          title: item?.stored_name || item?.original_name || "Course material",
           type: item?.file_type || "material",
-          color: pickMaterialColor(item?.original_name || item?.stored_name, item?.file_type),
+          color: pickMaterialColor(item?.stored_name || item?.original_name, item?.file_type),
           downloadUrl: item?.id ? `${API_BASE_URL}/materials/${item.id}/download` : null,
         }));
         if (!cancelled) {
@@ -581,3 +581,4 @@ function CourseDetail() {
 }
 
 export default CourseDetail;
+

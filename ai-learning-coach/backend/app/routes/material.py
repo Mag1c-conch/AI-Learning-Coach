@@ -76,7 +76,21 @@ def upload_material():
     os.makedirs(course_dir, exist_ok=True)
 
     original_name = file.filename
-    stored_name = _reserve_unique_filename(course_dir, original_name)
+    custom_name = request.form.get("custom_name", "").strip()
+    stored_name = None
+
+    if custom_name:
+        custom_base = secure_filename(custom_name)
+        if custom_base:
+            # Strip extension from the custom base if user accidentally provided one.
+            custom_base, _ = os.path.splitext(custom_base)
+            if custom_base:
+                _, original_ext = os.path.splitext(original_name)
+                candidate_name = f"{custom_base}{original_ext}"
+                stored_name = _reserve_unique_filename(course_dir, candidate_name)
+
+    if not stored_name:
+        stored_name = _reserve_unique_filename(course_dir, original_name)
     file_path = os.path.join(course_dir, stored_name)
     file.save(file_path)
 

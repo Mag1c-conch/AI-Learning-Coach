@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import {
   Box,
@@ -287,12 +287,12 @@ export default function Course() {
             }
             grouped[weekKey].push({
               id: material.id,
-              name: material.original_name,
+              name: material.stored_name || material.original_name,
               // 类型优先使用后端 file_type，其次本地映射，最后默认
               type: material.file_type || typeMap[String(material.id)] || 'learning_material',
               uploadDate: material.uploaded_at ? formatDate(material.uploaded_at) : '',
               size: formatFileSize(material.file_size),
-              material: material // 保留原始数据用于下载和删除
+              material: material
             });
           });
           
@@ -388,7 +388,7 @@ export default function Course() {
 
       await Promise.all(deletePromises);
       
-      // 刷新文件列表
+      // 刷新文件列表      
       await fetchMaterials();
       setSelectedFiles(new Set());
       alert('文件删除成功');
@@ -891,6 +891,9 @@ export default function Course() {
                 formData.append('uploaded_by', user.id);
                 if (fileType) formData.append('file_type', String(fileType));
                 if (weekNumber) formData.append('week_number', Number(weekNumber));
+                if (fileName && fileName.trim()) {
+                  formData.append('custom_name', fileName.trim());
+                }
 
                 // 上传文件
                 const response = await fetch('http://localhost:5001/materials', {
@@ -1017,3 +1020,4 @@ export default function Course() {
     </Box>
   );
 }
+
