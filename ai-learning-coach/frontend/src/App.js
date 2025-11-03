@@ -12,7 +12,7 @@ import AdminLayout from './Admin/AdminLayout.jsx';
 import AdminDashboard from './Admin/Pages/Admin/Dashboard.jsx';
 import AdminCourse from './Admin/Pages/Admin/Course.jsx';
 import AiAssistance   from './Admin/Pages/Admin/AiAssistance.jsx';
-import TimeTable      from './Admin/Pages/Admin/TimeTable.jsx';
+import Grading        from './Admin/Pages/Admin/Grading.jsx';
 import Registercourse from './Student/Registercourse.jsx';
 // import { Calendar } from 'antd';
 import Calendar from './Student/Calendar.jsx';
@@ -41,7 +41,7 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="course/:courseId" element={<AdminCourse />} />
             <Route path="assistant" element={<AiAssistance />} />
-            <Route path="timetable" element={<TimeTable />} />
+            <Route path="timetable" element={<Grading />} />
           </Route>
           </Routes>
         </div>

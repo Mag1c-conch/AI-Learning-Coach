@@ -16,6 +16,7 @@ import {
   Chip,
   Card,
   CardContent,
+  CircularProgress,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
@@ -24,6 +25,8 @@ import CircleIcon from "@mui/icons-material/Circle";
 import SendIcon from "@mui/icons-material/Send";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
 
 /* ---------- 搜索栏样式 ---------- */
 const Search = styled("div")(({ theme }) => ({
@@ -92,21 +95,148 @@ function useDisplayName() {
 
 export default function TimeTable() {
   const name = useDisplayName();
+  const [selectedCourse, setSelectedCourse] = useState("");
   const [selectedStudent, setSelectedStudent] = useState("");
   const [score, setScore] = useState("");
   const [comments, setComments] = useState("");
   const [feedbackType, setFeedbackType] = useState("hint");
   const [feedbackContent, setFeedbackContent] = useState("");
+  const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [aiGrading, setAiGrading] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
 
-  // 模拟学生列表
-  const students = [
-    { id: 1, name: "Zhang Wei", assignment: "Calculus Assignment 1", submitted: true },
-    { id: 2, name: "Li Na", assignment: "Calculus Assignment 1", submitted: true },
-    { id: 3, name: "Wang Ming", assignment: "Calculus Assignment 1", submitted: true },
-  ];
+  // 获取当前用户信息
+  const getCurrentUser = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        return JSON.parse(token);
+      }
+    } catch (error) {
+      console.error('Error parsing user token:', error);
+    }
+    return null;
+  };
+
+  // 获取课程列表
+  React.useEffect(() => {
+    const fetchCourses = async () => {
+      setCoursesLoading(true);
+      try {
+        const response = await fetch('http://localhost:5001/courses');
+        if (response.ok) {
+          const data = await response.json();
+          setCourses(data);
+        } else {
+          console.error('Failed to fetch courses');
+        }
+      } catch (err) {
+        console.error('Error fetching courses:', err);
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+
+    fetchCourses();
+  }, []);
+
+  // 模拟学生作业列表（按课程过滤）
+  const getStudentAssignments = () => {
+    if (!selectedCourse) return [];
+    
+    // 模拟数据，实际应该从后端获取
+    const allAssignments = [
+      { id: 1, courseId: 1, studentName: "Zhang Wei", assignmentTitle: "Calculus Assignment 1", submitted: true, submitDate: "2025-10-29 14:30" },
+      { id: 2, courseId: 1, studentName: "Li Na", assignmentTitle: "Calculus Assignment 1", submitted: true, submitDate: "2025-10-29 15:20" },
+      { id: 3, courseId: 1, studentName: "Wang Ming", assignmentTitle: "Calculus Assignment 2", submitted: true, submitDate: "2025-10-30 10:15" },
+      { id: 4, courseId: 2, studentName: "Chen Jing", assignmentTitle: "Physics Lab 1", submitted: true, submitDate: "2025-10-28 16:45" },
+      { id: 5, courseId: 2, studentName: "Liu Yang", assignmentTitle: "Physics Quiz 1", submitted: true, submitDate: "2025-10-29 09:30" },
+    ];
+
+    return allAssignments.filter(a => a.courseId === parseInt(selectedCourse));
+  };
+
+  const studentAssignments = getStudentAssignments();
+
+  const handleCourseChange = (e) => {
+    setSelectedCourse(e.target.value);
+    setSelectedStudent(""); // 重置学生选择
+    setScore("");
+    setComments("");
+  };
+
+  const handleAiGrade = async () => {
+    if (!selectedStudent) {
+      alert("Please select a student submission first");
+      return;
+    }
+
+    setAiGrading(true);
+    try {
+      // TODO: 调用 AI 批改 API
+      // 模拟 AI 批改过程
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // 模拟 AI 返回的评分和评语
+      setScore("85");
+      setComments("Good work overall! The derivatives are calculated correctly. However, there's a small error in Question 2 - you forgot to include the constant of integration 'C'. \n\nStrengths:\n- Correct application of power rule\n- Clear step-by-step solution\n\nAreas for improvement:\n- Remember to always add the constant 'C' when computing indefinite integrals\n- Consider showing more intermediate steps for complex problems");
+      
+      alert("AI grading completed!");
+    } catch (error) {
+      console.error("AI grading error:", error);
+      alert("Failed to get AI grading. Please try again.");
+    } finally {
+      setAiGrading(false);
+    }
+  };
+
+  const handleAiGenerateFeedback = async () => {
+    if (!selectedStudent) {
+      alert("Please select a student submission first");
+      return;
+    }
+
+    setAiGenerating(true);
+    try {
+      // TODO: 调用 AI 生成反馈 API
+      // 模拟 AI 生成过程
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // 模拟 AI 生成的反馈内容
+      const generatedFeedback = `Common Error Analysis:
+The student forgot to include the constant of integration 'C' in the indefinite integral.
+
+Learning Hint:
+When computing indefinite integrals, always remember that there are infinitely many antiderivatives that differ by a constant. We represent this by adding '+ C' to our answer.
+
+Similar Example:
+Find ∫(3x² + 2x)dx
+
+Solution:
+Step 1: Apply the power rule to each term
+∫3x²dx = x³
+∫2xdx = x²
+
+Step 2: Combine and add constant
+Answer: x³ + x² + C
+
+Practice Problem:
+Try solving: ∫(4x³ - 6x + 5)dx
+Expected answer: x⁴ - 3x² + 5x + C`;
+      
+      setFeedbackContent(generatedFeedback);
+      alert("AI feedback generated successfully!");
+    } catch (error) {
+      console.error("AI feedback generation error:", error);
+      alert("Failed to generate AI feedback. Please try again.");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   const handleGradeSubmit = () => {
-    console.log("Submitting grade:", { selectedStudent, score, comments });
+    console.log("Submitting grade:", { selectedCourse, selectedStudent, score, comments });
     // TODO: 提交评分到后端
   };
 
@@ -193,72 +323,103 @@ export default function TimeTable() {
             Grade Student Assignment
           </Typography>
 
-          {/* 选择学生 */}
+          {/* 选择课程 */}
           <FormControl fullWidth sx={{ mb: 3 }}>
-            <InputLabel>Select Student</InputLabel>
+            <InputLabel>Select Course</InputLabel>
+            <Select
+              value={selectedCourse}
+              label="Select Course"
+              onChange={handleCourseChange}
+              disabled={coursesLoading}
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {courses.map((course) => (
+                <MenuItem key={course.id} value={course.id}>
+                  {course.code} - {course.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* 选择学生作业 */}
+          <FormControl fullWidth sx={{ mb: 3 }} disabled={!selectedCourse}>
+            <InputLabel>Select Student Submission</InputLabel>
             <Select
               value={selectedStudent}
-              label="Select Student"
+              label="Select Student Submission"
               onChange={(e) => setSelectedStudent(e.target.value)}
             >
               <MenuItem value="">
                 <em>None</em>
               </MenuItem>
-              {students.map((student) => (
-                <MenuItem key={student.id} value={student.id}>
-                  {student.name} - {student.assignment}
+              {studentAssignments.map((assignment) => (
+                <MenuItem key={assignment.id} value={assignment.id}>
+                  {assignment.studentName} - {assignment.assignmentTitle}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
 
           {/* 作业内容显示区域 */}
-          {selectedStudent && (
-            <Card sx={{ mb: 3, bgcolor: "white" }}>
-              <CardContent>
-                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Student Submission
+          {selectedStudent && (() => {
+            const selectedAssignment = studentAssignments.find(a => a.id === parseInt(selectedStudent));
+            const selectedCourseInfo = courses.find(c => c.id === parseInt(selectedCourse));
+            
+            return (
+              <Card sx={{ mb: 3, bgcolor: "white" }}>
+                <CardContent>
+                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                      Student Submission
+                    </Typography>
+                    <Chip
+                      label="Submitted"
+                      color="success"
+                      size="small"
+                      sx={{ ml: 2 }}
+                      icon={<CheckCircleIcon />}
+                    />
+                  </Box>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="body2" sx={{ color: "#666", mb: 1 }}>
+                    <strong>Course:</strong> {selectedCourseInfo?.name || 'N/A'}
                   </Typography>
-                  <Chip
-                    label="Submitted"
-                    color="success"
-                    size="small"
-                    sx={{ ml: 2 }}
-                    icon={<CheckCircleIcon />}
-                  />
-                </Box>
-                <Divider sx={{ mb: 2 }} />
-                <Typography variant="body2" sx={{ color: "#666", mb: 2 }}>
-                  Assignment: Calculus Assignment 1
-                </Typography>
-                <Typography variant="body2" sx={{ color: "#666", mb: 2 }}>
-                  Submitted: 2025-10-29 14:30
-                </Typography>
-                <Box
-                  sx={{
-                    mt: 2,
-                    p: 2,
-                    bgcolor: "#f5f5f5",
-                    borderRadius: 1,
-                    minHeight: 150,
-                  }}
-                >
-                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                    Student's answer will be displayed here...
-                    {"\n\n"}
-                    Question 1: Calculate the derivative of f(x) = x³ + 2x² - 5x + 1
-                    {"\n"}
-                    Answer: f'(x) = 3x² + 4x - 5
-                    {"\n\n"}
-                    Question 2: Find the integral of ∫(2x + 3)dx
-                    {"\n"}
-                    Answer: x² + 3x + C
+                  <Typography variant="body2" sx={{ color: "#666", mb: 1 }}>
+                    <strong>Student:</strong> {selectedAssignment?.studentName || 'N/A'}
                   </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          )}
+                  <Typography variant="body2" sx={{ color: "#666", mb: 1 }}>
+                    <strong>Assignment:</strong> {selectedAssignment?.assignmentTitle || 'N/A'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "#666", mb: 2 }}>
+                    <strong>Submitted:</strong> {selectedAssignment?.submitDate || 'N/A'}
+                  </Typography>
+                  <Box
+                    sx={{
+                      mt: 2,
+                      p: 2,
+                      bgcolor: "#f5f5f5",
+                      borderRadius: 1,
+                      minHeight: 150,
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                      Student's answer will be displayed here...
+                      {"\n\n"}
+                      Question 1: Calculate the derivative of f(x) = x³ + 2x² - 5x + 1
+                      {"\n"}
+                      Answer: f'(x) = 3x² + 4x - 5
+                      {"\n\n"}
+                      Question 2: Find the integral of ∫(2x + 3)dx
+                      {"\n"}
+                      Answer: x² + 3x + C
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* 评分输入 */}
           <TextField
@@ -282,6 +443,27 @@ export default function TimeTable() {
             placeholder="Enter your feedback and comments for the student..."
             sx={{ mb: 3 }}
           />
+
+          {/* AI 批改按钮 */}
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={aiGrading ? <CircularProgress size={20} /> : <AutoFixHighIcon />}
+            onClick={handleAiGrade}
+            disabled={!selectedStudent || aiGrading}
+            sx={{
+              mb: 2,
+              borderColor: "#9c27b0",
+              color: "#9c27b0",
+              "&:hover": { 
+                borderColor: "#7b1fa2",
+                bgcolor: "rgba(156, 39, 176, 0.04)",
+              },
+              height: 45,
+            }}
+          >
+            {aiGrading ? "AI is Grading..." : "AI Grade Assignment"}
+          </Button>
 
           {/* 提交按钮 */}
           <Button
@@ -414,6 +596,27 @@ export default function TimeTable() {
             placeholder="Enter custom feedback or guidance for the student..."
             sx={{ mb: 3 }}
           />
+
+          {/* AI 生成反馈按钮 */}
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={aiGenerating ? <CircularProgress size={20} /> : <SmartToyIcon />}
+            onClick={handleAiGenerateFeedback}
+            disabled={!selectedStudent || aiGenerating}
+            sx={{
+              mb: 2,
+              borderColor: "#ff6f00",
+              color: "#ff6f00",
+              "&:hover": { 
+                borderColor: "#e65100",
+                bgcolor: "rgba(255, 111, 0, 0.04)",
+              },
+              height: 45,
+            }}
+          >
+            {aiGenerating ? "AI is Generating..." : "AI Generate Feedback"}
+          </Button>
 
           {/* 发送反馈按钮 */}
           <Button
