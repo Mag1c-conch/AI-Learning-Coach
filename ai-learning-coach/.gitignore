@@ -6,3 +6,4 @@ __pycache__/
 .idea/
 migrations/__pycache__/
 backend/app/routes/README.md
+backend/instance/
