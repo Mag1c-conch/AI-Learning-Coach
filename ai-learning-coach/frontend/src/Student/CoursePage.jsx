@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Paper,
@@ -15,6 +15,8 @@ import CircleIcon from "@mui/icons-material/Circle";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import Sidebar from "../components/Sidebar.jsx";
 import { CircularProgress, circularProgressClasses } from "@mui/material";
+import { useParams, useNavigate } from "react-router-dom";
+import http from "../api/http";
 
 /** ========= Enrollment helpers (最小侵入，无需新文件) ========= */
 const ENROLL_EVENT = "enrollment:updated";
@@ -37,7 +39,25 @@ function getEnrollmentKey(uid) {
 function loadEnrollments(uid = getCurrentUserId()) {
   if (!uid) return [];
   try {
-    return JSON.parse(localStorage.getItem(getEnrollmentKey(uid)) || "[]");
+    const stored = JSON.parse(localStorage.getItem(getEnrollmentKey(uid)) || "[]");
+    if (!Array.isArray(stored)) return [];
+    const mapped = stored
+      .map((item) => {
+        const id = Number(item?.id);
+        if (!Number.isInteger(id)) return null;
+        return {
+          ...item,
+          id,
+        };
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    return mapped.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
   } catch {
     return [];
   }
@@ -129,12 +149,17 @@ function ProgressCircular({ value = 70, size = 160, thickness = 7 }) {
 }
 
 /** ========= Local fallback data ========= */
-const fallbackCourse = {
-  code: "COMP9814",
-  name: "Artificial Intelligence",
-  progress: 70,
-};
-const materials = [{ title: "Lecture Slides", type: "PDF", color: "#1f2a44" }];
+const fallbackMaterials = [];
+const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5001";
+
+function pickMaterialColor(filename = "", type = "") {
+  const value = (type || filename.split(".").pop() || "").toLowerCase();
+  if (value.includes("pdf")) return "#1f2a44";
+  if (value.includes("doc")) return "#4b7bec";
+  if (value.includes("ppt")) return "#f39c12";
+  if (value.includes("xls") || value.includes("sheet")) return "#2ecc71";
+  return "#6c5ce7";
+}
 const assignments = [
   { title: "Quiz 6", time: "Oct 22 08:00am", percent: "5%", due: "Due 2 days" },
   { title: "Lab 7", time: "Oct 24 10:30am", percent: "3%", due: "Due 4 days" },
@@ -143,15 +168,55 @@ const assignments = [
 
 function CourseDetail() {
   const [enrolled, setEnrolled] = useState([]);
+  const [materials, setMaterials] = useState(fallbackMaterials);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [materialsError, setMaterialsError] = useState("");
+  const { courseId: courseIdParam } = useParams();
+  const navigate = useNavigate();
+  const normalizedParam = courseIdParam ? decodeURIComponent(courseIdParam) : null;
+  const numericCourseId = courseIdParam ? Number(courseIdParam) : NaN;
 
   useEffect(() => {
     const uid = getCurrentUserId();
     if (!uid) return;
     setEnrolled(loadEnrollments(uid));
 
+    let cancelled = false;
+
+    const fetchEnrollments = async () => {
+      try {
+        const res = await http.get(`/courses/users/${uid}/enrollments`);
+        const payload = Array.isArray(res.data) ? res.data : [];
+        const normalized = payload
+          .map((course) => {
+            const id = Number(course?.id);
+            if (!Number.isInteger(id)) return null;
+            return {
+              id,
+              code: course?.code || "",
+              name: course?.name || course?.title || "",
+              dueText: "Enrolled",
+              meta: course?.description ? `· ${course.description}` : "",
+              progress: course?.progress ?? 0,
+              teacher: course?.teacher || course?.creator_name || "",
+            };
+          })
+          .filter(Boolean);
+        if (!cancelled) {
+          setEnrolled(normalized);
+          localStorage.setItem(getEnrollmentKey(uid), JSON.stringify(normalized));
+        }
+      } catch (err) {
+        console.error("加载选课信息失败", err);
+      }
+    };
+
+    fetchEnrollments();
+
     const onEnrollUpdated = (e) => {
       if (e?.detail?.user_id !== uid) return;
       setEnrolled(loadEnrollments(uid));
+      fetchEnrollments();
     };
     window.addEventListener(ENROLL_EVENT, onEnrollUpdated);
 
@@ -159,22 +224,116 @@ function CourseDetail() {
     const onStorage = (e) => {
       if (e.key === getEnrollmentKey(uid)) {
         setEnrolled(loadEnrollments(uid));
+        fetchEnrollments();
       }
     };
     window.addEventListener("storage", onStorage);
 
     return () => {
+      cancelled = true;
       window.removeEventListener(ENROLL_EVENT, onEnrollUpdated);
       window.removeEventListener("storage", onStorage);
     };
   }, []);
-  const currentCourse =
-    enrolled && enrolled.length
-      ? enrolled[enrolled.length - 1]
-      : fallbackCourse;
+  const currentCourse = useMemo(() => {
+    if (!enrolled.length) return null;
+
+    if (Number.isInteger(numericCourseId)) {
+      const byId = enrolled.find((c) => Number.isInteger(c.id) && c.id === numericCourseId);
+      if (byId) return byId;
+      return null;
+    }
+
+    if (normalizedParam) {
+      const lowered = normalizedParam.toLowerCase();
+      const byCode = enrolled.find((c) => (c.code || "").toLowerCase() === lowered);
+      if (byCode) return byCode;
+      return null;
+    }
+
+    return enrolled[0];
+  }, [enrolled, numericCourseId, normalizedParam]);
+
+  useEffect(() => {
+    if (!enrolled.length) return;
+    const target = currentCourse;
+    if (!target) return;
+
+    if (!courseIdParam) {
+      if (Number.isInteger(target.id)) {
+        navigate(`/course/${target.id}`, { replace: true });
+      } else if (target.code) {
+        navigate(`/course/${encodeURIComponent(target.code)}`, { replace: true });
+      }
+      return;
+    }
+
+    if (Number.isInteger(target.id) && courseIdParam !== String(target.id)) {
+      navigate(`/course/${target.id}`, { replace: true });
+      return;
+    }
+
+    if (!Number.isInteger(target.id) && target.code) {
+      const desiredKey = encodeURIComponent(target.code);
+      if (courseIdParam !== desiredKey) {
+        navigate(`/course/${desiredKey}`, { replace: true });
+      }
+    }
+  }, [courseIdParam, currentCourse, enrolled, navigate]);
+
+  useEffect(() => {
+    const courseId = currentCourse?.id;
+    if (!courseId) {
+      setMaterials([]);
+      setMaterialsError("");
+      setMaterialsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchMaterials = async () => {
+      try {
+        setMaterialsLoading(true);
+        setMaterialsError("");
+        const res = await http.get("/materials", { params: { course_id: courseId } });
+        const payload = Array.isArray(res.data) ? res.data : [];
+        const mapped = payload.map((item) => ({
+          id: item?.id,
+          title: item?.original_name || item?.stored_name || "Course material",
+          type: item?.file_type || "material",
+          color: pickMaterialColor(item?.original_name || item?.stored_name, item?.file_type),
+          downloadUrl: item?.id ? `${API_BASE_URL}/materials/${item.id}/download` : null,
+        }));
+        if (!cancelled) {
+          setMaterials(mapped);
+        }
+      } catch (err) {
+        console.error("加载课程资料失败", err);
+        if (!cancelled) {
+          setMaterials([]);
+          setMaterialsError(err?.response?.data?.description || err.message);
+        }
+      } finally {
+        if (!cancelled) {
+          setMaterialsLoading(false);
+        }
+      }
+    };
+
+    fetchMaterials();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCourse?.id]);
 
   const progressValue =
-    typeof currentCourse.progress === "number" ? currentCourse.progress : 70;
+    typeof currentCourse?.progress === "number" ? currentCourse.progress : 0;
+  const courseCode = currentCourse?.code || "No course selected";
+  const courseName = currentCourse?.name || "";
+  const courseMeta = currentCourse?.meta || "";
+  const courseTeacher = currentCourse?.teacher || "";
+  const hasCourse = Boolean(currentCourse);
 
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
@@ -230,16 +389,22 @@ function CourseDetail() {
         {/* Course title */}
         <Paper elevation={1} sx={{ p: 2.5, borderRadius: 2, mb: 3, mt: 4, boxShadow: 5 }}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            {currentCourse.code} · {currentCourse.name}
+            {courseCode}
+            {courseName ? ` · ${courseName}` : ""}
           </Typography>
-          {currentCourse.teacher && (
+          {courseTeacher && (
             <Typography sx={{ mt: 0.5 }} color="text.secondary">
-              {currentCourse.teacher}
+              {courseTeacher}
             </Typography>
           )}
-          {currentCourse.meta && (
+          {courseMeta && (
             <Typography sx={{ mt: 0.5 }} color="text.secondary">
-              {currentCourse.meta}
+              {courseMeta}
+            </Typography>
+          )}
+          {!hasCourse && (
+            <Typography sx={{ mt: 1 }} color="text.secondary">
+              You have not selected a course yet. Please enroll to see materials.
             </Typography>
           )}
         </Paper>
@@ -267,47 +432,63 @@ function CourseDetail() {
               Materials
             </Typography>
 
-            {materials.map((m, idx) => (
-              <Paper
-                key={idx}
-                variant="outlined"
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  mb: 1.2,
-                  p: 1,
-                  gap: 1.2,
-                  borderRadius: 1.5,
-                  borderColor: "divider",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 4,
-                    height: 28,
-                    borderRadius: 2,
-                    bgcolor: m.color,
-                    p: 1,
-                  }}
-                />
-                <Box sx={{ flex: 1 }}>
-                  <Typography sx={{ fontWeight: 700, lineHeight: 1.1 }}>
-                    {m.title}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {m.type}
-                  </Typography>
-                </Box>
-                <Button
+            {materialsLoading ? (
+              <Typography color="text.secondary">Loading materials…</Typography>
+            ) : !hasCourse ? (
+              <Typography color="text.secondary">
+                Enroll in a course to view its materials.
+              </Typography>
+            ) : materialsError ? (
+              <Typography color="error">{materialsError}</Typography>
+            ) : materials.length === 0 ? (
+              <Typography color="text.secondary">No materials available yet.</Typography>
+            ) : (
+              materials.map((m, idx) => (
+                <Paper
+                  key={m.id ?? idx}
                   variant="outlined"
-                  size="small"
-                  sx={{ textTransform: "none", borderRadius: 1.2 }}
-                  onClick={() => console.log("Download", m.title)}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1.2,
+                    p: 1,
+                    gap: 1.2,
+                    borderRadius: 1.5,
+                    borderColor: "divider",
+                  }}
                 >
-                  Download
-                </Button>
-              </Paper>
-            ))}
+                  <Box
+                    sx={{
+                      width: 4,
+                      height: 28,
+                      borderRadius: 2,
+                      bgcolor: m.color,
+                    }}
+                  />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{ fontWeight: 700, lineHeight: 1.1 }}>
+                      {m.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {m.type || "material"}
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    sx={{ textTransform: "none", borderRadius: 1.2 }}
+                    disabled={!m.downloadUrl}
+                    onClick={() => {
+                      if (m.downloadUrl) {
+                        window.open(m.downloadUrl, "_blank", "noopener");
+                      }
+                    }}
+                  >
+                    Download
+                  </Button>
+                </Paper>
+              ))
+            )}
           </Paper>
 
           {/* Course Progress */}

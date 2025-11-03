@@ -68,7 +68,25 @@ function saveEnrolledCourse(course) {
     if (!uid) return;
     const key = `enrolledCourses:${uid}`; 
     const list = JSON.parse(localStorage.getItem(key) || "[]");
-    const next = [...list.filter((c) => c.code !== course.code), course];
+    const normalizedId = Number(course?.id);
+    const normalizedCourse = {
+      ...course,
+      id: Number.isInteger(normalizedId) ? normalizedId : course?.id,
+    };
+    const existing = Array.isArray(list)
+      ? list.map((item) => ({
+          ...item,
+          id: Number.isInteger(Number(item?.id)) ? Number(item.id) : item?.id,
+        }))
+      : [];
+    const next = [
+      ...existing.filter((c) =>
+        Number.isInteger(normalizedCourse.id)
+          ? Number(c?.id) !== normalizedCourse.id
+          : c?.code !== normalizedCourse.code
+      ),
+      normalizedCourse,
+    ];
     localStorage.setItem(key, JSON.stringify(next));
     window.dispatchEvent(new CustomEvent("enrollment:updated", { detail: { course, user_id: uid } }));
   } catch (e) {
@@ -131,6 +149,7 @@ const Registercourse = () => {
 
       // persist to localstorage
       saveEnrolledCourse({
+        id: Number(selected.id),
         code: selected.code,
         name: selected.name || "",
         dueText: "Enrolled",

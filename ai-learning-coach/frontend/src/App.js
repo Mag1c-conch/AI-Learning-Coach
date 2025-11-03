@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Signin from './components/Signin';
 import Signup from './Sign-up/App.jsx';
@@ -33,7 +33,7 @@ function App() {
             <Route path="/sidebar" element={<Sidebar />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/courses" element={<CoursesPage />} />
-            <Route path="/course/:code" element={<CoursePage />} />
+            <Route path="/course/:courseId" element={<CoursePage />} />
             <Route path="/registercourse" element={<Registercourse />} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="/admin" element={<AdminLayout />}>

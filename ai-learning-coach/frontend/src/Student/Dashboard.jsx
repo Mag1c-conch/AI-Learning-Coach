@@ -1,6 +1,6 @@
-import React, { useRef, useState, useMemo, useEffect } from "react";
+﻿import React, { useRef, useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+//import { useNavigate } from "react-router-dom";
 import "../App.css";
 import {
   Box,
@@ -99,17 +99,21 @@ function CoursesSlider({ courses = [] }) {
       >
         {courses.map((course) => (
           <Box
-            key={course.code}
+            key={course.id ?? course.code}
             sx={{
               flex: "0 0 auto",
               width: { xs: 260, sm: 300, md: 340 },
               scrollSnapAlign: "start",
             }}
           >
-            {/* Change to /course/:code */}
+            {/* Change to /course/:id */}
             <Box
               component={Link}
-              to={`/course/${course.code}`}
+              to={
+                Number.isInteger(course.id)
+                  ? `/course/${course.id}`
+                  : `/course/${encodeURIComponent(course.code || "")}`
+              }
               sx={{ 
                 textDecoration: "none", 
                 color: "inherit", 
@@ -290,29 +294,12 @@ function ProgressSlider({ items = [] }) {
 }
 
 
-// static course data
-const defaultCoursesData = [
-  { code: "COMP9814", name: "Artificial Intelligence", dueText: "Due in 2 days", meta: "· 2 assignments" },
-  // { code: "COMP9517", name: "Computer Vision",        dueText: "Due in 5 days", meta: "· 4 labs" },
-  // { code: "COMP9024", name: "Data Structures",        dueText: "Due in 1 week", meta: "· 1 project" },
-  // { code: "COMP9315", name: "Database Systems",       dueText: "Due tomorrow",  meta: "· exam review" },
-];
+// static course data placeholders (empty by default)
+const defaultCoursesData = [];
 
-const exerciseData = [
-  { title: "Artificial Intelligence", items: ["Exercise 1", "Exercise 2"] },
-  { title: "Computer Vision", item: "Lab 1" },
-  { title: "Big data", item: "Lab 5" },
-  { title: "Data Structures", item: "Assignment 1" },
-  { title: "Database Systems", item: "Tutorial 1" },
-];
+const exerciseData = [];
 
-const progressData = [
-  { course: "Artificial Intelligence", percent: 73 },
-  { course: "Computer Vision", percent: 85 },
-  { course: "Data Structures", percent: 60 },
-  { course: "Big data", percent: 45 },
-  { course: "Database Systems", percent: 29 },
-];
+const progressData = [];
 
 function ProgressCircular({ value = 80, size = 150, thickness = 5}) {
   return (
@@ -385,18 +372,26 @@ function getCurrentUserId() {
 }
 
 function mapEnrollmentToCard(e) {
+  const id = Number(e?.id);
+  const description = e?.description || "";
   return {
-    code: e.code,
+    id: Number.isInteger(id) ? id : undefined,
+    code: e?.code || "",
     name: e.name || e.title || e.code,   // see name than title
     dueText: "Enrolled",
-    meta: e.description ? `· ${e.description}` : "",
+    meta: description ? `· ${description}` : "",
   };
 }
 
 function mergeCourses(base, enrolledCards) {
   // put enrolled courses in front
-  const codes = new Set(enrolledCards.map((c) => c.code));
-  const rest = base.filter((b) => !codes.has(b.code));
+  const identifiers = new Set(
+    enrolledCards.map((c) => (Number.isInteger(Number(c.id)) ? `id:${Number(c.id)}` : `code:${c.code}`))
+  );
+  const rest = base.filter((b) => {
+    const key = Number.isInteger(Number(b.id)) ? `id:${Number(b.id)}` : `code:${b.code}`;
+    return !identifiers.has(key);
+  });
   return [...enrolledCards, ...rest];
 }
 
@@ -406,12 +401,28 @@ function readLocalEnrollments(userId) {
     const key = `enrolledCourses:${userId}`;
     const list = JSON.parse(localStorage.getItem(key) || "[]");
     if (!Array.isArray(list)) return [];
-    return list.map((c) => ({
-      code: c.code,
-      name: c.name || c.code,
-      dueText: "Enrolled",
-      meta: c.description ? `· ${c.description}` : "",
-    }));
+    const normalized = list
+      .map((c) => {
+        const id = Number(c?.id);
+        if (!Number.isInteger(id)) return null;
+        return { ...c, id };
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    return normalized
+      .filter((c) => {
+        if (seen.has(c.id)) return false;
+        seen.add(c.id);
+        return true;
+      })
+      .map((c) => ({
+        id: c.id,
+        code: c.code,
+        name: c.name || c.code,
+        dueText: "Enrolled",
+        meta: c.description ? `· ${c.description}` : "",
+      }));
   } catch {
     return [];
   }
@@ -436,17 +447,7 @@ const Dashboard = () => {
   // static exercise & progress data
   const [exercises] = useState(exerciseData);
   const [progress] = useState(progressData);
-  const [courses] = useState([
-    { code: "COMP9814", name: "Artificial Intelligence", badges: 1 },
-    { code: "COMP9820", name: "Project Management", badges: 0 },
-    { code: "COMP9517", name: "Computer Vision", badges: 3 },
-    { code: "COMP9021", name: "Principles of Programming", badges: 2 },
-    { code: "COMP9311", name: "Database Systems", badges: 1 },
-    { code: "COMP9511", name: "Human Computer Interaction", badges: 0 },
-    { code: "COMP9417", name: "Machine Learning", badges: 4 },
-    { code: "COMP9321", name: "Data Service Engineering", badges: 2 },
-    { code: "COMP6448", name: "Web Application Development", badges: 0 },
-  ]);
+  const [courses, setCourses] = useState([]);
 
   const totalRewards = courses.reduce((s, c) => s + (c.badges || 0), 0);
 
@@ -473,13 +474,15 @@ const Dashboard = () => {
       const { data } = await http.get(`/courses/users/${uid}/enrollments`);
       const enrolledCards = Array.isArray(data) ? data.map(mapEnrollmentToCard) : [];
       const fallback = enrolledCards.length ? [] : readLocalEnrollments(uid);
-      setSliderCourses(
-        mergeCourses(defaultCoursesData, enrolledCards.length ? enrolledCards : fallback)
-      );
+      const merged = mergeCourses(defaultCoursesData, enrolledCards.length ? enrolledCards : fallback);
+      setSliderCourses(merged);
+      setCourses(enrolledCards.map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 })));
     } catch (e) {
-      console.error("加载个人选课失败：", e?.response?.data || e.message);
+      console.error("Failed to load enrollments", e?.response?.data || e.message);
       const fallback = readLocalEnrollments(uid);
-      setSliderCourses(mergeCourses(defaultCoursesData, fallback));
+      const merged = mergeCourses(defaultCoursesData, fallback);
+      setSliderCourses(merged);
+      setCourses(fallback.map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 })));
     }
   };
 
@@ -636,3 +639,7 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+
+
+
+

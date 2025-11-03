@@ -122,6 +122,20 @@ def enroll_student(course_id):
     except Exception as e:
         db.session.rollback()
         abort(500, description=str(e))
+
+# Get course details
+@bp.route("/<int:course_id>", methods=["GET"])
+def get_course(course_id):
+    course = Course.query.get_or_404(course_id)
+    data = course.to_dict()
+    creator = User.query.get(course.created_by) if course.created_by else None
+    if creator:
+        first = (creator.first_name or "").strip()
+        last = (creator.last_name or "").strip()
+        teacher_name = (f"{first} {last}").strip()
+        data["teacher"] = teacher_name or None
+        data["creator_name"] = teacher_name or None
+    return jsonify(data), 200
         
 # list all courses a student is enrolled in 
 @bp.route("/users/<int:user_id>/enrollments", methods=["GET"])
