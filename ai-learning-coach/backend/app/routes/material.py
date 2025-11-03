@@ -3,7 +3,7 @@ from werkzeug.utils import secure_filename
 import os
 
 from ..extensions import db
-from ..models import Course, Material, User, UserRole
+from ..models import Assignment, Course, Enrollment, Material, User, UserRole
 
 bp = Blueprint("material", __name__, url_prefix="/materials")
 
@@ -20,19 +20,79 @@ def _reserve_unique_filename(directory: str, filename: str) -> str:
     return candidate
 
 
+def _material_file_path(material: Material) -> str:
+    root = current_app.config["UPLOAD_FOLDER"]
+    base_dir = os.path.join(root, str(material.course_id))
+    if material.assignment_id:
+        base_dir = os.path.join(base_dir, str(material.assignment_id))
+    return os.path.join(base_dir, material.stored_name)
+
+
+def _remove_file_from_disk(material: Material) -> None:
+    file_path = _material_file_path(material)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
+
+
+def _sanitize_custom_basename(name: str) -> str:
+    safe = secure_filename(name or "")
+    if not safe:
+        return ""
+    base, _ = os.path.splitext(safe)
+    return base
+
+
+def _build_submission_stored_name(course_dir: str, assignment: Assignment, student: User, original_name: str) -> tuple[str, str]:
+    assignment_dir = os.path.join(course_dir, str(assignment.id))
+    os.makedirs(assignment_dir, exist_ok=True)
+
+    _, original_ext = os.path.splitext(original_name)
+    stored_name = f"{student.id}{original_ext}"
+    return assignment_dir, stored_name
+
+
+def _material_with_student_dict(material: Material) -> dict:
+    data = material.to_dict()
+    student = User.query.get(material.uploaded_by)
+    if student:
+        data["student"] = {
+            "id": student.id,
+            "first_name": student.first_name,
+            "last_name": student.last_name,
+            "username": student.username,
+        }
+    else:
+        data["student"] = None
+    return data
+
+
+def _ensure_student_enrolled(course_id: int, student_id: int) -> None:
+    if not Enrollment.query.filter_by(course_id=course_id, user_id=student_id).first():
+        abort(403, description="student is not enrolled in this course")
+
+
 @bp.route("", methods=["GET"])
 def list_materials():
     """
     Optional query parameters:
     - course_id: int, filter materials by course
+    - include_submissions: bool, when true include student assignment submissions (default false)
     Returns 200 with an array of material JSON objects.
     """
     course_id = request.args.get("course_id", type=int)
+    include_submissions = request.args.get("include_submissions", "false").lower() in {
+        "true",
+        "1",
+        "yes",
+    }
 
     query = Material.query
     if course_id is not None:
         Course.query.get_or_404(course_id)
         query = query.filter_by(course_id=course_id)
+
+    if not include_submissions:
+        query = query.filter(Material.assignment_id.is_(None))
 
     materials = query.order_by(Material.uploaded_at.desc()).all()
     return jsonify([material.to_dict() for material in materials]), 200
@@ -79,15 +139,11 @@ def upload_material():
     custom_name = request.form.get("custom_name", "").strip()
     stored_name = None
 
-    if custom_name:
-        custom_base = secure_filename(custom_name)
-        if custom_base:
-            # Strip extension from the custom base if user accidentally provided one.
-            custom_base, _ = os.path.splitext(custom_base)
-            if custom_base:
-                _, original_ext = os.path.splitext(original_name)
-                candidate_name = f"{custom_base}{original_ext}"
-                stored_name = _reserve_unique_filename(course_dir, candidate_name)
+    base = _sanitize_custom_basename(custom_name)
+    if base:
+        _, original_ext = os.path.splitext(original_name)
+        candidate_name = f"{base}{original_ext}"
+        stored_name = _reserve_unique_filename(course_dir, candidate_name)
 
     if not stored_name:
         stored_name = _reserve_unique_filename(course_dir, original_name)
@@ -138,15 +194,8 @@ def delete_material(material_id: int):
 
     material = Material.query.get_or_404(material_id)
 
-    # attempt to remove the stored file; ignore if it does not exist
-    file_path = os.path.join(
-        current_app.config["UPLOAD_FOLDER"],
-        str(material.course_id),
-        material.stored_name,
-    )
     try:
-        if os.path.isfile(file_path):
-            os.remove(file_path)
+        _remove_file_from_disk(material)
     except OSError as exc:
         abort(500, description=f"failed to delete file: {exc}")
 
@@ -167,11 +216,7 @@ def download_material(material_id: int):
     """
     material = Material.query.get_or_404(material_id)
 
-    file_path = os.path.join(
-        current_app.config["UPLOAD_FOLDER"],
-        str(material.course_id),
-        material.stored_name,
-    )
+    file_path = _material_file_path(material)
     if not os.path.isfile(file_path):
         abort(404, description="file not found on server")
 
@@ -180,3 +225,112 @@ def download_material(material_id: int):
         as_attachment=True,
         download_name=material.original_name,
     )
+
+
+@bp.route("/assignments/<int:assignment_id>/submissions", methods=["POST"])
+def submit_assignment_material(assignment_id: int):
+    """
+    Allows a student to upload an assignment submission.
+    Expects multipart/form-data payload with fields:
+    - file: binary file object to upload
+    - student_id: int, id of the student submitting
+    Returns 201 with created material JSON (including student info).
+    """
+    assignment = Assignment.query.get_or_404(assignment_id)
+
+    if "file" not in request.files:
+        abort(400, description="No file part in the request")
+
+    file = request.files["file"]
+    if file.filename == "":
+        abort(400, description="file name is empty")
+
+    student_id = request.form.get("student_id", type=int)
+    if not student_id:
+        abort(400, description="missing required student_id")
+
+    student = User.query.get_or_404(student_id)
+    if student.role != UserRole.STUDENT:
+        abort(403, description="only students may submit assignments")
+
+    _ensure_student_enrolled(assignment.course_id, student.id)
+
+    root = current_app.config["UPLOAD_FOLDER"]
+    course_dir = os.path.join(root, str(assignment.course_id))
+    os.makedirs(course_dir, exist_ok=True)
+
+    assignment_dir, stored_name = _build_submission_stored_name(
+        course_dir,
+        assignment,
+        student,
+        file.filename,
+    )
+    file_path = os.path.join(assignment_dir, stored_name)
+
+    # Replace previous submissions from same student
+    previous_submissions = Material.query.filter_by(
+        assignment_id=assignment.id,
+        uploaded_by=student.id,
+    ).all()
+    for previous in previous_submissions:
+        _remove_file_from_disk(previous)
+        db.session.delete(previous)
+
+    file.save(file_path)
+
+    submission = Material(
+        course_id=assignment.course_id,
+        assignment_id=assignment.id,
+        original_name=file.filename,
+        stored_name=stored_name,
+        uploaded_by=student.id,
+        file_size=os.path.getsize(file_path),
+        file_type="assignment_submission",
+        week_number=None,
+    )
+
+    try:
+        db.session.add(submission)
+        db.session.commit()
+        return jsonify(_material_with_student_dict(submission)), 201
+    except Exception as exc:
+        db.session.rollback()
+        _remove_file_from_disk(submission)
+        abort(500, description=str(exc))
+
+
+@bp.route("/assignments/<int:assignment_id>/submissions", methods=["GET"])
+def list_assignment_submissions(assignment_id: int):
+    """
+    Lists assignment submissions. Requires query parameter:
+    - viewer_id: id of the user requesting the list.
+      * If viewer is the teacher (admin) who owns the assignment, returns all submissions.
+      * If viewer is a student, returns only their submissions.
+    Optional query parameters:
+    - student_id: filter submissions to a specific student (teachers only).
+    """
+    assignment = Assignment.query.get_or_404(assignment_id)
+
+    viewer_id = request.args.get("viewer_id", type=int)
+    if not viewer_id:
+        abort(400, description="missing required viewer_id")
+    viewer = User.query.get_or_404(viewer_id)
+
+    query = Material.query.filter_by(assignment_id=assignment.id)
+
+    if viewer.role == UserRole.STUDENT:
+        if viewer.id != viewer_id:
+            abort(403, description="students may only view their own submissions")
+        _ensure_student_enrolled(assignment.course_id, viewer.id)
+        query = query.filter_by(uploaded_by=viewer.id)
+    elif viewer.role == UserRole.ADMIN:
+        if viewer.id != assignment.teacher_id:
+            abort(403, description="only the assignment owner may view all submissions")
+        student_filter = request.args.get("student_id", type=int)
+        if student_filter:
+            query = query.filter_by(uploaded_by=student_filter)
+    else:
+        abort(403, description="unsupported user role")
+
+    submissions = query.order_by(Material.uploaded_at.desc()).all()
+    return jsonify([_material_with_student_dict(m) for m in submissions]), 200

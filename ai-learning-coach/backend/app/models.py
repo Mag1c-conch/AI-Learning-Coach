@@ -88,6 +88,7 @@ class Material(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=False)
+    assignment_id = db.Column(db.Integer, db.ForeignKey("assignments.id"), nullable=True)
     stored_name = db.Column(db.String(255), nullable=False)
     original_name = db.Column(db.String(255), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
@@ -98,11 +99,13 @@ class Material(db.Model):
     week_number = db.Column(db.Integer, nullable=True)   # 1-based week number within term
 
     course = db.relationship("Course", back_populates="materials", lazy="joined")
+    assignment = db.relationship("Assignment", back_populates="submissions", lazy="joined")
 
     def to_dict(self):
         return {
             "id": self.id,
             "course_id": self.course_id,
+             "assignment_id": self.assignment_id,
             "stored_name": self.stored_name,
             "original_name": self.original_name,
             "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
@@ -127,6 +130,7 @@ class Assignment(db.Model):
 
     course = db.relationship("Course", back_populates="assignments", lazy="joined")
     teacher = db.relationship("User", back_populates="assignments_created", lazy="joined")
+    submissions = db.relationship("Material", back_populates="assignment", lazy="selectin")
 
     def to_dict(self):
         return {
