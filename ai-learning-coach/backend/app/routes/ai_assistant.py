@@ -1,8 +1,11 @@
 # app/routes/ai_assistant.py
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, abort, current_app, jsonify, request
+from app.models import Assignment, Course, Enrollment, User, UserRole
 
+from ..extensions import db
 from ..services import chat_storage
 from ..services.assistant import process_assistant_request
+from ..services.ai import generate_reply
 
 bp = Blueprint("ai_assistant", __name__)
 
@@ -96,3 +99,48 @@ def get_conversation(conversation_id: int):
         return jsonify({"error": "forbidden"}), 403
 
     return jsonify(data), 200
+@bp.route("/get_plan", methods=["POST"])
+def get_plan():
+    payload = request.get_json(silent=True) or {}
+    student_id=payload.get('student_id')
+    # validate input
+    if not student_id:
+        abort(400, description="missing required fields")
+    student = User.query.get_or_404(student_id)
+    if student.role != UserRole.STUDENT:
+        abort(403, description="only students may enroll in courses")
+    courses = (
+        db.session.query(Course)
+        .join(Enrollment, Enrollment.course_id == Course.id)
+        .filter(Enrollment.user_id == student_id)
+        .order_by(Course.created_at.desc())
+        .all()
+    )
+    course_info = ""
+    for course in courses:
+        course_info += f"Course Code:{course.code}\nCouse Name: {course.name}\nCourse Description: {course.description}\n"
+        course_info += "Assignments\n\n"
+        assignments = Assignment.query.filter_by(course_id=course.id).order_by(Assignment.due_date.asc()).all()
+        for assignment in assignments:
+            course_info += f"Assignment: {assignment.title}\nDescription:{assignment.description}\nDue Date{assignment.due_date}\n"
+        
+    messages = [{"role": "user", "content": course_info}]
+    system_prompt = "You are an expert in study planning and I will give you the courses and assignments, you should generate an study plan for today."
+
+    if not isinstance(messages, list) or not messages:
+        abort(400, description="messages must be a non-empty list")
+
+    try:
+        reply = generate_reply(messages, system_prompt=system_prompt)
+    except ValueError as err:
+        abort(400, description=str(err))
+    except RuntimeError as err:
+        abort(502, description=str(err))
+
+    return jsonify(
+        {
+            "reply": reply,
+            "model": current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash"),
+        }
+    ), 200
+
