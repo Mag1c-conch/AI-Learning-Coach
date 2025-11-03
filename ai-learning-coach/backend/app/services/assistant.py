@@ -19,6 +19,7 @@ GENERAL_CHAT_PROMPT = (
     "the user needs help with other tasks such as generating practice questions or "
     "analyzing wrong answers. Do not reveal full solutions directly; prefer hints and "
     "guiding steps."
+    "if user say hello, greet them back, and ask what service they need."
 )
 
 CLASSIFIER_PROMPT = (
