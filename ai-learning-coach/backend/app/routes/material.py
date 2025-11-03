@@ -226,7 +226,7 @@ def download_material(material_id: int):
         download_name=material.original_name,
     )
 
-
+# student assignment submission endpoints(only students)
 @bp.route("/assignments/<int:assignment_id>/submissions", methods=["POST"])
 def submit_assignment_material(assignment_id: int):
     """
@@ -298,7 +298,7 @@ def submit_assignment_material(assignment_id: int):
         _remove_file_from_disk(submission)
         abort(500, description=str(exc))
 
-
+# List assignment submissions (admins and students)
 @bp.route("/assignments/<int:assignment_id>/submissions", methods=["GET"])
 def list_assignment_submissions(assignment_id: int):
     """
