@@ -1,12 +1,23 @@
 ﻿from flask import Blueprint, abort, current_app, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 import os
-import uuid
 
 from ..extensions import db
 from ..models import Course, Material, User, UserRole
 
 bp = Blueprint("material", __name__, url_prefix="/materials")
+
+
+def _reserve_unique_filename(directory: str, filename: str) -> str:
+    safe_name = secure_filename(filename) or "uploaded_file"
+    name, ext = os.path.splitext(safe_name)
+    candidate = safe_name
+    counter = 1
+
+    while os.path.exists(os.path.join(directory, candidate)):
+        candidate = f"{name}_{counter}{ext}"
+        counter += 1
+    return candidate
 
 
 @bp.route("", methods=["GET"])
@@ -65,7 +76,7 @@ def upload_material():
     os.makedirs(course_dir, exist_ok=True)
 
     original_name = file.filename
-    stored_name = f"{uuid.uuid4().hex}_{secure_filename(original_name)}"
+    stored_name = _reserve_unique_filename(course_dir, original_name)
     file_path = os.path.join(course_dir, stored_name)
     file.save(file_path)
 

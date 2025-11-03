@@ -18,14 +18,34 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    cols = []
+    try:
+        cols = [c['name'] for c in inspector.get_columns('materials')]
+    except Exception:
+        cols = []
+
     with op.batch_alter_table('materials') as batch_op:
-        batch_op.add_column(sa.Column('file_type', sa.String(length=50), nullable=True))
-        batch_op.add_column(sa.Column('week_number', sa.Integer(), nullable=True))
+        if 'file_type' not in cols:
+            batch_op.add_column(sa.Column('file_type', sa.String(length=50), nullable=True))
+        if 'week_number' not in cols:
+            batch_op.add_column(sa.Column('week_number', sa.Integer(), nullable=True))
 
 
 def downgrade():
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    cols = []
+    try:
+        cols = [c['name'] for c in inspector.get_columns('materials')]
+    except Exception:
+        cols = []
+
     with op.batch_alter_table('materials') as batch_op:
-        batch_op.drop_column('week_number')
-        batch_op.drop_column('file_type')
+        if 'week_number' in cols:
+            batch_op.drop_column('week_number')
+        if 'file_type' in cols:
+            batch_op.drop_column('file_type')
 
 
