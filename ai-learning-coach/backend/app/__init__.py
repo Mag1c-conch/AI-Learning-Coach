@@ -1,7 +1,9 @@
-﻿from flask import Flask
+from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+
+from redis import Redis
 
 from .extensions import db, migrate
 from .routes import ai_assistant, assignment, auth, course, material
@@ -38,6 +40,7 @@ def create_app():
     # load ai api key
     app.config["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY", "")
     app.config["GEMINI_MODEL"] = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    app.config["CHAT_HISTORY_TTL"] = int(os.getenv("CHAT_HISTORY_TTL", 60 * 60 * 24 * 7))
 
     # Set database URI - use environment variable if available, otherwise use default SQLite
     db_path = os.path.join(instance_dir, "app.db")
@@ -50,6 +53,17 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     from . import models
+
+    redis_client = None
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        try:
+            redis_client = Redis.from_url(redis_url, decode_responses=True)
+            redis_client.ping()
+        except Exception as exc:
+            app.logger.warning("Redis unavailable: %s", exc)
+            redis_client = None
+    app.extensions["redis"] = redis_client
 
     # Create all database tables if they don't exist
     with app.app_context():
@@ -69,3 +83,7 @@ def create_app():
     # ai assistant blueprint
     app.register_blueprint(ai_assistant.bp)
     return app
+
+
+
+

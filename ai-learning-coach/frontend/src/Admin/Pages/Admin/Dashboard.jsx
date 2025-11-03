@@ -180,7 +180,7 @@ const CourseCard = ({ course, navigate }) => (
       }}
       onClick={() => {
         // 跳转到课程页面
-        navigate(`/admin/course/${course.id}`);
+        navigate(`/admin/course/${course.code ?? course.id}`);
       }}
     />
     {/* 下半：信息 */}
@@ -238,6 +238,20 @@ export default function Dashboard() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  const getCurrentUserId = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return null;
+      }
+      const userData = JSON.parse(token);
+      return userData?.id ?? null;
+    } catch (error) {
+      console.error("Error parsing user token:", error);
+      return null;
+    }
+  };
+
   // —— 默认学习相关图片
   const defaultCourseImages = [
     "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", // 书本和笔记本
@@ -250,13 +264,23 @@ export default function Dashboard() {
   // —— 从后端获取课程列表
   const fetchCourses = async () => {
     setCoursesLoading(true);
+    const adminId = getCurrentUserId();
+
+    if (!adminId) {
+      console.warn("Unable to determine current admin id; course list will be empty.");
+      setCourses([]);
+      setCoursesLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch('http://localhost:5001/courses');
+      const response = await fetch(`http://localhost:5001/courses?created_by=${encodeURIComponent(adminId)}`);
       if (response.ok) {
         const data = await response.json();
         // 将后端数据转换为前端格式
         const formattedCourses = data.map((course, index) => ({
-          id: course.code,
+          id: course.id,
+          code: course.code,
           title: `${course.code} - ${course.name}`,
           org: course.description || "COMPSC - School of CSE",
           image: course.image_url || defaultCourseImages[index % defaultCourseImages.length],
@@ -294,14 +318,7 @@ export default function Dashboard() {
     setError("");
 
     try {
-      // 从localStorage获取当前用户ID
-      const token = localStorage.getItem('token');
-      let adminId = null;
-      
-      if (token) {
-        const userData = JSON.parse(token);
-        adminId = userData.id;
-      }
+      const adminId = getCurrentUserId();
 
       if (!adminId) {
         setError("Unable to get user information. Please login again.");
@@ -359,14 +376,7 @@ export default function Dashboard() {
     setDeleteError("");
 
     try {
-      // 从localStorage获取当前用户ID
-      const token = localStorage.getItem('token');
-      let adminId = null;
-      
-      if (token) {
-        const userData = JSON.parse(token);
-        adminId = userData.id;
-      }
+      const adminId = getCurrentUserId();
 
       if (!adminId) {
         setDeleteError("Unable to get user information. Please login again.");
@@ -374,7 +384,7 @@ export default function Dashboard() {
         return;
       }
 
-      // 找到选中课程的后端ID
+      // 找到选中课程
       const selectedCourse = courses.find(c => c.id === selectedCourseId);
       if (!selectedCourse) {
         setDeleteError("Course not found");
@@ -382,24 +392,7 @@ export default function Dashboard() {
         return;
       }
 
-      // 需要从后端获取课程的数据库ID
-      const coursesResponse = await fetch('http://localhost:5001/courses');
-      if (!coursesResponse.ok) {
-        setDeleteError("Failed to fetch course information");
-        setDeleteLoading(false);
-        return;
-      }
-      
-      const coursesData = await coursesResponse.json();
-      const courseToDelete = coursesData.find(c => c.code === selectedCourseId);
-      
-      if (!courseToDelete) {
-        setDeleteError("Course not found in database");
-        setDeleteLoading(false);
-        return;
-      }
-
-      const response = await fetch(`http://localhost:5001/courses/${courseToDelete.id}`, {
+      const response = await fetch(`http://localhost:5001/courses/${selectedCourse.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
