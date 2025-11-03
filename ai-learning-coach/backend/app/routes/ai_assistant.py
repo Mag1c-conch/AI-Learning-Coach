@@ -24,6 +24,8 @@ def chat():
             conversation = chat_storage.get_conversation(conversation_id)
             if not conversation:
                 return jsonify({"error": "conversation not found"}), 404
+            if conversation.user_id and user_id and conversation.user_id != user_id:
+                return jsonify({"error": "forbidden"}), 403
         else:
             conversation = chat_storage.create_conversation(
                 user_id=user_id,
@@ -57,3 +59,40 @@ def chat():
     except Exception as exc:
         current_app.logger.exception("ERROR in /assistant/chat: %s", exc)
         return jsonify({"error": str(exc)}), 500
+
+
+@bp.route("/assistant/conversations", methods=["GET"])
+def list_conversations():
+    user_id = request.args.get("user_id", type=int)
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    limit = request.args.get("limit", type=int)
+    include_messages = request.args.get("include_messages", "false").lower() in {"true", "1", "yes"}
+    message_limit = request.args.get("message_limit", type=int)
+
+    conversations = chat_storage.list_conversations(
+        user_id=user_id,
+        limit=limit,
+        include_messages=include_messages,
+        message_limit=message_limit,
+    )
+    return jsonify(conversations), 200
+
+
+@bp.route("/assistant/conversations/<int:conversation_id>", methods=["GET"])
+def get_conversation(conversation_id: int):
+    user_id = request.args.get("user_id", type=int)
+    message_limit = request.args.get("message_limit", type=int)
+
+    data = chat_storage.get_conversation_with_history(conversation_id, message_limit=message_limit)
+    if not data:
+        return jsonify({"error": "conversation not found"}), 404
+
+    conv_user_id = data.get("user_id")
+    if conv_user_id and user_id is None:
+        return jsonify({"error": "user_id is required"}), 400
+    if conv_user_id and user_id != conv_user_id:
+        return jsonify({"error": "forbidden"}), 403
+
+    return jsonify(data), 200

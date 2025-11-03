@@ -135,8 +135,37 @@ def get_history(conversation_id: int, limit: Optional[int] = None) -> List[dict]
 def conversation_to_dict(conversation: Conversation, include_messages: bool = False) -> dict:
     data = conversation.to_dict()
     if include_messages:
-        data["messages"] = [
-            message.to_dict()
-            for message in sorted(conversation.messages, key=lambda m: m.created_at or datetime.now(timezone.utc))
-        ]
+        data["messages"] = get_history(conversation.id)
+    return data
+
+
+def list_conversations(
+    user_id: int,
+    limit: Optional[int] = None,
+    include_messages: bool = False,
+    message_limit: Optional[int] = None,
+) -> List[dict]:
+    query = (
+        Conversation.query.filter(Conversation.user_id == user_id)
+        .order_by(Conversation.updated_at.desc())
+    )
+    if limit:
+        query = query.limit(limit)
+
+    conversations = query.all()
+    results = []
+    for conversation in conversations:
+        data = conversation_to_dict(conversation, include_messages=False)
+        if include_messages:
+            data["messages"] = get_history(conversation.id, limit=message_limit)
+        results.append(data)
+    return results
+
+
+def get_conversation_with_history(conversation_id: int, message_limit: Optional[int] = None) -> Optional[dict]:
+    conversation = db.session.get(Conversation, conversation_id)
+    if not conversation:
+        return None
+    data = conversation_to_dict(conversation, include_messages=False)
+    data["messages"] = get_history(conversation_id, limit=message_limit)
     return data
