@@ -7,6 +7,7 @@ import {
   IconButton,
   Chip,
   Divider,
+  Checkbox,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import InputBase from "@mui/material/InputBase";
@@ -18,8 +19,12 @@ import { CircularProgress, circularProgressClasses } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
 import http from "../api/http";
 
-/** ========= Enrollment helpers ========= */
+/** ========= 常量 & 工具 ========= */
 const ENROLL_EVENT = "enrollment:updated";
+const TASK_TYPES = new Set(["assignment", "quiz", "lab"]);
+const fallbackCourse = { code: "COMP9814", name: "Artificial Intelligence" };
+
+const isNumericId = (v) => /^\d+$/.test(String(v));
 
 function getCurrentUserId() {
   try {
@@ -31,81 +36,33 @@ function getCurrentUserId() {
     return null;
   }
 }
-
 function getEnrollmentKey(uid) {
   return `enrolledCourses:${uid}`;
 }
-
 function loadEnrollments(uid = getCurrentUserId()) {
   if (!uid) return [];
   try {
     const stored = JSON.parse(localStorage.getItem(getEnrollmentKey(uid)) || "[]");
     if (!Array.isArray(stored)) return [];
+    // 规范化 + 去重
     const mapped = stored
       .map((item) => {
         const id = Number(item?.id);
-        if (!Number.isInteger(id)) return null;
-        return {
-          ...item,
-          id,
-        };
+        return Number.isInteger(id) ? { ...item, id } : null;
       })
       .filter(Boolean);
-
     const seen = new Set();
-    return mapped.filter((item) => {
-      if (seen.has(item.id)) return false;
-      seen.add(item.id);
-      return true;
-    });
+    return mapped.filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)));
   } catch {
     return [];
   }
 }
 
-/** ========= Search box ========= */
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: theme.palette.action.hover,
-  "&:hover": {
-    backgroundColor: alpha(theme.palette.common.black, 0.1),
-  },
-  display: "flex",
-  alignItems: "center",
-  marginRight: theme.spacing(2),
-  marginLeft: 0,
-  width: "200px",
-  paddingLeft: theme.spacing(1),
-  [theme.breakpoints.up("sm")]: {
-    width: "250px",
-  },
-}));
-
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: theme.spacing(0, 1),
-  height: "100%",
-  color: "rgba(0,0,0,0.5)",
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  width: "100%",
-  "& .MuiInputBase-input": {
-    padding: theme.spacing(1, 1, 1, 0),
-    transition: theme.transitions.create("width"),
-    width: "100%",
-  },
-}));
-
-/** ========= Progress ========= */
-function ProgressCircular({ value = 70, size = 160, thickness = 7 }) {
+/** 进度环 */
+function ProgressCircular({ value = 0, size = 160, thickness = 7 }) {
+  const safe = Math.max(0, Math.min(100, Math.round(value)));
   return (
     <Box sx={{ position: "relative", display: "inline-flex" }}>
-      {/* Background */}
       <CircularProgress
         variant="determinate"
         value={100}
@@ -117,10 +74,9 @@ function ProgressCircular({ value = 70, size = 160, thickness = 7 }) {
           transform: "rotate(-110deg)",
         }}
       />
-      {/* Foreground */}
       <CircularProgress
         variant="determinate"
-        value={value}
+        value={safe}
         size={size}
         thickness={thickness}
         sx={{
@@ -131,7 +87,6 @@ function ProgressCircular({ value = 70, size = 160, thickness = 7 }) {
           transform: "rotate(-110deg)",
         }}
       />
-      {/* Label */}
       <Box
         sx={{
           position: "absolute",
@@ -142,47 +97,206 @@ function ProgressCircular({ value = 70, size = 160, thickness = 7 }) {
           fontWeight: 700,
         }}
       >
-        {value}%
+        {safe}%
       </Box>
     </Box>
   );
 }
 
-/** ========= Local fallback data ========= */
-const fallbackMaterials = [];
-const API_BASE_URL = process.env.REACT_APP_API_BASE || "http://localhost:5001";
+/** 顶部搜索框样式 */
+const Search = styled("div")(({ theme }) => ({
+  position: "relative",
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: theme.palette.action.hover,
+  "&:hover": { backgroundColor: alpha(theme.palette.common.black, 0.1) },
+  display: "flex",
+  alignItems: "center",
+  marginRight: theme.spacing(2),
+  marginLeft: 0,
+  width: "200px",
+  paddingLeft: theme.spacing(1),
+  [theme.breakpoints.up("sm")]: { width: "250px" },
+}));
+const SearchIconWrapper = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: theme.spacing(0, 1),
+  height: "100%",
+  color: "rgba(0,0,0,0.5)",
+}));
+const StyledInputBase = styled(InputBase)(({ theme }) => ({
+  color: "inherit",
+  width: "100%",
+  "& .MuiInputBase-input": {
+    padding: theme.spacing(1, 1, 1, 0),
+    transition: theme.transitions.create("width"),
+    width: "100%",
+  },
+}));
 
-function pickMaterialColor(filename = "", type = "") {
-  const value = (type || filename.split(".").pop() || "").toLowerCase();
-  if (value.includes("pdf")) return "#1f2a44";
-  if (value.includes("doc")) return "#4b7bec";
-  if (value.includes("ppt")) return "#f39c12";
-  if (value.includes("xls") || value.includes("sheet")) return "#2ecc71";
-  return "#6c5ce7";
+/** 文件扩展名→颜色/标签 */
+const extColor = {
+  pdf: "#d32f2f",
+  ppt: "#d24625",
+  pptx: "#d24625",
+  doc: "#2b579a",
+  docx: "#2b579a",
+  xls: "#217346",
+  xlsx: "#217346",
+  csv: "#217346",
+  zip: "#6b7280",
+  rar: "#6b7280",
+  default: "#1f2a44",
+};
+const labelFromExt = (ext) => {
+  if (!ext) return "File";
+  const e = ext.toLowerCase();
+  if (e === "pdf") return "PDF";
+  if (["ppt", "pptx"].includes(e)) return "Slides";
+  if (["doc", "docx"].includes(e)) return "Doc";
+  if (["xls", "xlsx", "csv"].includes(e)) return "Sheet";
+  return e.toUpperCase();
+};
+
+const parsePercent = (p) => {
+  if (typeof p === "number") return p;
+  if (typeof p === "string") {
+    const n = Number(p.replace(/%/g, "").trim());
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
+const assignmentStatusKey = (uid, courseCode) =>
+  `assignmentStatus:${uid || "anon"}:${courseCode || "unknown"}`;
+function loadAssignmentStatus(uid, courseCode) {
+  try {
+    const raw = localStorage.getItem(assignmentStatusKey(uid, courseCode));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
 }
-const assignments = [
-  { title: "Quiz 6", time: "Oct 22 08:00am", percent: "5%", due: "Due 2 days" },
-  { title: "Lab 7", time: "Oct 24 10:30am", percent: "3%", due: "Due 4 days" },
-  { title: "Assignment 2", time: "Oct 27 04:00pm", percent: "25%", due: "Due 9 days" },
-];
+function saveAssignmentStatus(uid, courseCode, statusObj) {
+  try {
+    localStorage.setItem(assignmentStatusKey(uid, courseCode), JSON.stringify(statusObj));
+  } catch {}
+}
 
+/** kind 显示/样式 */
+const prettyKind = (k) => {
+  const t = String(k || "").toLowerCase();
+  if (t === "quiz") return "Quiz";
+  if (t === "assignment") return "Assignment";
+  if (t === "lab") return "Lab";
+  return t ? t[0].toUpperCase() + t.slice(1) : "";
+};
+const kindChipSX = (k) => {
+  const t = String(k || "").toLowerCase();
+  if (t === "quiz") return { borderColor: "info.main", color: "info.main" };
+  if (t === "assignment") return { borderColor: "primary.main", color: "primary.main" };
+  if (t === "lab") return { borderColor: "success.main", color: "success.main" };
+  return {};
+};
+const inferKindFromTitle = (title) => {
+  const s = String(title || "").toLowerCase();
+  if (s.includes("quiz")) return "quiz";
+  if (s.includes("assignment") || s.includes("assn") || /\ba\d+\b/.test(s)) return "assignment";
+  if (s.includes("lab")) return "lab";
+  return "";
+};
+
+/** 规范化 materials（加 ext / file_type / download_url / uploaded_at） */
+function normalizeMaterials(arr = []) {
+  const getExt = (name) => {
+    if (!name) return "";
+    const i = name.lastIndexOf(".");
+    return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
+  };
+  return (Array.isArray(arr) ? arr : []).map((m) => {
+    const ext = m.ext || getExt(m.original_name || m.stored_name);
+    return {
+      ...m,
+      ext,
+      download_url: m.download_url || (m.id ? `/materials/${m.id}/download` : null),
+      uploaded_at: m.uploaded_at || m.created_at || m.updated_at,
+      file_type: (m.file_type || "").toLowerCase(),
+    };
+  });
+}
+
+/** 剩余时间 */
+function formatTimeLeft(isoLike) {
+  if (!isoLike) return "";
+  const now = Date.now();
+  const due = new Date(isoLike).getTime();
+  if (Number.isNaN(due)) return "";
+  const diff = due - now;
+  const past = diff < 0;
+  const abs = Math.abs(diff);
+  const SEC = 1000,
+    MIN = 60 * SEC,
+    HOUR = 60 * MIN,
+    DAY = 24 * HOUR;
+  const days = Math.floor(abs / DAY);
+  const hours = Math.floor((abs % DAY) / HOUR);
+  const mins = Math.floor((abs % HOUR) / MIN);
+  const part = days > 0 ? `${days}d ${hours}h` : hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  return past ? `Overdue ${part}` : `Due in ${part}`;
+}
+
+/** 鉴权下载（axios blob） */
+const filenameFromDisposition = (disposition) => {
+  if (!disposition) return null;
+  const m1 = /filename\*\=UTF-8''([^;]+)/i.exec(disposition);
+  if (m1) return decodeURIComponent(m1[1]);
+  const m2 = /filename="?([^"]+)"?/i.exec(disposition);
+  return m2 ? m2[1] : null;
+};
+async function downloadWithAuth(urlOrPath, fallbackName = "file") {
+  try {
+    const res = await http.get(urlOrPath, { responseType: "blob" });
+    const cd =
+      res.headers?.["content-disposition"] ||
+      res.headers?.get?.("content-disposition");
+    const filename = filenameFromDisposition(cd) || fallbackName;
+    const blobUrl = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error("Download failed:", err);
+    const status = err?.response?.status;
+    alert(`下载失败${status ? `（HTTP ${status}）` : ""}，请稍后再试`);
+  }
+}
+
+/** ========= 组件 ========= */
 function CourseDetail() {
-  const [enrolled, setEnrolled] = useState([]);
-  const [materials, setMaterials] = useState(fallbackMaterials);
-  const [materialsLoading, setMaterialsLoading] = useState(false);
-  const [materialsError, setMaterialsError] = useState("");
-  const { courseId: courseIdParam } = useParams();
+  // 兼容两种路由参数：/course/:id 或 /course/:courseId 或直接用课程 code
+  const { id: idParam, courseId: courseIdParam } = useParams();
+  const rawParam = idParam ?? courseIdParam ?? null;
   const navigate = useNavigate();
-  const normalizedParam = courseIdParam ? decodeURIComponent(courseIdParam) : null;
-  const numericCourseId = courseIdParam ? Number(courseIdParam) : NaN;
 
+  const [enrolled, setEnrolled] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [taskMaterials, setTaskMaterials] = useState([]); // 仅 assignment/quiz/lab
+  const [matLoading, setMatLoading] = useState(false);
+  const [matError, setMatError] = useState(null);
+
+  const uid = getCurrentUserId();
+
+  /** 加载选课信息（后端优先，失败回退本地）+ 跨标签/事件同步 */
   useEffect(() => {
-    const uid = getCurrentUserId();
     if (!uid) return;
     setEnrolled(loadEnrollments(uid));
 
     let cancelled = false;
-
     const fetchEnrollments = async () => {
       try {
         const res = await http.get(`/courses/users/${uid}/enrollments`);
@@ -195,9 +309,8 @@ function CourseDetail() {
               id,
               code: course?.code || "",
               name: course?.name || course?.title || "",
-              dueText: "Enrolled",
               meta: course?.description ? `· ${course.description}` : "",
-              progress: course?.progress ?? 0,
+              progress: course?.progress ?? null, // 若后端有进度则用它
               teacher: course?.teacher || course?.creator_name || "",
             };
           })
@@ -207,20 +320,21 @@ function CourseDetail() {
           localStorage.setItem(getEnrollmentKey(uid), JSON.stringify(normalized));
         }
       } catch (err) {
-        console.error("加载选课信息失败", err);
+        console.error("加载选课信息失败：", err);
+        // 回退到本地已存
+        if (!cancelled) setEnrolled(loadEnrollments(uid));
       }
     };
 
     fetchEnrollments();
 
     const onEnrollUpdated = (e) => {
-      if (e?.detail?.user_id !== uid) return;
+      if (e?.detail?.user_id && e.detail.user_id !== uid) return;
       setEnrolled(loadEnrollments(uid));
       fetchEnrollments();
     };
     window.addEventListener(ENROLL_EVENT, onEnrollUpdated);
 
-    // 跨标签页同步
     const onStorage = (e) => {
       if (e.key === getEnrollmentKey(uid)) {
         setEnrolled(loadEnrollments(uid));
@@ -234,111 +348,237 @@ function CourseDetail() {
       window.removeEventListener(ENROLL_EVENT, onEnrollUpdated);
       window.removeEventListener("storage", onStorage);
     };
-  }, []);
+  }, [uid]);
+
+  /** 当前课程：优先匹配 id，其次 code；没有就兜底 */
   const currentCourse = useMemo(() => {
-    if (!enrolled.length) return null;
-
-    if (Number.isInteger(numericCourseId)) {
-      const byId = enrolled.find((c) => Number.isInteger(c.id) && c.id === numericCourseId);
-      if (byId) return byId;
-      return null;
+    const list = Array.isArray(enrolled) ? enrolled : [];
+    if (!list.length) {
+      if (rawParam) return { id: undefined, code: String(rawParam), name: "" };
+      return fallbackCourse;
     }
-
-    if (normalizedParam) {
-      const lowered = normalizedParam.toLowerCase();
-      const byCode = enrolled.find((c) => (c.code || "").toLowerCase() === lowered);
-      if (byCode) return byCode;
-      return null;
+    if (rawParam) {
+      const byId = list.find((c) => String(c.id) === String(rawParam));
+      const byCode = list.find((c) => String(c.code) === String(rawParam));
+      return byId || byCode || { id: undefined, code: String(rawParam), name: "" };
     }
+    return list[0];
+  }, [enrolled, rawParam]);
 
-    return enrolled[0];
-  }, [enrolled, numericCourseId, normalizedParam]);
-
+  /** 规范路由：将参数重写为规范 id 或 code */
   useEffect(() => {
-    if (!enrolled.length) return;
-    const target = currentCourse;
-    if (!target) return;
-
-    if (!courseIdParam) {
-      if (Number.isInteger(target.id)) {
-        navigate(`/course/${target.id}`, { replace: true });
-      } else if (target.code) {
-        navigate(`/course/${encodeURIComponent(target.code)}`, { replace: true });
-      }
-      return;
+    if (!enrolled.length || !currentCourse) return;
+    const desired = currentCourse.id != null ? String(currentCourse.id) : currentCourse.code;
+    if (!rawParam || String(rawParam) !== String(desired)) {
+      navigate(`/course/${encodeURIComponent(desired)}`, { replace: true });
     }
+  }, [enrolled, currentCourse, rawParam, navigate]);
 
-    if (Number.isInteger(target.id) && courseIdParam !== String(target.id)) {
-      navigate(`/course/${target.id}`, { replace: true });
-      return;
-    }
-
-    if (!Number.isInteger(target.id) && target.code) {
-      const desiredKey = encodeURIComponent(target.code);
-      if (courseIdParam !== desiredKey) {
-        navigate(`/course/${desiredKey}`, { replace: true });
-      }
-    }
-  }, [courseIdParam, currentCourse, enrolled, navigate]);
-
+  /** 加载 materials（并筛出任务型 materials） */
   useEffect(() => {
-    const courseId = currentCourse?.id;
-    if (!courseId) {
-      setMaterials([]);
-      setMaterialsError("");
-      setMaterialsLoading(false);
-      return;
-    }
+    let alive = true;
 
-    let cancelled = false;
-    const fetchMaterials = async () => {
+    setMatLoading(true);
+    setMatError(null);
+    setMaterials([]);
+    setTaskMaterials([]);
+
+    (async () => {
       try {
-        setMaterialsLoading(true);
-        setMaterialsError("");
-        const res = await http.get("/materials", { params: { course_id: courseId } });
-        const payload = Array.isArray(res.data) ? res.data : [];
-        const mapped = payload.map((item) => ({
-          id: item?.id,
-          title: item?.stored_name || item?.original_name || "Course material",
-          type: item?.file_type || "material",
-          color: pickMaterialColor(item?.stored_name || item?.original_name, item?.file_type),
-          downloadUrl: item?.id ? `${API_BASE_URL}/materials/${item.id}/download` : null,
-        }));
-        if (!cancelled) {
-          setMaterials(mapped);
+        const cid = currentCourse?.id;
+        const ccode = currentCourse?.code;
+        if (!cid && !ccode) {
+          if (alive) {
+            setMaterials([]);
+            setTaskMaterials([]);
+            setMatLoading(false);
+          }
+          return;
         }
-      } catch (err) {
-        console.error("加载课程资料失败", err);
-        if (!cancelled) {
+
+        const params = cid && isNumericId(cid) ? { course_id: Number(cid) } : { course_code: String(ccode) };
+        const { data } = await http.get("/materials", { params });
+        if (!alive) return;
+
+        const norm = normalizeMaterials(data);
+
+        // 二次过滤确保只保留当前课程数据
+        const courseMatch = (m) => {
+          const idOk =
+            currentCourse?.id != null &&
+            (String(m.course_id) === String(currentCourse.id) ||
+              String(m.courseId) === String(currentCourse.id));
+          const codeOk =
+            currentCourse?.code &&
+            (m.course_code === currentCourse.code ||
+              m.courseCode === currentCourse.code ||
+              m.course?.code === currentCourse.code);
+          return idOk || codeOk;
+        };
+        const onlyThisCourse = norm.filter(courseMatch);
+
+        setMaterials(onlyThisCourse);
+        setTaskMaterials(onlyThisCourse.filter((m) => TASK_TYPES.has(m.file_type)));
+      } catch (e) {
+        console.error("fetch materials failed", e);
+        if (alive) {
+          setMatError("Failed to load materials");
           setMaterials([]);
-          setMaterialsError(err?.response?.data?.description || err.message);
+          setTaskMaterials([]);
         }
       } finally {
-        if (!cancelled) {
-          setMaterialsLoading(false);
-        }
+        if (alive) setMatLoading(false);
       }
-    };
-
-    fetchMaterials();
+    })();
 
     return () => {
-      cancelled = true;
+      alive = false;
     };
-  }, [currentCourse?.id]);
+  }, [currentCourse?.id, currentCourse?.code]);
+
+  /** 老师端上传后刷新 */
+  useEffect(() => {
+    const onUpdated = (e) => {
+      const { course_id, course_code } = e?.detail ?? {};
+      const sameId = currentCourse?.id && course_id && String(course_id) === String(currentCourse.id);
+      const sameCode =
+        currentCourse?.code && course_code && String(course_code) === String(currentCourse.code);
+      if (!sameId && !sameCode) return;
+
+      const params = currentCourse?.id ? { course_id: currentCourse.id } : { course_code: currentCourse?.code };
+      http
+        .get("/materials", { params })
+        .then(({ data }) => {
+          const norm = normalizeMaterials(data);
+          const courseMatch = (m) => {
+            const idOk =
+              currentCourse?.id != null &&
+              (String(m.course_id) === String(currentCourse.id) ||
+                String(m.courseId) === String(currentCourse.id));
+            const codeOk =
+              currentCourse?.code &&
+              (m.course_code === currentCourse.code ||
+                m.courseCode === currentCourse.code ||
+                m.course?.code === currentCourse.code);
+            return idOk || codeOk;
+          };
+          const onlyThisCourse = norm.filter(courseMatch);
+          setMaterials(onlyThisCourse);
+          setTaskMaterials(onlyThisCourse.filter((m) => TASK_TYPES.has(m.file_type)));
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("materials:updated", onUpdated);
+    return () => window.removeEventListener("materials:updated", onUpdated);
+  }, [currentCourse?.id, currentCourse?.code]);
+
+  /** Assignments：从任务型 materials 构建；支持勾选持久化 */
+  const [assignments, setAssignments] = useState([]);
+  useEffect(() => {
+    const status = loadAssignmentStatus(uid, currentCourse?.code);
+    if (!taskMaterials || taskMaterials.length === 0) {
+      // 无任务型 materials，清空
+      setAssignments([]);
+      return;
+    }
+    const mapped = taskMaterials.map((m) => {
+      const when = m.deadline || m.due_date || m.uploaded_at || "";
+      return {
+        id: `m-${m.id}`,
+        title: m.original_name || m.stored_name || "Untitled",
+        percent: "", // 若后端提供占比可使用
+        due: "",
+        weight: 0, // 默认 0，走“数量制”兜底
+        completed: Boolean(status[`m-${m.id}`]),
+        dueAt: when,
+        kind: m.file_type, // quiz / assignment / lab
+        assignmentId: m.assignment_id || m.id, // 提交用
+        sourceMaterialId: m.id,
+      };
+    });
+    setAssignments(mapped);
+  }, [taskMaterials, uid, currentCourse?.code]);
+
+  /** 计算课程进度：优先用后端 progress；否则用完成权重/数量 */
+  const computedProgress = useMemo(() => {
+    const totalWeight = assignments.reduce((s, a) => s + (a.weight || 0), 0);
+    if (totalWeight > 0) {
+      const doneWeight = assignments.reduce((s, a) => s + (a.completed ? a.weight || 0 : 0), 0);
+      return (doneWeight / totalWeight) * 100;
+    }
+    const total = assignments.length;
+    if (!total) return 0;
+    const done = assignments.filter((a) => a.completed).length;
+    return (done / total) * 100;
+  }, [assignments]);
 
   const progressValue =
-    typeof currentCourse?.progress === "number" ? currentCourse.progress : 0;
+    typeof currentCourse?.progress === "number" && currentCourse.progress >= 0
+      ? currentCourse.progress
+      : computedProgress;
+
+  /** 勾选完成并持久化 */
+  const toggleAssignment = (id) => {
+    setAssignments((prev) => {
+      const next = prev.map((a) => (a.id === id ? { ...a, completed: !a.completed } : a));
+      const status = next.reduce((obj, a) => {
+        obj[a.id] = a.completed;
+        return obj;
+      }, {});
+      saveAssignmentStatus(uid, currentCourse?.code, status);
+      return next;
+    });
+  };
+
+  /** 提交作业（文件上传） */
+  const handleSubmitAssignment = (a) => {
+    const studentId = getCurrentUserId();
+    const courseId = currentCourse?.id;
+    const assignmentId = a.assignmentId || a.sourceMaterialId || String(a.id || "").replace(/^m-/, "");
+    if (!studentId || !courseId || !assignmentId) {
+      alert("提交失败：学号/课程/作业标识不完整");
+      return;
+    }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "*/*";
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("course_id", courseId);
+        fd.append("assignment_id", assignmentId);
+        fd.append("student_id", studentId);
+        // 后端若有 /assignments/:id/submit 则替换为对应路由
+        const url = "/submissions";
+        const res = await http.post(url, fd, { headers: { "Content-Type": "multipart/form-data" } });
+        if (res.status >= 200 && res.status < 300) {
+          alert("提交成功！");
+        } else {
+          alert("提交失败，请稍后再试");
+        }
+      } catch (err) {
+        console.error("submit failed:", err);
+        const status = err?.response?.status;
+        alert(`提交失败${status ? `（HTTP ${status}）` : ""}`);
+      }
+    };
+    input.click();
+  };
+
+  /** ========= UI ========= */
   const courseCode = currentCourse?.code || "No course selected";
   const courseName = currentCourse?.name || "";
   const courseMeta = currentCourse?.meta || "";
   const courseTeacher = currentCourse?.teacher || "";
-  const hasCourse = Boolean(currentCourse);
 
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
-      {/* Right content */}
+
+      {/* 右侧主区域 */}
       <Box
         sx={{
           flex: 1,
@@ -350,7 +590,7 @@ function CourseDetail() {
       >
         <Divider sx={{ position: "sticky", top: 56, zIndex: 1, mb: 2, opacity: 0.5 }} />
 
-        {/* Upper right corner: Search + Notifications */}
+        {/* 右上角 Search + 通知 */}
         <Box
           sx={{
             display: "flex",
@@ -365,17 +605,14 @@ function CourseDetail() {
             <SearchIconWrapper>
               <SearchIcon aria-hidden />
             </SearchIconWrapper>
-            <StyledInputBase
-              placeholder="Search"
-              inputProps={{ "aria-label": "Search" }}
-            />
+            <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
           </Search>
           <IconButton aria-label="Notifications">
             <NotificationsIcon />
           </IconButton>
         </Box>
 
-        {/* Page title */}
+        {/* 页面标题 */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
           <Typography variant="h4" sx={{ fontWeight: 800 }}>
             Course
@@ -386,7 +623,7 @@ function CourseDetail() {
           </Typography>
         </Box>
 
-        {/* Course title */}
+        {/* 课程标题卡片 */}
         <Paper elevation={1} sx={{ p: 2.5, borderRadius: 2, mb: 3, mt: 4, boxShadow: 5 }}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             {courseCode}
@@ -402,21 +639,10 @@ function CourseDetail() {
               {courseMeta}
             </Typography>
           )}
-          {!hasCourse && (
-            <Typography sx={{ mt: 1 }} color="text.secondary">
-              You have not selected a course yet. Please enroll to see materials.
-            </Typography>
-          )}
         </Paper>
 
-        {/* Materials + Progress + Assignments */}
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "repeat(12, 1fr)" },
-            gap: 3,
-          }}
-        >
+        {/* 三栏：Materials / Progress / Assignments */}
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(12, 1fr)" }, gap: 3 }}>
           {/* Materials */}
           <Paper
             elevation={1}
@@ -432,20 +658,21 @@ function CourseDetail() {
               Materials
             </Typography>
 
-            {materialsLoading ? (
-              <Typography color="text.secondary">Loading materials…</Typography>
-            ) : !hasCourse ? (
-              <Typography color="text.secondary">
-                Enroll in a course to view its materials.
-              </Typography>
-            ) : materialsError ? (
-              <Typography color="error">{materialsError}</Typography>
-            ) : materials.length === 0 ? (
-              <Typography color="text.secondary">No materials available yet.</Typography>
-            ) : (
-              materials.map((m, idx) => (
+            {matLoading && <Typography variant="body2" color="text.secondary">Loading materials…</Typography>}
+            {matError && <Typography variant="body2" color="error">{matError}</Typography>}
+            {!matLoading && !matError && materials.length === 0 && (
+              <Typography variant="body2" color="text.secondary">No materials yet.</Typography>
+            )}
+
+            {!matLoading && !matError && materials.map((m) => {
+              const color = extColor[m.ext] || extColor.default;
+              const sizeKB = m.file_size ? Math.round(m.file_size / 1024) : null;
+              const dateStr = m.uploaded_at ? new Date(m.uploaded_at).toLocaleDateString() : "";
+              const label = labelFromExt(m.ext);
+              const fileName = m.original_name || m.stored_name || "file";
+              return (
                 <Paper
-                  key={m.id ?? idx}
+                  key={m.id}
                   variant="outlined"
                   sx={{
                     display: "flex",
@@ -457,38 +684,29 @@ function CourseDetail() {
                     borderColor: "divider",
                   }}
                 >
-                  <Box
-                    sx={{
-                      width: 4,
-                      height: 28,
-                      borderRadius: 2,
-                      bgcolor: m.color,
-                    }}
-                  />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontWeight: 700, lineHeight: 1.1 }}>
-                      {m.title}
+                  <Box sx={{ width: 4, height: 28, borderRadius: 2, bgcolor: color }} />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700, lineHeight: 1.1 }} noWrap title={fileName}>
+                      {fileName}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {m.type || "material"}
+                      {label}
+                      {sizeKB ? ` · ${sizeKB} KB` : ""}
+                      {dateStr ? ` · ${dateStr}` : ""}
                     </Typography>
                   </Box>
                   <Button
                     variant="outlined"
                     size="small"
                     sx={{ textTransform: "none", borderRadius: 1.2 }}
-                    disabled={!m.downloadUrl}
-                    onClick={() => {
-                      if (m.downloadUrl) {
-                        window.open(m.downloadUrl, "_blank", "noopener");
-                      }
-                    }}
+                    disabled={!m.download_url}
+                    onClick={() => m.download_url && downloadWithAuth(m.download_url, fileName)}
                   >
                     Download
                   </Button>
                 </Paper>
-              ))
-            )}
+              );
+            })}
           </Paper>
 
           {/* Course Progress */}
@@ -512,16 +730,8 @@ function CourseDetail() {
             </Box>
           </Paper>
 
-          {/* Assignments */}
-          <Paper
-            elevation={1}
-            sx={{
-              gridColumn: "1 / -1",
-              p: 2,
-              borderRadius: 2,
-              mt: 5,
-            }}
-          >
+          {/* Assignments（仅任务型 materials） */}
+          <Paper elevation={1} sx={{ gridColumn: "1 / -1", p: 2, borderRadius: 2, mt: 5 }}>
             <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>
                 Assignments
@@ -542,37 +752,59 @@ function CourseDetail() {
 
             <Divider sx={{ mb: 1 }} />
 
-            {assignments.map((a, i) => (
-              <Box
-                key={i}
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    md: "2fr 2fr auto auto",
-                  },
-                  alignItems: "center",
-                  columnGap: 2,
-                  rowGap: 2,
-                  py: 1.2,
-                }}
-              >
-                <Typography fontWeight={600}>{a.title}</Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  <Chip label={a.time} size="small" variant="outlined" />
-                  <Typography sx={{ fontWeight: 700 }}>{a.percent}</Typography>
-                </Box>
-                <Typography color="text.secondary">{a.due}</Typography>
-                <Button
-                  size="small"
-                  variant="text"
-                  sx={{ justifySelf: "end", textTransform: "none" }}
-                  onClick={() => console.log("Open assignment", a.title)}
+            {assignments.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                No assignments yet.
+              </Typography>
+            )}
+
+            {assignments.map((a) => {
+              const timeLeft = formatTimeLeft(a.dueAt);
+              const timeLeftChipSX = timeLeft.startsWith("Overdue")
+                ? { borderColor: "error.main", color: "error.main" }
+                : { borderColor: "info.main", color: "info.main" };
+              const kind = a.kind || inferKindFromTitle(a.title);
+
+              return (
+                <Box
+                  key={a.id}
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", md: "auto auto 2fr 1fr auto" }, // 勾选 | 类型 | 标题 | 剩余时间 | 提交
+                    alignItems: "center",
+                    columnGap: 2,
+                    rowGap: 2,
+                    py: 1.2,
+                  }}
                 >
-                  Details
-                </Button>
-              </Box>
-            ))}
+                  <Checkbox
+                    checked={a.completed}
+                    onChange={() => toggleAssignment(a.id)}
+                    sx={{ p: 0.5 }}
+                    inputProps={{ "aria-label": `mark ${a.title} completed` }}
+                  />
+
+                  <Chip label={prettyKind(kind)} size="small" variant="outlined" sx={kindChipSX(kind)} />
+
+                  <Typography fontWeight={600} noWrap title={a.title}>
+                    {a.title}
+                  </Typography>
+
+                  {timeLeft && <Chip label={timeLeft} size="small" variant="outlined" sx={timeLeftChipSX} />}
+
+                  <Box sx={{ justifySelf: "end", display: "flex", gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      sx={{ textTransform: "none" }}
+                      onClick={() => handleSubmitAssignment(a)}
+                    >
+                      Upload
+                    </Button>
+                  </Box>
+                </Box>
+              );
+            })}
           </Paper>
         </Box>
       </Box>
@@ -581,4 +813,3 @@ function CourseDetail() {
 }
 
 export default CourseDetail;
-
