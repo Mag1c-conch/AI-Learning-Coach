@@ -1,18 +1,29 @@
 // src/Admin/Pages/Admin/TimeTable.jsx
-import React, { useMemo, useEffect, useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Box,
   Typography,
   IconButton,
   InputBase,
-  CircularProgress,
+  Paper,
+  TextField,
+  Button,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Divider,
+  Chip,
+  Card,
+  CardContent,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import CircleIcon from "@mui/icons-material/Circle";
-import { Badge, Calendar } from 'antd';
-import dayjs from 'dayjs';
+import SendIcon from "@mui/icons-material/Send";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ErrorIcon from "@mui/icons-material/Error";
 
 /* ---------- 搜索栏样式 ---------- */
 const Search = styled("div")(({ theme }) => ({
@@ -81,125 +92,32 @@ function useDisplayName() {
 
 export default function TimeTable() {
   const name = useDisplayName();
-  const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState("");
+  const [score, setScore] = useState("");
+  const [comments, setComments] = useState("");
+  const [feedbackType, setFeedbackType] = useState("hint");
+  const [feedbackContent, setFeedbackContent] = useState("");
 
-  // Fetch all assignments
-  useEffect(() => {
-    const fetchAssignments = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('http://localhost:5001/assignments');
-        if (response.ok) {
-          const data = await response.json();
-          setAssignments(data);
-        } else {
-          console.error('Failed to fetch assignments');
-        }
-      } catch (err) {
-        console.error('Error fetching assignments:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // 模拟学生列表
+  const students = [
+    { id: 1, name: "Zhang Wei", assignment: "Calculus Assignment 1", submitted: true },
+    { id: 2, name: "Li Na", assignment: "Calculus Assignment 1", submitted: true },
+    { id: 3, name: "Wang Ming", assignment: "Calculus Assignment 1", submitted: true },
+  ];
 
-    fetchAssignments();
-  }, []);
-
-  // Get events for a specific date
-  const getListData = (value) => {
-    const dateStr = value.format('YYYY-MM-DD');
-    let listData = [];
-
-    assignments.forEach((assignment) => {
-      if (assignment.due_date) {
-        const dueDate = dayjs(assignment.due_date);
-        const dueDateStr = dueDate.format('YYYY-MM-DD');
-        
-        if (dueDateStr === dateStr) {
-          // Determine badge type based on assignment title or description
-          let badgeType = 'success'; // default
-          const title = assignment.title?.toLowerCase() || '';
-          const desc = assignment.description?.toLowerCase() || '';
-          
-          if (title.includes('quiz') || desc.includes('quiz')) {
-            badgeType = 'warning';
-          } else if (title.includes('lab') || desc.includes('lab')) {
-            badgeType = 'processing';
-          } else if (title.includes('assignment') || desc.includes('assignment')) {
-            badgeType = 'error';
-          }
-
-          listData.push({
-            type: badgeType,
-            content: assignment.title || 'Assignment',
-            assignment: assignment,
-          });
-        }
-      }
-    });
-
-    return listData || [];
+  const handleGradeSubmit = () => {
+    console.log("Submitting grade:", { selectedStudent, score, comments });
+    // TODO: 提交评分到后端
   };
 
-  const getMonthData = (value) => {
-    // Count assignments in the month
-    let count = 0;
-    const month = value.month();
-    const year = value.year();
-
-    assignments.forEach((assignment) => {
-      if (assignment.due_date) {
-        const dueDate = dayjs(assignment.due_date);
-        if (dueDate.month() === month && dueDate.year() === year) {
-          count++;
-        }
-      }
-    });
-
-    return count > 0 ? count : null;
+  const handleFeedbackSend = () => {
+    console.log("Sending feedback:", { feedbackType, feedbackContent });
+    // TODO: 发送反馈到后端或AI助手
   };
-
-  const monthCellRender = (value) => {
-    const num = getMonthData(value);
-    return num ? (
-      <div className="notes-month">
-        <section>{num}</section>
-        <span>Assignments</span>
-      </div>
-    ) : null;
-  };
-
-  const dateCellRender = (value) => {
-    const listData = getListData(value);
-    return (
-      <ul className="events" style={{ textAlign: "left", paddingLeft: "0", margin: "0" }}>
-        {listData.map((item, index) => (
-          <li key={`${item.content}-${index}`} style={{ textAlign: "left", listStyle: "none" }}>
-            <Badge status={item.type} text={item.content} />
-          </li>
-        ))}
-      </ul>
-    );
-  };
-
-  const cellRender = (current, info) => {
-    if (info.type === 'date') return dateCellRender(current);
-    if (info.type === 'month') return monthCellRender(current);
-    return info.originNode;
-  };
-
-  if (loading) {
-    return (
-      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   return (
     <Box sx={{ p: 3, position: "relative" }}>
-      {/* ======= 页头（与Dashboard相同） ======= */}
+      {/* ======= 页头 ======= */}
       <Box
         sx={{
           height: 32,
@@ -211,14 +129,14 @@ export default function TimeTable() {
       >
         {/* 左：标题组 */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1 }}>
-          <Typography variant="h6">TimeTable</Typography>
+          <Typography variant="h6">Grading</Typography>
           <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
           <Typography variant="subtitle1" sx={{ color: "#7a7a7a" }}>
             Admin
           </Typography>
         </Box>
 
-        {/* 右：搜索 + 铃铛（保留你的绝对定位样式） */}
+        {/* 右：搜索 + 铃铛 */}
         <Box
           sx={{
             display: "flex",
@@ -226,7 +144,7 @@ export default function TimeTable() {
             alignItems: "center",
             gap: 1,
             position: "absolute",
-            top: -10,
+            top: 15,
             right: 20,
           }}
         >
@@ -242,7 +160,7 @@ export default function TimeTable() {
         </Box>
       </Box>
 
-      {/* ======= 分割线（与Dashboard相同） ======= */}
+      {/* ======= 分割线 ======= */}
       <Box
         sx={{
           height: 2,
@@ -253,25 +171,286 @@ export default function TimeTable() {
         }}
       />
 
-      {/* ======= 日历组件（调整大小） ======= */}
+      {/* ======= 主内容区域：左右布局 ======= */}
       <Box
         sx={{
-          height: "calc(100vh - 155px)", // 减少高度，增加更多边距
-          width: "100%", // 减少宽度
-          maxWidth: "1000px", // 设置最大宽度
-          margin: "0 auto", // 居中显示
-          overflow: "hidden",
+          display: "flex",
+          gap: 2,
+          height: "calc(100vh - 155px)",
         }}
       >
-        <Calendar 
-          cellRender={cellRender}
-          style={{
-            height: "100%",
-            width: "100%",
-            fontSize: "18px",
-            textAlign: "left", // 文本左对齐
+        {/* ======= 左侧：批改作业 ======= */}
+        <Paper
+          elevation={2}
+          sx={{
+            flex: 1,
+            p: 3,
+            overflowY: "auto",
+            bgcolor: "#fafafa",
           }}
-        />
+        >
+          <Typography variant="h6" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+            Grade Student Assignment
+          </Typography>
+
+          {/* 选择学生 */}
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel>Select Student</InputLabel>
+            <Select
+              value={selectedStudent}
+              label="Select Student"
+              onChange={(e) => setSelectedStudent(e.target.value)}
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {students.map((student) => (
+                <MenuItem key={student.id} value={student.id}>
+                  {student.name} - {student.assignment}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* 作业内容显示区域 */}
+          {selectedStudent && (
+            <Card sx={{ mb: 3, bgcolor: "white" }}>
+              <CardContent>
+                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    Student Submission
+                  </Typography>
+                  <Chip
+                    label="Submitted"
+                    color="success"
+                    size="small"
+                    sx={{ ml: 2 }}
+                    icon={<CheckCircleIcon />}
+                  />
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <Typography variant="body2" sx={{ color: "#666", mb: 2 }}>
+                  Assignment: Calculus Assignment 1
+                </Typography>
+                <Typography variant="body2" sx={{ color: "#666", mb: 2 }}>
+                  Submitted: 2025-10-29 14:30
+                </Typography>
+                <Box
+                  sx={{
+                    mt: 2,
+                    p: 2,
+                    bgcolor: "#f5f5f5",
+                    borderRadius: 1,
+                    minHeight: 150,
+                  }}
+                >
+                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                    Student's answer will be displayed here...
+                    {"\n\n"}
+                    Question 1: Calculate the derivative of f(x) = x³ + 2x² - 5x + 1
+                    {"\n"}
+                    Answer: f'(x) = 3x² + 4x - 5
+                    {"\n\n"}
+                    Question 2: Find the integral of ∫(2x + 3)dx
+                    {"\n"}
+                    Answer: x² + 3x + C
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 评分输入 */}
+          <TextField
+            fullWidth
+            label="Score (0-100)"
+            type="number"
+            value={score}
+            onChange={(e) => setScore(e.target.value)}
+            sx={{ mb: 3 }}
+            InputProps={{ inputProps: { min: 0, max: 100 } }}
+          />
+
+          {/* 评语输入 */}
+          <TextField
+            fullWidth
+            label="Comments"
+            multiline
+            rows={4}
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+            placeholder="Enter your feedback and comments for the student..."
+            sx={{ mb: 3 }}
+          />
+
+          {/* 提交按钮 */}
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={handleGradeSubmit}
+            disabled={!selectedStudent || !score}
+            sx={{
+              bgcolor: "#1976d2",
+              "&:hover": { bgcolor: "#1565c0" },
+              height: 45,
+            }}
+          >
+            Submit Grade
+          </Button>
+        </Paper>
+
+        {/* ======= 右侧：反馈与辅导 ======= */}
+        <Paper
+          elevation={2}
+          sx={{
+            flex: 1,
+            p: 3,
+            overflowY: "auto",
+            bgcolor: "#fafafa",
+          }}
+        >
+          <Typography variant="h6" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+            Student Feedback & Guidance
+          </Typography>
+
+          {/* 反馈类型选择 */}
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel>Feedback Type</InputLabel>
+            <Select
+              value={feedbackType}
+              label="Feedback Type"
+              onChange={(e) => setFeedbackType(e.target.value)}
+            >
+              <MenuItem value="hint">Problem-Solving Hint</MenuItem>
+              <MenuItem value="example">Similar Example</MenuItem>
+              <MenuItem value="explanation">Concept Explanation</MenuItem>
+              <MenuItem value="correction">Error Correction</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* 反馈内容区域 */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 2, color: "#666" }}>
+              Guidance Content:
+            </Typography>
+            <Card sx={{ bgcolor: "white", mb: 2 }}>
+              <CardContent>
+                {feedbackType === "hint" && (
+                  <Box>
+                    <Typography variant="body2" sx={{ mb: 2, fontWeight: 600, color: "#1976d2" }}>
+                      💡 Problem-Solving Hint:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#666" }}>
+                      For derivative problems, remember to apply the power rule: d/dx(xⁿ) = n·xⁿ⁻¹
+                      {"\n\n"}
+                      Break down complex expressions into simpler terms and differentiate each term separately.
+                    </Typography>
+                  </Box>
+                )}
+                {feedbackType === "example" && (
+                  <Box>
+                    <Typography variant="body2" sx={{ mb: 2, fontWeight: 600, color: "#2e7d32" }}>
+                      📝 Similar Example:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#666" }}>
+                      Example: Find the derivative of g(x) = 2x⁴ - 3x² + 7
+                      {"\n\n"}
+                      Solution:
+                      {"\n"}
+                      g'(x) = 8x³ - 6x
+                      {"\n\n"}
+                      Step 1: Apply power rule to each term
+                      {"\n"}
+                      Step 2: The constant term (7) becomes 0
+                    </Typography>
+                  </Box>
+                )}
+                {feedbackType === "explanation" && (
+                  <Box>
+                    <Typography variant="body2" sx={{ mb: 2, fontWeight: 600, color: "#ed6c02" }}>
+                      📖 Concept Explanation:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#666" }}>
+                      The derivative represents the rate of change of a function. It tells us how the function's output changes as the input changes.
+                      {"\n\n"}
+                      Key concepts:
+                      {"\n"}
+                      • Power Rule: d/dx(xⁿ) = n·xⁿ⁻¹
+                      {"\n"}
+                      • Constant Rule: d/dx(c) = 0
+                      {"\n"}
+                      • Sum Rule: d/dx(f + g) = f' + g'
+                    </Typography>
+                  </Box>
+                )}
+                {feedbackType === "correction" && (
+                  <Box>
+                    <Typography variant="body2" sx={{ mb: 2, fontWeight: 600, color: "#d32f2f" }}>
+                      ⚠️ Error Correction:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#666" }}>
+                      Common mistake: Forgetting to reduce the exponent when applying the power rule.
+                      {"\n\n"}
+                      ❌ Incorrect: d/dx(x³) = 3x³
+                      {"\n"}
+                      ✅ Correct: d/dx(x³) = 3x²
+                      {"\n\n"}
+                      Remember: Multiply by the exponent AND reduce the exponent by 1.
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+
+          {/* 自定义反馈输入 */}
+          <TextField
+            fullWidth
+            label="Custom Feedback"
+            multiline
+            rows={6}
+            value={feedbackContent}
+            onChange={(e) => setFeedbackContent(e.target.value)}
+            placeholder="Enter custom feedback or guidance for the student..."
+            sx={{ mb: 3 }}
+          />
+
+          {/* 发送反馈按钮 */}
+          <Button
+            variant="contained"
+            fullWidth
+            endIcon={<SendIcon />}
+            onClick={handleFeedbackSend}
+            sx={{
+              bgcolor: "#2e7d32",
+              "&:hover": { bgcolor: "#1b5e20" },
+              height: 45,
+            }}
+          >
+            Send Feedback to Student
+          </Button>
+
+          {/* AI助手建议 */}
+          <Divider sx={{ my: 3 }} />
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 2, color: "#666" }}>
+              💬 AI Assistant Suggestions:
+            </Typography>
+            <Card sx={{ bgcolor: "#e3f2fd" }}>
+              <CardContent>
+                <Typography variant="body2" sx={{ color: "#0d47a1" }}>
+                  Based on the student's submission, you might want to:
+                  {"\n"}
+                  • Provide more examples on the power rule
+                  {"\n"}
+                  • Emphasize the importance of checking work
+                  {"\n"}
+                  • Recommend additional practice problems
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+        </Paper>
       </Box>
     </Box>
   );
