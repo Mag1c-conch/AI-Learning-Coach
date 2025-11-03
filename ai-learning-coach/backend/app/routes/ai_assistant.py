@@ -140,7 +140,7 @@ def get_plan():
     return jsonify(
         {
             "reply": reply,
-            "model": current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash"),
+            "model": current_app.config.get("GEMINI_MODEL", "gemini-2.5-flash"),
         }
     ), 200
 
