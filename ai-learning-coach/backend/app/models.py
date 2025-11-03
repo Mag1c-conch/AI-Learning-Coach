@@ -28,6 +28,7 @@ class User(db.Model):
         lazy="selectin",
         foreign_keys="Assignment.teacher_id",
     )
+    conversations = db.relationship("Conversation", back_populates="user", lazy="selectin")
 
     #  Unique constraint on (username, role)
     __table_args__ = (
@@ -105,7 +106,7 @@ class Material(db.Model):
         return {
             "id": self.id,
             "course_id": self.course_id,
-             "assignment_id": self.assignment_id,
+            "assignment_id": self.assignment_id,
             "stored_name": self.stored_name,
             "original_name": self.original_name,
             "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
@@ -141,5 +142,54 @@ class Assignment(db.Model):
             "description": self.description,
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "optional": bool(self.optional),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Conversation(db.Model):
+    __tablename__ = "conversations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    title = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+
+    user = db.relationship("User", back_populates="conversations", lazy="joined")
+    messages = db.relationship(
+        "ConversationMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="ConversationMessage.created_at",
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ConversationMessage(db.Model):
+    __tablename__ = "conversation_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey("conversations.id"), nullable=False)
+    role = db.Column(db.String(16), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    conversation = db.relationship("Conversation", back_populates="messages", lazy="joined")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "conversation_id": self.conversation_id,
+            "role": self.role,
+            "content": self.content,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
