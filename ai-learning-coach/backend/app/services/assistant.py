@@ -290,6 +290,32 @@ def _load_material_text(material: Material, limit: int = 4000) -> str:
             raise ValueError("服务器未安装 python-docx，无法解析 .docx 文件。") from exc
         document = Document(file_path)
         content = "\n".join(paragraph.text for paragraph in document.paragraphs)
+    elif ext == ".pdf":
+        # Prefer pdfminer.six for better extraction; fallback to PyPDF2 if missing.
+        try:
+            from pdfminer.high_level import extract_text  # type: ignore
+        except ImportError:
+            try:
+                import PyPDF2  # type: ignore
+            except ImportError as exc:
+                raise ValueError("暂未安装 pdfminer.six 或 PyPDF2，无法读取 .pdf 文件。") from exc
+            try:
+                with open(file_path, "rb") as fh:
+                    reader = PyPDF2.PdfReader(fh)
+                    pages = []
+                    for page in reader.pages:
+                        try:
+                            pages.append(page.extract_text() or "")
+                        except Exception:
+                            pages.append("")
+                    content = "\n".join(pages)
+            except Exception as exc:
+                raise ValueError(f"读取 PDF 失败: {exc}") from exc
+        else:
+            try:
+                content = extract_text(file_path) or ""
+            except Exception as exc:
+                raise ValueError(f"读取 PDF 失败: {exc}") from exc
     else:
         raise ValueError(f"暂不支持读取该文件类型：{ext or '未知'}。")
 
