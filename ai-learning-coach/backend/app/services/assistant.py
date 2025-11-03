@@ -12,11 +12,8 @@ from .ai import generate_reply
 GENERAL_CHAT_PROMPT = (
     "You are an AI learning coach. Provide concise, structured answers tailored to "
     "the provided course context and learner needs."
-<<<<<<< HEAD
     "after each response, ask if the user needs other help, including generate practice questions or generate wrong answer hints."
     "don't directly give answers to questions, only give hints."
-=======
->>>>>>> f4f64ae9abe54d3e9f61a41899b977f8454fee24
 )
 
 CLASSIFIER_PROMPT = (
@@ -54,10 +51,7 @@ WRONG_ANSWER_PROMPT = (
     "and the correct answer if available. Provide a constructive hint (not the full "
     "solution unless the teacher specifically requests it) that helps the student "
     "understand the mistake and identify the correct reasoning."
-<<<<<<< HEAD
     "don't directly give the correct answer, only hints or guidance."
-=======
->>>>>>> f4f64ae9abe54d3e9f61a41899b977f8454fee24
 )
 
 
@@ -95,11 +89,7 @@ def _handle_general_chat(messages: List[Dict[str, Any]], params: Dict[str, Any])
     text = generate_reply(messages, system_prompt=GENERAL_CHAT_PROMPT)
     return {"task": "general_chat", "text": text}
 
-<<<<<<< HEAD
 # generate questions from material
-=======
-
->>>>>>> f4f64ae9abe54d3e9f61a41899b977f8454fee24
 def _handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
     material, error_response = _resolve_material(params)
     if error_response:
@@ -333,11 +323,7 @@ def _resolve_material(params: Dict[str, Any]):
     if not candidates:
         return None, {
             "task": "generate_practice",
-<<<<<<< HEAD
             "text": f"未找到名称包含「{name_str}」的课程资料，请确认文件名。",
-=======
-            "text": f"未找到名称包含「{name_str}」的课程资料，请确认文件名或提供 material_id。",
->>>>>>> f4f64ae9abe54d3e9f61a41899b977f8454fee24
         }
 
     if len(candidates) > 1:
@@ -349,11 +335,7 @@ def _resolve_material(params: Dict[str, Any]):
             "task": "generate_practice",
             "text": (
                 f"找到多个匹配的资料：{preview}。"
-<<<<<<< HEAD
                 "请提供更精确的文件名。"
-=======
-                "请提供更精确的文件名或直接给出 material_id。"
->>>>>>> f4f64ae9abe54d3e9f61a41899b977f8454fee24
             ),
         }
 
