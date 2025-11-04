@@ -482,18 +482,24 @@ function CourseDetail() {
       return;
     }
     const mapped = taskMaterials.map((m) => {
-      const when = m.deadline || m.due_date || m.uploaded_at || "";
+      const when = m.assignment?.due_date || m.deadline || m.due_date || m.uploaded_at || "";
+      const assignmentRecordId = m.assignment_id ?? m.assignment?.id ?? null;
+      const parsedAssignmentId =
+        assignmentRecordId != null && !Number.isNaN(Number(assignmentRecordId))
+          ? Number(assignmentRecordId)
+          : null;
       return {
         id: `m-${m.id}`,
-        title: m.original_name || m.stored_name || "Untitled",
+        title: m.stored_name || m.original_name || "Untitled",
         percent: "", // 若后端提供占比可使用
         due: "",
         weight: 0, // 默认 0，走“数量制”兜底
         completed: Boolean(status[`m-${m.id}`]),
         dueAt: when,
         kind: m.file_type, // quiz / assignment / lab
-        assignmentId: m.assignment_id || m.id, // 提交用
+        assignmentId: parsedAssignmentId, // 提交用 assignment_id
         sourceMaterialId: m.id,
+        assignment: m.assignment ?? null,
       };
     });
     setAssignments(mapped);
@@ -533,10 +539,10 @@ function CourseDetail() {
   /** 提交作业（文件上传） */
   const handleSubmitAssignment = (a) => {
     const studentId = getCurrentUserId();
-    const courseId = currentCourse?.id;
-    const assignmentId = a.assignmentId || a.sourceMaterialId || String(a.id || "").replace(/^m-/, "");
-    if (!studentId || !courseId || !assignmentId) {
-      alert("提交失败：学号/课程/作业标识不完整");
+    const assignmentIdCandidate = a.assignmentId ?? a.assignment?.id ?? a.assignment_id ?? null;
+    const assignmentId = assignmentIdCandidate != null ? Number(assignmentIdCandidate) : NaN;
+    if (!studentId || Number.isNaN(assignmentId)) {
+      alert("提交失败：学生标识或作业标识不完整");
       return;
     }
     const input = document.createElement("input");
@@ -548,11 +554,8 @@ function CourseDetail() {
       try {
         const fd = new FormData();
         fd.append("file", file);
-        fd.append("course_id", courseId);
-        fd.append("assignment_id", assignmentId);
         fd.append("student_id", studentId);
-        // 后端若有 /assignments/:id/submit 则替换为对应路由
-        const url = "/submissions";
+        const url = `/materials/assignments/${assignmentId}/submissions`;
         const res = await http.post(url, fd, { headers: { "Content-Type": "multipart/form-data" } });
         if (res.status >= 200 && res.status < 300) {
           alert("提交成功！");
@@ -669,7 +672,7 @@ function CourseDetail() {
               const sizeKB = m.file_size ? Math.round(m.file_size / 1024) : null;
               const dateStr = m.uploaded_at ? new Date(m.uploaded_at).toLocaleDateString() : "";
               const label = labelFromExt(m.ext);
-              const fileName = m.original_name || m.stored_name || "file";
+              const fileName = m.stored_name || m.original_name || "file";
               return (
                 <Paper
                   key={m.id}
