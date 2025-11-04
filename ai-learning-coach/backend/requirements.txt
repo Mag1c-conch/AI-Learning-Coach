@@ -10,3 +10,4 @@ python-docx>=0.8
 redis>=5.0
 pdfminer.six>=20221105
 PyPDF2>=3.0.0
+tzdata>=2025.1
