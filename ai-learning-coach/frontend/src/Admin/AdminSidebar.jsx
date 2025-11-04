@@ -25,7 +25,7 @@ export default function AdminSidebar() {
           </Link>
         </Button>
         <Button fullWidth>
-          <Link href="/admin/timetable" sx={{ color: '#fff', textDecoration: 'none' }}>
+          <Link href="/admin/grading" sx={{ color: '#fff', textDecoration: 'none' }}>
             Grading
           </Link>
         </Button>
