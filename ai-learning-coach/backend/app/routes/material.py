@@ -27,9 +27,18 @@ def _material_file_path(material: Material) -> str:
     course_dir = os.path.join(root, str(material.course_id))
     if material.assignment_id:
         assignment_dir = os.path.join(course_dir, str(material.assignment_id))
-        candidate = os.path.join(assignment_dir, material.stored_name)
-        if os.path.isfile(candidate):
-            return candidate
+        if material.file_type == "assignment_submission":
+            student_dir = os.path.join(assignment_dir, "student_uploads")
+            candidate = os.path.join(student_dir, material.stored_name)
+            if os.path.isfile(candidate):
+                return candidate
+            legacy_candidate = os.path.join(assignment_dir, material.stored_name)
+            if os.path.isfile(legacy_candidate):
+                return legacy_candidate
+        else:
+            candidate = os.path.join(assignment_dir, material.stored_name)
+            if os.path.isfile(candidate):
+                return candidate
     return os.path.join(course_dir, material.stored_name)
 
 
@@ -80,10 +89,12 @@ def _parse_due_date(raw):
 def _build_submission_stored_name(course_dir: str, assignment: Assignment, student: User, original_name: str) -> tuple[str, str]:
     assignment_dir = os.path.join(course_dir, str(assignment.id))
     os.makedirs(assignment_dir, exist_ok=True)
+    student_upload_dir = os.path.join(assignment_dir, "student_uploads")
+    os.makedirs(student_upload_dir, exist_ok=True)
 
     _, original_ext = os.path.splitext(original_name)
     stored_name = f"{student.id}{original_ext}"
-    return assignment_dir, stored_name
+    return student_upload_dir, stored_name
 
 
 def _material_with_student_dict(material: Material) -> dict:
@@ -281,16 +292,35 @@ def delete_material(material_id: int):
         abort(403, description="only administrators may delete materials")
 
     material = Material.query.get_or_404(material_id)
+    assignment_to_remove = None
+    extra_materials = []
+    if material.assignment_id and material.file_type in {"assignment", "quiz", "lab"}:
+        assignment_to_remove = material.assignment or Assignment.query.get(material.assignment_id)
+        if assignment_to_remove:
+            extra_materials = (
+                Material.query.filter(Material.assignment_id == assignment_to_remove.id, Material.id != material.id)
+                .order_by(Material.uploaded_at.desc())
+                .all()
+            )
 
     try:
         _remove_file_from_disk(material)
+        for extra in extra_materials:
+            _remove_file_from_disk(extra)
     except OSError as exc:
         abort(500, description=f"failed to delete file: {exc}")
 
     try:
+        for extra in extra_materials:
+            db.session.delete(extra)
+        if assignment_to_remove:
+            db.session.delete(assignment_to_remove)
         db.session.delete(material)
         db.session.commit()
-        return jsonify({"status": "deleted", "material_id": material_id}), 200
+        response_payload = {"status": "deleted", "material_id": material_id}
+        if assignment_to_remove:
+            response_payload["assignment_id"] = assignment_to_remove.id
+        return jsonify(response_payload), 200
     except Exception as exc:
         db.session.rollback()
         abort(500, description=str(exc))
