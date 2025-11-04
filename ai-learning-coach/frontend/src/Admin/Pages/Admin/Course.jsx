@@ -883,16 +883,39 @@ export default function Course() {
                 return;
               }
 
-              try {
+                          try {
                 // 创建FormData对象
                 const formData = new FormData();
+                const trimmedName = fileName?.trim();
+                const isTaskType = fileType === 'assignment' || fileType === 'quiz' || fileType === 'lab';
+                const titleBase = trimmedName || selectedFile?.name || 'Untitled';
+
                 formData.append('file', selectedFile);
                 formData.append('course_id', course.id);
                 formData.append('uploaded_by', user.id);
                 if (fileType) formData.append('file_type', String(fileType));
                 if (weekNumber) formData.append('week_number', Number(weekNumber));
-                if (fileName && fileName.trim()) {
-                  formData.append('custom_name', fileName.trim());
+                if (trimmedName) {
+                  formData.append('custom_name', trimmedName);
+                }
+                if (isTaskType) {
+                  const titlePrefix =
+                    fileType === 'assignment' ? 'Assignment' : fileType === 'quiz' ? 'Quiz' : 'Lab';
+                  const assignmentTitle = `${titlePrefix}: ${titleBase}`;
+                  const notes = additionalNotes?.trim();
+                  const isoDeadline = deadline && typeof deadline?.toISOString === 'function'
+                    ? deadline.toISOString()
+                    : deadline
+                      ? String(deadline)
+                      : '';
+
+                  formData.append('assignment_title', assignmentTitle);
+                  if (notes) {
+                    formData.append('assignment_description', notes);
+                  }
+                  if (isoDeadline) {
+                    formData.append('assignment_due_date', isoDeadline);
+                  }
                 }
 
                 // 上传文件
@@ -904,85 +927,7 @@ export default function Course() {
                 if (response.ok) {
                   const data = await response.json();
                   console.log('File uploaded successfully:', data);
-
-                  // 若为需要截止时间的类型且已选择截止时间，则创建对应的 assignment，用于 TimeTable 显示
-                  try {
-                    const isTaskType = fileType === 'assignment' || fileType === 'quiz' || fileType === 'lab';
-                    if (isTaskType && deadline) {
-                      const titleBase = fileName?.trim() || selectedFile?.name || 'Untitled';
-                      const titlePrefix = fileType === 'assignment' ? 'Assignment' : (fileType === 'quiz' ? 'Quiz' : 'Lab');
-                      const payload = {
-                        course_id: course.id,
-                        title: `${titlePrefix}: ${titleBase}`,
-                        description: additionalNotes || '',
-                        due_date: (typeof deadline?.toISOString === 'function') ? deadline.toISOString() : String(deadline),
-                        teacher_id: user.id,
-                        optional: false,
-                      };
-                      const createRes = await fetch('http://localhost:5001/assignments', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                      });
-                      if (!createRes.ok) {
-                        const errData = await createRes.json().catch(() => ({}));
-                        console.warn('Failed to create assignment:', errData);
-                      }
-                    }
-                  } catch (e) {
-                    console.warn('Create assignment error:', e);
-                  }
-
-                  // 若为需要截止时间的类型且已选择截止时间，则创建对应的 assignment，用于 TimeTable 显示
-                  try {
-                    const isTaskType = fileType === 'assignment' || fileType === 'quiz' || fileType === 'lab';
-                    if (isTaskType && deadline) {
-                      const titleBase = fileName?.trim() || selectedFile?.name || 'Untitled';
-                      const titlePrefix = fileType === 'assignment' ? 'Assignment' : (fileType === 'quiz' ? 'Quiz' : 'Lab');
-                      const payload = {
-                        course_id: course.id,
-                        title: `${titlePrefix}: ${titleBase}`,
-                        description: additionalNotes || '',
-                        due_date: (typeof deadline?.toISOString === 'function') ? deadline.toISOString() : String(deadline),
-                        teacher_id: user.id,
-                        optional: false,
-                      };
-                      const createRes = await fetch('http://localhost:5001/assignments', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                      });
-                      if (!createRes.ok) {
-                        const errData = await createRes.json().catch(() => ({}));
-                        console.warn('Failed to create assignment:', errData);
-                      }
-                    }
-                  } catch (e) {
-                    console.warn('Create assignment error:', e);
-                  }
-
-                  // 将用户选择的周次与后端返回的 material.id 进行持久化映射，便于后续分组
-                  try {
-                    if (weekNumber) {
-                      const raw = localStorage.getItem('materialWeekMap');
-                      const map = raw ? (JSON.parse(raw) || {}) : {};
-                      map[String(data.id)] = Number(weekNumber);
-                      localStorage.setItem('materialWeekMap', JSON.stringify(map));
-                    }
-                    if (fileType) {
-                      const typeRaw = localStorage.getItem('materialTypeMap');
-                      const typeMap = typeRaw ? (JSON.parse(typeRaw) || {}) : {};
-                      typeMap[String(data.id)] = String(fileType);
-                      localStorage.setItem('materialTypeMap', JSON.stringify(typeMap));
-                    }
-                  } catch (e) {
-                    console.warn('Persist week number failed:', e);
-                  }
-
-                  alert('文件上传成功');
-                  
-                  // 刷新文件列表
-                  await fetchMaterials();
+await fetchMaterials();
                   
                   // Close dialog and reset form
                   setOpenAddFile(false);
