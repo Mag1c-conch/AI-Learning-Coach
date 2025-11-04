@@ -1,6 +1,8 @@
 ﻿from flask import Blueprint, abort, current_app, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 import os
+from datetime import datetime
+from sqlalchemy import or_
 
 from ..extensions import db
 from ..models import Assignment, Course, Enrollment, Material, User, UserRole
@@ -22,10 +24,13 @@ def _reserve_unique_filename(directory: str, filename: str) -> str:
 
 def _material_file_path(material: Material) -> str:
     root = current_app.config["UPLOAD_FOLDER"]
-    base_dir = os.path.join(root, str(material.course_id))
+    course_dir = os.path.join(root, str(material.course_id))
     if material.assignment_id:
-        base_dir = os.path.join(base_dir, str(material.assignment_id))
-    return os.path.join(base_dir, material.stored_name)
+        assignment_dir = os.path.join(course_dir, str(material.assignment_id))
+        candidate = os.path.join(assignment_dir, material.stored_name)
+        if os.path.isfile(candidate):
+            return candidate
+    return os.path.join(course_dir, material.stored_name)
 
 
 def _remove_file_from_disk(material: Material) -> None:
@@ -41,6 +46,36 @@ def _sanitize_custom_basename(name: str) -> str:
     base, _ = os.path.splitext(safe)
     return base
 
+
+
+
+def _parse_bool(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def _parse_due_date(raw):
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        return raw
+    normalized = str(raw).strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        abort(400, description="assignment_due_date must be ISO 8601 formatted datetime string")
 
 def _build_submission_stored_name(course_dir: str, assignment: Assignment, student: User, original_name: str) -> tuple[str, str]:
     assignment_dir = os.path.join(course_dir, str(assignment.id))
@@ -92,7 +127,7 @@ def list_materials():
         query = query.filter_by(course_id=course_id)
 
     if not include_submissions:
-        query = query.filter(Material.assignment_id.is_(None))
+        query = query.filter(or_(Material.assignment_id.is_(None), Material.file_type != "assignment_submission"))
 
     materials = query.order_by(Material.uploaded_at.desc()).all()
     return jsonify([material.to_dict() for material in materials]), 200
@@ -106,10 +141,13 @@ def upload_material():
     - file: binary file object to upload
     - course_id: int, target course ID
     - uploaded_by: int, admin user ID performing the upload
-    Optional form fields (if provided will be saved):
+    Optional form fields:
     - file_type: str, one of {assignment, quiz, lab, lecture_slide, learning_material, practice}
     - week_number: int, 1-based week index
-    Returns 201 with the created material JSON on success.
+    - custom_name: str, rename the stored file
+    - assignment_id: link to an existing assignment when file_type is assignment/quiz/lab
+    - assignment_title / assignment_description / assignment_due_date / assignment_optional: metadata for a new assignment
+    Returns 201 with the created material JSON (and assignment metadata when applicable).
     """
     if "file" not in request.files:
         abort(400, description="No file part in the request")
@@ -119,47 +157,88 @@ def upload_material():
         abort(400, description="file name is empty")
 
     course_id = request.form.get("course_id", type=int)
-    uploaded_by = request.form.get("uploaded_by", type=int)  # admin user id
+    uploaded_by = request.form.get("uploaded_by", type=int)
     if not course_id or not uploaded_by:
         abort(400, description="missing required fields")
 
     course = Course.query.get_or_404(course_id)
     user = User.query.get_or_404(uploaded_by)
 
-    # check if the user is admin
     if user.role != UserRole.ADMIN:
         abort(403, description="only administrators may upload materials")
 
-    # save file to upload folder
     root = current_app.config["UPLOAD_FOLDER"]
     course_dir = os.path.join(root, str(course_id))
     os.makedirs(course_dir, exist_ok=True)
 
     original_name = file.filename
     custom_name = request.form.get("custom_name", "").strip()
-    stored_name = None
-
-    base = _sanitize_custom_basename(custom_name)
-    if base:
-        _, original_ext = os.path.splitext(original_name)
-        candidate_name = f"{base}{original_ext}"
-        stored_name = _reserve_unique_filename(course_dir, candidate_name)
-
-    if not stored_name:
-        stored_name = _reserve_unique_filename(course_dir, original_name)
-    file_path = os.path.join(course_dir, stored_name)
-    file.save(file_path)
-
     file_type = request.form.get("file_type")
     week_number = request.form.get("week_number", type=int)
 
-    # normalize file_type to a small whitelist if present
-    _allowed_types = {"assignment", "quiz", "lab", "lecture_slide", "learning_material", "practice"}
-    if file_type and file_type not in _allowed_types:
+    allowed_types = {"assignment", "quiz", "lab", "lecture_slide", "learning_material", "practice"}
+    if file_type and file_type not in allowed_types:
         abort(400, description="invalid file_type")
+
+    assignment = None
+    assignment_dir = None
+    if file_type in {"assignment", "quiz", "lab"}:
+        assignment_id = request.form.get("assignment_id", type=int)
+        if assignment_id:
+            assignment = Assignment.query.get_or_404(assignment_id)
+            if assignment.course_id != course.id:
+                abort(400, description="assignment does not belong to the provided course")
+            if assignment.teacher_id != user.id:
+                abort(403, description="only the assignment owner may attach materials")
+        else:
+            title_candidate = request.form.get("assignment_title")
+            if not title_candidate:
+                title_candidate = custom_name or os.path.splitext(original_name)[0]
+            if not title_candidate:
+                title_candidate = f"{file_type.title()} task"
+
+            description = (
+                request.form.get("assignment_description")
+                or request.form.get("description")
+                or request.form.get("additional_notes")
+                or None
+            )
+            due_date = _parse_due_date(
+                request.form.get("assignment_due_date")
+                or request.form.get("due_date")
+                or request.form.get("deadline")
+            )
+            optional_flag = _parse_bool(request.form.get("assignment_optional"))
+
+            assignment = Assignment(
+                course_id=course.id,
+                teacher_id=user.id,
+                title=title_candidate,
+                description=description,
+                due_date=due_date,
+                optional=bool(optional_flag) if optional_flag is not None else False,
+            )
+            db.session.add(assignment)
+            db.session.flush()
+
+        assignment_dir = os.path.join(course_dir, str(assignment.id))
+        os.makedirs(assignment_dir, exist_ok=True)
+
+    base_name = _sanitize_custom_basename(custom_name)
+    if base_name:
+        _, ext = os.path.splitext(original_name)
+        candidate_name = f"{base_name}{ext}"
+    else:
+        candidate_name = original_name
+
+    target_dir = assignment_dir or course_dir
+    stored_name = _reserve_unique_filename(target_dir, candidate_name)
+    file_path = os.path.join(target_dir, stored_name)
+    file.save(file_path)
 
     material = Material(
         course_id=course_id,
+        assignment_id=assignment.id if assignment else None,
         original_name=original_name,
         stored_name=stored_name,
         uploaded_by=user.id,
@@ -167,14 +246,23 @@ def upload_material():
         file_type=file_type,
         week_number=week_number,
     )
+
     try:
         db.session.add(material)
         db.session.commit()
-        return jsonify(material.to_dict()), 201
     except Exception as exc:
         db.session.rollback()
+        try:
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+        except OSError:
+            pass
         abort(500, description=str(exc))
 
+    payload = material.to_dict()
+    if assignment:
+        payload["assignment"] = assignment.to_dict()
+    return jsonify(payload), 201
 
 @bp.route("/<int:material_id>", methods=["DELETE"])
 def delete_material(material_id: int):
@@ -207,7 +295,7 @@ def delete_material(material_id: int):
         db.session.rollback()
         abort(500, description=str(exc))
 
-
+# 下载文件
 @bp.route("/<int:material_id>/download", methods=["GET"])
 def download_material(material_id: int):
     """
@@ -226,7 +314,7 @@ def download_material(material_id: int):
         download_name=material.original_name,
     )
 
-
+# 提交文件（students）
 @bp.route("/assignments/<int:assignment_id>/submissions", methods=["POST"])
 def submit_assignment_material(assignment_id: int):
     """
@@ -334,3 +422,5 @@ def list_assignment_submissions(assignment_id: int):
 
     submissions = query.order_by(Material.uploaded_at.desc()).all()
     return jsonify([_material_with_student_dict(m) for m in submissions]), 200
+
+
