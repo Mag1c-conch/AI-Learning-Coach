@@ -236,9 +236,9 @@ class FeedbackNotification(db.Model):
             "title": self.title,
             "content": self.content,
             "is_read": bool(self.is_read),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "read_at": self.read_at.isoformat() if self.read_at else None,
+            "created_at": _to_sydney_iso(self.created_at),
+            "updated_at": _to_sydney_iso(self.updated_at),
+            "read_at": _to_sydney_iso(self.read_at),
         }
         if include_related:
             data["teacher"] = {
