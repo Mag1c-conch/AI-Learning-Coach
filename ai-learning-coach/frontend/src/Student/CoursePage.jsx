@@ -17,6 +17,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import Sidebar from "../components/Sidebar.jsx";
 import { CircularProgress, circularProgressClasses } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
+import { ButtonBase } from "@mui/material";
 import http from "../api/http";
 
 /** ========= 常量 & 工具 ========= */
@@ -290,6 +291,15 @@ function CourseDetail() {
   const [matError, setMatError] = useState(null);
 
   const uid = getCurrentUserId();
+  const courseProgressKey = (uid, courseKey) =>
+    `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
+  
+  function loadCourseProgress(uid, courseKey) {
+    const raw = localStorage.getItem(courseProgressKey(uid, courseKey));
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  
 
   /** 加载选课信息（后端优先，失败回退本地）+ 跨标签/事件同步 */
   useEffect(() => {
@@ -364,7 +374,42 @@ function CourseDetail() {
     }
     return list[0];
   }, [enrolled, rawParam]);
-
+  const goToStudyProgress = () => {
+    if (!currentCourse) return;
+    const path =
+      currentCourse?.id != null
+        ? `/progress/${currentCourse.id}`
+        : `/progress/${encodeURIComponent(currentCourse?.code || "")}`;
+    navigate(path);
+  };
+  
+  useEffect(() => {
+    const onCourseProgressUpdated = (e) => {
+      const { user_id, course_key, value } = e.detail || {};
+      if (user_id !== uid) return;
+      const myKey =
+        currentCourse?.code ??
+        (currentCourse?.id != null ? String(currentCourse.id) : "course");
+      if (course_key !== myKey) return;
+      setEnrolled((prev) => [...prev]); // 渲染重新计算 progressValue
+    };
+  
+    const onStorage = (e) => {
+      if (!e.key) return;
+      const keyPrefix = courseProgressKey(uid, "").replace(/:$/, "");
+      if (e.key.startsWith(keyPrefix)) {
+        setEnrolled((prev) => [...prev]);
+      }
+    };
+  
+    window.addEventListener("courseProgress:updated", onCourseProgressUpdated);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("courseProgress:updated", onCourseProgressUpdated);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [uid, currentCourse?.id, currentCourse?.code]);
+  
   /** 规范路由：将参数重写为规范 id 或 code */
   useEffect(() => {
     if (!enrolled.length || !currentCourse) return;
@@ -518,10 +563,19 @@ function CourseDetail() {
     return (done / total) * 100;
   }, [assignments]);
 
+// 课程唯一键：优先 code，没 code 用 id
+  const courseKey =
+    currentCourse?.code ??
+    (currentCourse?.id != null ? String(currentCourse.id) : "course");
+
+  const savedOverall = loadCourseProgress(uid, courseKey);
+
   const progressValue =
-    typeof currentCourse?.progress === "number" && currentCourse.progress >= 0
-      ? currentCourse.progress
-      : computedProgress;
+    savedOverall != null
+      ? savedOverall
+      : (typeof currentCourse?.progress === "number" && currentCourse.progress >= 0
+          ? currentCourse.progress
+          : computedProgress);
 
   /** 勾选完成并持久化 */
   const toggleAssignment = (id) => {
@@ -720,18 +774,32 @@ function CourseDetail() {
               p: 2,
               borderRadius: 2,
               boxShadow: 2,
-              display: "flex",
-              flexDirection: "column",
-              height: "100%",
             }}
           >
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              Course Progress
-            </Typography>
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
-              <ProgressCircular value={progressValue} />
-            </Box>
+            <ButtonBase
+              onClick={goToStudyProgress}
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+                alignItems: "center",
+                borderRadius: 2,
+                p: 1,
+                cursor: "pointer",
+                "&:hover": { bgcolor: "action.hover" },
+              }}
+              aria-label={`Open study progress for ${courseCode}`}
+              title="Open Study Progress"
+            >
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                Course Progress
+              </Typography>
+              <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+                <ProgressCircular value={progressValue} />
+              </Box>
+            </ButtonBase>
           </Paper>
+
 
           {/* Assignments（仅任务型 materials） */}
           <Paper elevation={1} sx={{ gridColumn: "1 / -1", p: 2, borderRadius: 2, mt: 5 }}>

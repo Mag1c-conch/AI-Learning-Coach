@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar.jsx';
 import Dashboard from './Student/Dashboard.jsx';
 import CoursesPage from "./Student/CoursesPage";
 import CoursePage from "./Student/CoursePage";
+import StudyProgress from "./Student/StudyProgress.jsx";
 import { dividerClasses } from '@mui/material';
 import AdminLayout from './Admin/AdminLayout.jsx';
 import AdminDashboard from './Admin/Pages/Admin/Dashboard.jsx';
@@ -36,6 +37,9 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/courses" element={<CoursesPage />} />
             <Route path="/course/:id" element={<CoursePage />} />
+            <Route path="/progress" element={<StudyProgress />} />
+            <Route path="/progress/:code" element={<StudyProgress />} />
+            <Route path="/progress/id/:id" element={<StudyProgress />} />
             <Route path="/registercourse" element={<Registercourse />} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="/admin" element={<AdminLayout />}>

@@ -27,6 +27,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
 import http from "../api/http";
+
 // Search box format
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
@@ -66,18 +67,13 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 }));
 
 // Course sliding component (inline)
-function CoursesSlider({ courses = [] }) {
+function CoursesSlider({ courses = [], progressMap = {} }) {
   const slidingRef = useRef(null);
   // Scrolling design
   const scrollingCards = (dir = 1) => {
     const el = slidingRef.current;
-    if (!el) {
-      return;
-    }
-    el.scrollBy({ 
-      left: dir * (el.clientWidth * 0.9), 
-      behavior: "smooth" 
-    });  // Scrolling distance
+    if (!el) return;
+    el.scrollBy({ left: dir * (el.clientWidth * 0.9), behavior: "smooth" }); // Scrolling distance
   };
 
   return (
@@ -113,13 +109,10 @@ function CoursesSlider({ courses = [] }) {
                   ? `/course/${course.id}`
                   : `/course/${encodeURIComponent(course.code || "")}`
               }
-              sx={{ 
-                textDecoration: "none", 
-                color: "inherit", 
-              }}
+              sx={{ textDecoration: "none", color: "inherit" }}
             >
               {/* Each course card design */}
-              <Card  
+              <Card
                 elevation={3}
                 sx={{
                   borderRadius: 2,
@@ -154,6 +147,13 @@ function CoursesSlider({ courses = [] }) {
                   <Typography variant="body2" color="text.secondary">
                     {course.meta}
                   </Typography>
+
+                  {/* show courses progress */}
+                  <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 700 }}>
+                    Progress: {Math.max(0, Math.min(100, Math.round(
+                      Number(progressMap[(course.code ?? (course.id != null ? String(course.id) : "course"))]) || 0
+                    )))}%
+                  </Typography>
                 </CardContent>
               </Card>
             </Box>
@@ -162,7 +162,7 @@ function CoursesSlider({ courses = [] }) {
       </Box>
 
       {/* Left and right scrolling buttons */}
-      <IconButton  // Left scrolling button
+      <IconButton
         onClick={() => scrollingCards(-1)}
         size="small"
         sx={{
@@ -179,7 +179,7 @@ function CoursesSlider({ courses = [] }) {
         <ChevronLeftIcon />
       </IconButton>
 
-      <IconButton  // Right scrolling button
+      <IconButton
         onClick={() => scrollingCards(1)}
         size="small"
         sx={{
@@ -200,19 +200,14 @@ function CoursesSlider({ courses = [] }) {
 }
 
 // Progress sliding component (inline)
-function ProgressSlider({ items = [] }) {
+function ProgressSlider({ items = [], onOpen }) {
   const slidingRef = useRef(null);
 
   // Scrolling design
   const scrollingCards = (dir = 1) => {
     const el = slidingRef.current;
-    if (!el) {
-      return;
-    }
-    el.scrollBy({ 
-      left: dir * (el.clientWidth * 0.9), 
-      behavior: "smooth" 
-    });
+    if (!el) return;
+    el.scrollBy({ left: dir * (el.clientWidth * 0.9), behavior: "smooth" });
   };
 
   return (
@@ -232,21 +227,24 @@ function ProgressSlider({ items = [] }) {
         }}
       >
         {items.map((item) => (
-          <Card  // Each course progress card design
-            key={item.course}
+          <Card
+            key={item.courseKey}
             elevation={3}
+            onClick={() => onOpen?.(item.courseKey)}
+            role="button"
+            tabIndex={0}
             sx={{
               flex: "0 0 auto",
               width: { xs: 240, sm: 280, md: 300 }, // Set card width
               scrollSnapAlign: "start",
               borderRadius: 2,
+              cursor: "pointer",
             }}
           >
             <CardContent sx={{ textAlign: "center" }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
                 {item.course}
               </Typography>
-
               {/* Circular progress */}
               <ProgressCircular value={item.percent} size={140} />
             </CardContent>
@@ -255,7 +253,7 @@ function ProgressSlider({ items = [] }) {
       </Box>
 
       {/* Left and right scrolling buttons */}
-      <IconButton  // Left scrolling button
+      <IconButton
         onClick={() => scrollingCards(-1)}
         size="small"
         sx={{
@@ -272,7 +270,7 @@ function ProgressSlider({ items = [] }) {
         <ChevronLeftIcon />
       </IconButton>
 
-      <IconButton  // Right scrolling button
+      <IconButton
         onClick={() => scrollingCards(1)}
         size="small"
         sx={{
@@ -292,22 +290,20 @@ function ProgressSlider({ items = [] }) {
   );
 }
 
-
 // static course data placeholders (empty by default)
 const defaultCoursesData = [];
-
 const exerciseData = [];
-
 const progressData = [];
 
-function ProgressCircular({ value = 80, size = 150, thickness = 5}) {
+// ProgressCircular
+function ProgressCircular({ value = 80, size = 150, thickness = 5 }) {
   return (
-    <Box 
-      sx={{ 
-        position: "relative", 
-        display: "inline-flex", 
-        alignItems: "center", 
-        justifyContent: "center", 
+    <Box
+      sx={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
       {/* Background circle（Pink color）*/}
@@ -318,9 +314,7 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5}) {
         thickness={thickness}
         sx={{
           color: "#f6c6d1",
-          [`& .${circularProgressClasses.circle}`]: {
-            strokeLinecap: "round",
-          },
+          [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" },
           transform: "rotate(-110deg)", // Upper left of the opening
         }}
       />
@@ -334,9 +328,7 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5}) {
           color: "#ea9cb0",
           position: "absolute",
           left: 0,
-          [`& .${circularProgressClasses.circle}`]: {
-            strokeLinecap: "round",
-          },
+          [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" },
           transform: "rotate(-110deg)",
         }}
       />
@@ -358,6 +350,7 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5}) {
     </Box>
   );
 }
+
 // read user id from localstorage
 function getCurrentUserId() {
   try {
@@ -368,6 +361,34 @@ function getCurrentUserId() {
   } catch {
     return null;
   }
+}
+
+//进度同步
+const courseKeyFromCourse = (c) => c?.code ?? (c?.id != null ? String(c.id) : "course");
+const courseProgressKey = (uid, courseKey) =>
+  `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
+
+// 读取今天的学习计划
+const planStorageKey = (uid, courseKey, dateStr) =>
+  `studyPlan:${uid || "anon"}:${courseKey || "course"}:${dateStr}`;
+const todayStr = () => new Date().toISOString().slice(0, 10);
+/** 返回：[{ courseKey, courseLabel, items:[{title,type}...] }, ...] */
+function loadTodayTodosForUser(uid, courseList = []) {
+  const t = todayStr();
+  const out = [];
+  for (const c of courseList) {
+    const key = courseKeyFromCourse(c);
+    const raw = localStorage.getItem(planStorageKey(uid, key, t));
+    const items = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(items) && items.length) {
+      out.push({
+        courseKey: key,
+        courseLabel: c.code || c.name || key,
+        items,
+      });
+    }
+  }
+  return out;
 }
 
 function mapEnrollmentToCard(e) {
@@ -430,23 +451,26 @@ function readLocalEnrollments(userId) {
 const Dashboard = () => {
   const [sliderCourses, setSliderCourses] = useState(defaultCoursesData);
   const [uid, setUid] = useState(getCurrentUserId());
-  useEffect(() => {
-  const onStorage = () => setUid(getCurrentUserId());
-  const onLogin = () => setUid(getCurrentUserId()); 
-
-  window.addEventListener("storage", onStorage);
-  window.addEventListener("login:success", onLogin);
-
-  return () => {
-    window.removeEventListener("storage", onStorage);
-    window.removeEventListener("login:success", onLogin);
-  };
-}, []);
-
+  const [todosByCourse, setTodosByCourse] = useState([]); 
   // static exercise & progress data
   const [exercises] = useState(exerciseData);
-  const [progress] = useState(progressData);
   const [courses, setCourses] = useState([]);
+  const [progressMap, setProgressMap] = useState({});     // { [courseKey]: percent }
+  const [progressItems, setProgressItems] = useState([]); // [{courseKey, courseLabel, percent}]
+  const navigate = useNavigate();
+  const openStudyProgress = (courseKey) =>
+    navigate(`/progress/${encodeURIComponent(courseKey)}`);
+
+  useEffect(() => {
+    const onStorage = () => setUid(getCurrentUserId());
+    const onLogin = () => setUid(getCurrentUserId());
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("login:success", onLogin);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("login:success", onLogin);
+    };
+  }, []);
 
   const totalRewards = courses.reduce((s, c) => s + (c.badges || 0), 0);
 
@@ -463,36 +487,118 @@ const Dashboard = () => {
     }
   }, []);
 
+  // 读取 localStorage 并构建 Study Progress 展示数据
+  const rebuildProgress = React.useCallback(
+    (list = courses, userId = uid) => {
+      const map = {};
+      for (const c of list) {
+        const key = courseKeyFromCourse(c);
+        const raw = localStorage.getItem(courseProgressKey(userId, key));
+        const num = Math.max(0, Math.min(100, Math.round(Number(raw) || 0)));
+        map[key] = num;
+      }
+      setProgressMap(map);
+      const items = list.map((c) => {
+        const key = courseKeyFromCourse(c);
+        return {
+          courseKey: key,
+          courseLabel: c.code || c.name || key,
+          percent: map[key] ?? 0,
+          course: c.code || c.name || key, 
+        };
+      });
+      setProgressItems(items);
+    },
+    [uid, courses]
+  );
+
   useEffect(() => {
-  const load = async () => {
-    if (!uid) {
-      setSliderCourses(defaultCoursesData);
-      return;
-    }
-    try {
-      const { data } = await http.get(`/courses/users/${uid}/enrollments`);
-      const enrolledCards = Array.isArray(data) ? data.map(mapEnrollmentToCard) : [];
-      const fallback = enrolledCards.length ? [] : readLocalEnrollments(uid);
-      const merged = mergeCourses(defaultCoursesData, enrolledCards.length ? enrolledCards : fallback);
-      setSliderCourses(merged);
-      setCourses(enrolledCards.map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 })));
-    } catch (e) {
-      console.error("Failed to load enrollments", e?.response?.data || e.message);
-      const fallback = readLocalEnrollments(uid);
-      const merged = mergeCourses(defaultCoursesData, fallback);
-      setSliderCourses(merged);
-      setCourses(fallback.map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 })));
-    }
-  };
+    const load = async () => {
+      if (!uid) {
+        setSliderCourses(defaultCoursesData);
+        setCourses([]);
+        setTodosByCourse([]);
+        return;
+      }
+      try {
+        const { data } = await http.get(`/courses/users/${uid}/enrollments`);
+        const enrolledCards = Array.isArray(data) ? data.map(mapEnrollmentToCard) : [];
+        const fallback = enrolledCards.length ? [] : readLocalEnrollments(uid);
+        const merged = mergeCourses(defaultCoursesData, enrolledCards.length ? enrolledCards : fallback);
+        setSliderCourses(merged);
+        const base = (enrolledCards.length ? enrolledCards : fallback)
+          .map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 }));
+        setCourses(base);
+        // 重建进度 & todo list
+        rebuildProgress(base, uid);
+        setTodosByCourse(loadTodayTodosForUser(uid, base)); 
+      } catch (e) {
+        console.error("Failed to load enrollments", e?.response?.data || e.message);
+        const fallback = readLocalEnrollments(uid);
+        const merged = mergeCourses(defaultCoursesData, fallback);
+        setSliderCourses(merged);
+        const base = fallback.map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 }));
+        setCourses(base);
+        rebuildProgress(base, uid);
+        setTodosByCourse(loadTodayTodosForUser(uid, base)); 
+      }
+    };
 
-  load();
-  const onUpdated = (ev) => {
-  if (!ev?.detail?.user_id || ev.detail.user_id === uid) load();
-  };
-  window.addEventListener("enrollment:updated", onUpdated);
-  return () => window.removeEventListener("enrollment:updated", onUpdated);
-}, [uid]); 
+    load();
+    const onUpdated = (ev) => {
+      if (!ev?.detail?.user_id || ev.detail.user_id === uid) load();
+    };
+    window.addEventListener("enrollment:updated", onUpdated);
+    return () => window.removeEventListener("enrollment:updated", onUpdated);
+  }, [uid, rebuildProgress]);
 
+  useEffect(() => {
+    if (courses?.length) {
+      rebuildProgress(courses, uid);
+      setTodosByCourse(loadTodayTodosForUser(uid, courses)); 
+    }
+  }, [courses, uid, rebuildProgress]);
+
+  useEffect(() => {
+    const onProgressUpdated = (e) => {
+      const { course_key, value } = e?.detail || {};
+      if (!course_key) return;
+      const v = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+      setProgressMap((m) => ({ ...m, [course_key]: v }));
+      setProgressItems((items) =>
+        items.map((it) => (it.courseKey === course_key ? { ...it, percent: v } : it))
+      );
+    };
+    const onPlanUpdated = () => {
+      setTodosByCourse(loadTodayTodosForUser(uid, courses));
+    };
+    window.addEventListener("courseProgress:updated", onProgressUpdated);
+    window.addEventListener("studyplan:updated", onPlanUpdated);
+    return () => {
+      window.removeEventListener("courseProgress:updated", onProgressUpdated);
+      window.removeEventListener("studyplan:updated", onPlanUpdated);
+    };
+  }, [uid, courses]);
+
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (!e.key) return;
+      const pfx1 = `courseProgress:${uid || "anon"}:`;
+      const pfx2 = `studyPlan:${uid || "anon"}:`;
+      if (e.key.startsWith(pfx1)) {
+        const course_key = e.key.slice(pfx1.length);
+        const v = Math.max(0, Math.min(100, Math.round(Number(e.newValue) || 0)));
+        setProgressMap((m) => ({ ...m, [course_key]: v }));
+        setProgressItems((items) =>
+          items.map((it) => (it.courseKey === course_key ? { ...it, percent: v } : it))
+        );
+      } else if (e.key.startsWith(pfx2)) {
+        setTodosByCourse(loadTodayTodosForUser(uid, courses));
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [uid, courses]);
 
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
@@ -541,7 +647,7 @@ const Dashboard = () => {
                 <Typography component={Link} to="/courses" variant="h5" sx={{ fontWeight: 700, mb: 2, textDecoration: "none", color: "inherit", "&:hover": { textDecoration: "underline" } }}>
                   Courses
                 </Typography>
-                <CoursesSlider courses={sliderCourses} />
+                <CoursesSlider courses={sliderCourses} progressMap={progressMap} />
               </Paper>
             </Grid>
 
@@ -550,36 +656,37 @@ const Dashboard = () => {
               <Paper variant="outlined" sx={{ flex: 1, p: 2, width: "100%", borderRadius: 2, boxShadow: 2, border: "1px solid", borderColor: "divider", height: { md: "38vh" } }}>
                 <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Todo List</Typography>
                 <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1, maxHeight: "70%", overflowY: "auto" }}>
-                  {exercises.length === 0 ? (
+                  {todosByCourse.length === 0 ? (  
                     <Typography>No materials</Typography>
                   ) : (
-                    exercises.map((e, i) => {
-                      const items = e.items || (e.item ? [e.item] : []);
-                      return (
-                        <Box key={i} sx={{ pb: 2, "&:last-child": { pb: 0 } }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 1 }}>{e.title}</Typography>
-                          {items.map((it, idx) => (
-                            <Typography key={idx} variant="body1" display="block" sx={{ pb: 1, lineHeight: 1.2 }}>{it}</Typography>
-                          ))}
-                          {i < exercises.length - 1 && <Divider sx={{ mt: 1 }} />}
-                        </Box>
-                      );
-                    })
+                    todosByCourse.map((g) => (
+                      <Box key={g.courseKey} sx={{ pb: 1.5 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2, mb: .5 }}>
+                          {g.courseLabel}
+                        </Typography>
+                        {g.items.map((it, idx) => (
+                          <Typography key={idx} variant="body2" sx={{ display: "block", lineHeight: 1.3 }}>
+                            • {it.title}
+                          </Typography>
+                        ))}
+                        <Divider sx={{ mt: 1 }} />
+                      </Box>
+                    ))
                   )}
                 </Box>
               </Paper>
             </Grid>
 
             {/* Study Progress */}
-            <Grid 
-              item 
+            <Grid
+              item
               sx={{
                 flexGrow: 0,
                 flexShrink: 0,
                 flexBasis: { xs: '100%', sm: '50%', md: '62.5%' },
                 maxWidth: { xs: '100%', sm: '50%', md: '62.5%' },
               }}
-              >
+            >
               <Paper
                 sx={{
                   p: 3,
@@ -591,12 +698,12 @@ const Dashboard = () => {
                 }}
               >
                 {/* Title + Upper right corner: button */}
-                <Box 
-                  sx={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    justifyContent: "space-between", 
-                    mb: 1 
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    mb: 1
                   }}
                 >
                   <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
@@ -618,7 +725,7 @@ const Dashboard = () => {
                     Generate study Plan
                   </Box>
                 </Box>
-                <ProgressSlider items={progress} />
+                <ProgressSlider items={progressItems} onOpen={openStudyProgress} />
               </Paper>
             </Grid>
 
@@ -638,7 +745,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-
-
-
 
