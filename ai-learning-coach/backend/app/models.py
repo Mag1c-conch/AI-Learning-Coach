@@ -1,7 +1,19 @@
 ﻿from datetime import datetime, timezone
 import enum
+from zoneinfo import ZoneInfo
 
 from .extensions import db
+
+SYDNEY_TZ = ZoneInfo("Australia/Sydney")
+
+
+def _to_sydney_iso(dt):
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(SYDNEY_TZ).isoformat()
+
 
 class UserRole(enum.Enum):
     ADMIN = "admin"
@@ -175,9 +187,9 @@ class Assignment(db.Model):
             "teacher_id": self.teacher_id,
             "title": self.title,
             "description": self.description,
-            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "due_date": _to_sydney_iso(self.due_date),
             "optional": bool(self.optional),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": _to_sydney_iso(self.created_at),
         }
 
 
