@@ -100,7 +100,7 @@ def _build_submission_stored_name(course_dir: str, assignment: Assignment, stude
 def _material_with_student_dict(material: Material) -> dict:
     data = material.to_dict()
     student = User.query.get(material.uploaded_by)
-    if student:
+    if student and student.role == UserRole.STUDENT:
         data["student"] = {
             "id": student.id,
             "first_name": student.first_name,
@@ -434,7 +434,9 @@ def list_assignment_submissions(assignment_id: int):
         abort(400, description="missing required viewer_id")
     viewer = User.query.get_or_404(viewer_id)
 
-    query = Material.query.filter_by(assignment_id=assignment.id)
+    query = Material.query.filter_by(assignment_id=assignment.id).filter(
+        Material.file_type == "assignment_submission"
+    )
 
     if viewer.role == UserRole.STUDENT:
         if viewer.id != viewer_id:

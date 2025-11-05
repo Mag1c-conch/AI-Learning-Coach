@@ -1,0 +1,114 @@
+from flask import Blueprint, abort, jsonify, request
+
+from ..extensions import db
+from ..models import Course, Feedback, User, UserRole
+
+bp = Blueprint("feedback", __name__, url_prefix="/feedback")
+
+
+def _require_json() -> dict:
+    payload = request.get_json(silent=True)
+    if payload is None:
+        abort(400, description="request payload must be valid JSON")
+    return payload
+
+
+def _coerce_int(field: str, value, required: bool = True):
+    if value is None:
+        if required:
+            abort(400, description=f"{field} is required")
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        abort(400, description=f"{field} must be an integer")
+
+
+def _parse_bool(value, default=None):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    txt = str(value).strip().lower()
+    if txt in {"1", "true", "yes", "y", "on"}:
+        return True
+    if txt in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
+@bp.route("", methods=["POST"])
+def create_feedback():
+    """
+    创建一条新的反馈记录。请求体必须包含 teacher_id、student_id 和 content 字段，course_id 字段可选。
+    只有教师（UserRole.ADMIN）才能发送反馈，且反馈只能发送给学生（UserRole.STUDENT）。
+    如果指定了 course_id，则教师必须是该课程的创建者。
+    """
+    payload = _require_json()
+
+    teacher_id = _coerce_int("teacher_id", payload.get("teacher_id"))
+    student_id = _coerce_int("student_id", payload.get("student_id"))
+    course_id = _coerce_int("course_id", payload.get("course_id"), required=False)
+    content_raw = payload.get("content")
+
+    content = str(content_raw).strip() if content_raw is not None else ""
+    if not content:
+        abort(400, description="content must not be empty")
+
+    teacher = User.query.get_or_404(teacher_id)
+    if teacher.role != UserRole.ADMIN:
+        abort(403, description="only teachers may send feedback")
+
+    student = User.query.get_or_404(student_id)
+    if student.role != UserRole.STUDENT:
+        abort(403, description="feedback may only be sent to students")
+
+    course = None
+    if course_id is not None:
+        course = Course.query.get_or_404(course_id)
+        if course.created_by != teacher.id:
+            abort(403, description="teacher does not own the specified course")
+
+    feedback = Feedback(
+        teacher_id=teacher.id,
+        student_id=student.id,
+        course_id=course.id if course else None,
+        content=content,
+    )
+    db.session.add(feedback)
+    db.session.commit()
+
+    return jsonify(feedback.to_dict(include_related=True)), 201
+
+
+@bp.route("", methods=["GET"])
+def list_feedback():
+    """
+    如果提供了 teacher_id、student_id 或 course_id 参数，则返回相应的反馈记录列表。
+    可以选择性地使用 include_related 参数来决定是否包含相关的教师、学生和课程信息。
+    可以使用 limit 参数来限制返回的记录数量。
+    """
+    query = Feedback.query
+
+    teacher_id = request.args.get("teacher_id", type=int)
+    student_id = request.args.get("student_id", type=int)
+    course_id = request.args.get("course_id", type=int)
+    include_related = _parse_bool(request.args.get("include_related"), default=True)
+    limit = request.args.get("limit", type=int)
+
+    if teacher_id:
+        query = query.filter(Feedback.teacher_id == teacher_id)
+    if student_id:
+        query = query.filter(Feedback.student_id == student_id)
+    if course_id:
+        query = query.filter(Feedback.course_id == course_id)
+
+    if not any([teacher_id, student_id, course_id]):
+        abort(400, description="at least one of teacher_id, student_id, or course_id must be provided")
+
+    query = query.order_by(Feedback.created_at.desc())
+    if limit is not None:
+        query = query.limit(max(1, limit))
+
+    entries = query.all()
+    return jsonify([entry.to_dict(include_related=include_related) for entry in entries]), 200
