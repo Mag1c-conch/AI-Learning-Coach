@@ -147,7 +147,7 @@ export default function Course() {
               title: `${foundCourse.code} - ${foundCourse.name}`,
               org: foundCourse.description || "COMPSC - School of CSE",
               image: foundCourse.image_url || defaultCourseImages[0],
-              studentCount: 0, // TODO: 从enrollments计算
+              studentCount: foundCourse.student_count || 0,
               ...foundCourse // 保留后端原始数据
             });
           } else {
@@ -518,9 +518,6 @@ export default function Course() {
                 >
                   <Typography variant="body1" sx={{ mb: 1 }}>
                     <strong>Course ID:</strong> {course.code || course.id}
-                  </Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>
-                    <strong>Facility:</strong> {course.org}
                   </Typography>
                   <Typography variant="body1" sx={{ mb: 1 }}>
                     <strong>Student Count:</strong> {course.studentCount} 

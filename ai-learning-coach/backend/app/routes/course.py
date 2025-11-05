@@ -82,10 +82,14 @@ def _build_course_payload(course: Course):
                 teacher_email = value.strip()
                 break
 
+    # 计算课程的注册学生数量
+    student_count = Enrollment.query.filter_by(course_id=course.id).count()
+
     data = course.to_dict()
     data["creator_name"] = teacher_name
     data["teacher"] = teacher_name
     data["email"] = teacher_email
+    data["student_count"] = student_count
     return data
 
 # list all courses
@@ -152,6 +156,11 @@ def get_course(course_id):
         teacher_name = (f"{first} {last}").strip()
         data["teacher"] = teacher_name or None
         data["creator_name"] = teacher_name or None
+    
+    # 添加学生数量
+    student_count = Enrollment.query.filter_by(course_id=course.id).count()
+    data["student_count"] = student_count
+    
     return jsonify(data), 200
         
 # list all courses a student is enrolled in 

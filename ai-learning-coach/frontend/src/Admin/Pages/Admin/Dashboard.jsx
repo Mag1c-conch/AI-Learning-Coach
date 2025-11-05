@@ -294,7 +294,7 @@ export default function Dashboard() {
           title: `${course.code} - ${course.name}`,
           org: course.description || "COMPSC - School of CSE",
           image: course.image_url || defaultCourseImages[index % defaultCourseImages.length],
-          studentCount: 0, // TODO: 从enrollments计算
+          studentCount: course.student_count || 0,
         }));
         
         console.log("Setting courses to:", formattedCourses);
