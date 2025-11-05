@@ -40,6 +40,18 @@ class User(db.Model):
         lazy="selectin",
         foreign_keys="Assignment.teacher_id",
     )
+    feedback_sent = db.relationship(
+        "Feedback",
+        back_populates="teacher",
+        lazy="selectin",
+        foreign_keys="Feedback.teacher_id",
+    )
+    feedback_received = db.relationship(
+        "Feedback",
+        back_populates="student",
+        lazy="selectin",
+        foreign_keys="Feedback.student_id",
+    )
     conversations = db.relationship("Conversation", back_populates="user", lazy="selectin")
 
     #  Unique constraint on (username, role)
@@ -65,6 +77,13 @@ class Course(db.Model):
     enrollments = db.relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
     assignments = db.relationship("Assignment", back_populates="course", cascade="all, delete-orphan", lazy="selectin")
     materials = db.relationship("Material", back_populates="course", cascade="all, delete-orphan", lazy="selectin")
+    feedback_entries = db.relationship(
+        "Feedback",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        single_parent=True,
+    )
 
     def to_dict(self):
         return {
@@ -158,6 +177,75 @@ class Assignment(db.Model):
             "optional": bool(self.optional),
             "created_at": _to_sydney_iso(self.created_at),
         }
+
+
+class Feedback(db.Model):
+    __tablename__ = "feedback"
+
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        onupdate=datetime.now(timezone.utc),
+    )
+
+    course = db.relationship("Course", back_populates="feedback_entries", lazy="joined")
+    teacher = db.relationship(
+        "User",
+        foreign_keys=[teacher_id],
+        back_populates="feedback_sent",
+        lazy="joined",
+    )
+    student = db.relationship(
+        "User",
+        foreign_keys=[student_id],
+        back_populates="feedback_received",
+        lazy="joined",
+    )
+
+    def to_dict(self, include_related: bool = False):
+        data = {
+            "id": self.id,
+            "course_id": self.course_id,
+            "teacher_id": self.teacher_id,
+            "student_id": self.student_id,
+            "content": self.content,
+            "created_at": _to_sydney_iso(self.created_at),
+            "updated_at": _to_sydney_iso(self.updated_at),
+        }
+        if include_related:
+            data["teacher"] = (
+                {
+                    "id": self.teacher.id,
+                    "first_name": self.teacher.first_name,
+                    "last_name": self.teacher.last_name,
+                    "username": self.teacher.username,
+                }
+                if self.teacher
+                else None
+            )
+            data["student"] = (
+                {
+                    "id": self.student.id,
+                    "first_name": self.student.first_name,
+                    "last_name": self.student.last_name,
+                    "username": self.student.username,
+                }
+                if self.student
+                else None
+            )
+            if self.course:
+                data["course"] = {
+                    "id": self.course.id,
+                    "code": self.course.code,
+                    "name": self.course.name,
+                }
+        return data
 
 
 class Conversation(db.Model):
