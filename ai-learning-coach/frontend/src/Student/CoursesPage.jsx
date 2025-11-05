@@ -12,13 +12,14 @@ import {
 import { styled, alpha } from "@mui/material/styles";
 import InputBase from "@mui/material/InputBase";
 import SearchIcon from "@mui/icons-material/Search";
-import NotificationsIcon from "@mui/icons-material/Notifications";
+
 import CircleIcon from "@mui/icons-material/Circle";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import Sidebar from "../components/Sidebar.jsx";
 import http from "../api/http";
+import NotificationsBell from "../components/Notifications.jsx";
 
 // Search box format
 const Search = styled("div")(({ theme }) => ({
@@ -201,7 +202,7 @@ const Courses = () => {
             />
           </Search>
           <IconButton>
-            <NotificationsIcon />
+            <NotificationsBell />
           </IconButton>
         </Box>
 
