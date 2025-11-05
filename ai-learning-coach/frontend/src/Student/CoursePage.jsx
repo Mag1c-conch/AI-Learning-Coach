@@ -807,18 +807,6 @@ function CourseDetail() {
               <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>
                 Assignments
               </Typography>
-              <Button
-                variant="contained"
-                sx={{
-                  textTransform: "none",
-                  background: "#1f2a44",
-                  "&:hover": { background: "#1a2438" },
-                  borderRadius: 1.2,
-                }}
-                onClick={() => console.log("Generate study plan")}
-              >
-                Generate Study Plan
-              </Button>
             </Box>
 
             <Divider sx={{ mb: 1 }} />
@@ -848,12 +836,6 @@ function CourseDetail() {
                     py: 1.2,
                   }}
                 >
-                  <Checkbox
-                    checked={a.completed}
-                    onChange={() => toggleAssignment(a.id)}
-                    sx={{ p: 0.5 }}
-                    inputProps={{ "aria-label": `mark ${a.title} completed` }}
-                  />
 
                   <Chip label={prettyKind(kind)} size="small" variant="outlined" sx={kindChipSX(kind)} />
 

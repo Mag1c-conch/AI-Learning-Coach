@@ -1,6 +1,6 @@
-﻿import React, { useRef, useState, useMemo, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+﻿// src/Student/Dashboard.jsx
+import React, { useRef, useState, useMemo, useEffect, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import "../App.css";
 import {
   Box,
@@ -12,23 +12,38 @@ import {
   Card,
   CardContent,
   Divider,
+  CircularProgress,
+  Badge,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItemButton,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
+  Chip,
+  Button,
 } from "@mui/material";
-import Sidebar from "../components/Sidebar.jsx";
 import { styled, alpha } from "@mui/material/styles";
+import { circularProgressClasses } from "@mui/material/CircularProgress";
+import Sidebar from "../components/Sidebar.jsx";
 import SearchIcon from "@mui/icons-material/Search";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import CircleIcon from "@mui/icons-material/Circle";
-import { CircularProgress } from "@mui/material";
-import { circularProgressClasses } from "@mui/material/CircularProgress";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
+import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
+import SchoolIcon from "@mui/icons-material/School";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
 import http from "../api/http";
 
-// Search box format
+// ===== Search box format =====
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
   borderRadius: theme.shape.borderRadius,
@@ -66,19 +81,17 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
-// Course sliding component (inline)
+// ===== Course sliding component =====
 function CoursesSlider({ courses = [], progressMap = {} }) {
   const slidingRef = useRef(null);
-  // Scrolling design
   const scrollingCards = (dir = 1) => {
     const el = slidingRef.current;
     if (!el) return;
-    el.scrollBy({ left: dir * (el.clientWidth * 0.9), behavior: "smooth" }); // Scrolling distance
+    el.scrollBy({ left: dir * (el.clientWidth * 0.9), behavior: "smooth" });
   };
 
   return (
     <Box sx={{ position: "relative" }}>
-      {/* Sliding direction: y (all courses)*/}
       <Box
         ref={slidingRef}
         sx={{
@@ -101,7 +114,6 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
               scrollSnapAlign: "start",
             }}
           >
-            {/* Change to /course/:id */}
             <Box
               component={Link}
               to={
@@ -111,7 +123,6 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
               }
               sx={{ textDecoration: "none", color: "inherit" }}
             >
-              {/* Each course card design */}
               <Card
                 elevation={3}
                 sx={{
@@ -148,11 +159,22 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
                     {course.meta}
                   </Typography>
 
-                  {/* show courses progress */}
                   <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 700 }}>
-                    Progress: {Math.max(0, Math.min(100, Math.round(
-                      Number(progressMap[(course.code ?? (course.id != null ? String(course.id) : "course"))]) || 0
-                    )))}%
+                    Progress:{" "}
+                    {Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        Math.round(
+                          Number(
+                            progressMap[
+                              course.code ?? (course.id != null ? String(course.id) : "course")
+                            ] || 0
+                          )
+                        )
+                      )
+                    )}
+                    %
                   </Typography>
                 </CardContent>
               </Card>
@@ -161,7 +183,6 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
         ))}
       </Box>
 
-      {/* Left and right scrolling buttons */}
       <IconButton
         onClick={() => scrollingCards(-1)}
         size="small"
@@ -199,11 +220,9 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
   );
 }
 
-// Progress sliding component (inline)
+// ===== Progress slider =====
 function ProgressSlider({ items = [], onOpen }) {
   const slidingRef = useRef(null);
-
-  // Scrolling design
   const scrollingCards = (dir = 1) => {
     const el = slidingRef.current;
     if (!el) return;
@@ -212,7 +231,6 @@ function ProgressSlider({ items = [], onOpen }) {
 
   return (
     <Box sx={{ position: "relative" }}>
-      {/* Sliding direction: y (all courses progress)*/}
       <Box
         ref={slidingRef}
         sx={{
@@ -235,7 +253,7 @@ function ProgressSlider({ items = [], onOpen }) {
             tabIndex={0}
             sx={{
               flex: "0 0 auto",
-              width: { xs: 240, sm: 280, md: 300 }, // Set card width
+              width: { xs: 240, sm: 280, md: 300 },
               scrollSnapAlign: "start",
               borderRadius: 2,
               cursor: "pointer",
@@ -245,14 +263,12 @@ function ProgressSlider({ items = [], onOpen }) {
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
                 {item.course}
               </Typography>
-              {/* Circular progress */}
               <ProgressCircular value={item.percent} size={140} />
             </CardContent>
           </Card>
         ))}
       </Box>
 
-      {/* Left and right scrolling buttons */}
       <IconButton
         onClick={() => scrollingCards(-1)}
         size="small"
@@ -290,23 +306,10 @@ function ProgressSlider({ items = [], onOpen }) {
   );
 }
 
-// static course data placeholders (empty by default)
-const defaultCoursesData = [];
-const exerciseData = [];
-const progressData = [];
-
-// ProgressCircular
+// ===== ProgressCircular =====
 function ProgressCircular({ value = 80, size = 150, thickness = 5 }) {
   return (
-    <Box
-      sx={{
-        position: "relative",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      {/* Background circle（Pink color）*/}
+    <Box sx={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
       <CircularProgress
         variant="determinate"
         value={100}
@@ -315,10 +318,9 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5 }) {
         sx={{
           color: "#f6c6d1",
           [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" },
-          transform: "rotate(-110deg)", // Upper left of the opening
+          transform: "rotate(-110deg)",
         }}
       />
-      {/* Progress bar */}
       <CircularProgress
         variant="determinate"
         value={value}
@@ -332,7 +334,6 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5 }) {
           transform: "rotate(-110deg)",
         }}
       />
-      {/* Percentage */}
       <Box
         sx={{
           position: "absolute",
@@ -351,7 +352,11 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5 }) {
   );
 }
 
-// read user id from localstorage
+// ===== helpers =====
+const defaultCoursesData = [];
+const exerciseData = [];
+const progressData = [];
+
 function getCurrentUserId() {
   try {
     const token = localStorage.getItem("token");
@@ -363,16 +368,14 @@ function getCurrentUserId() {
   }
 }
 
-//进度同步
 const courseKeyFromCourse = (c) => c?.code ?? (c?.id != null ? String(c.id) : "course");
 const courseProgressKey = (uid, courseKey) =>
   `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
 
-// 读取今天的学习计划
 const planStorageKey = (uid, courseKey, dateStr) =>
   `studyPlan:${uid || "anon"}:${courseKey || "course"}:${dateStr}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
-/** 返回：[{ courseKey, courseLabel, items:[{title,type}...] }, ...] */
+
 function loadTodayTodosForUser(uid, courseList = []) {
   const t = todayStr();
   const out = [];
@@ -397,16 +400,17 @@ function mapEnrollmentToCard(e) {
   return {
     id: Number.isInteger(id) ? id : undefined,
     code: e?.code || "",
-    name: e.name || e.title || e.code,   // see name than title
+    name: e.name || e.title || e.code,
     dueText: "Enrolled",
     meta: description ? `· ${description}` : "",
   };
 }
 
 function mergeCourses(base, enrolledCards) {
-  // put enrolled courses in front
   const identifiers = new Set(
-    enrolledCards.map((c) => (Number.isInteger(Number(c.id)) ? `id:${Number(c.id)}` : `code:${c.code}`))
+    enrolledCards.map((c) =>
+      Number.isInteger(Number(c.id)) ? `id:${Number(c.id)}` : `code:${c.code}`
+    )
   );
   const rest = base.filter((b) => {
     const key = Number.isInteger(Number(b.id)) ? `id:${Number(b.id)}` : `code:${b.code}`;
@@ -448,15 +452,15 @@ function readLocalEnrollments(userId) {
   }
 }
 
+// ===== Dashboard component =====
 const Dashboard = () => {
   const [sliderCourses, setSliderCourses] = useState(defaultCoursesData);
   const [uid, setUid] = useState(getCurrentUserId());
-  const [todosByCourse, setTodosByCourse] = useState([]); 
-  // static exercise & progress data
+  const [todosByCourse, setTodosByCourse] = useState([]);
   const [exercises] = useState(exerciseData);
   const [courses, setCourses] = useState([]);
-  const [progressMap, setProgressMap] = useState({});     // { [courseKey]: percent }
-  const [progressItems, setProgressItems] = useState([]); // [{courseKey, courseLabel, percent}]
+  const [progressMap, setProgressMap] = useState({});
+  const [progressItems, setProgressItems] = useState([]);
   const navigate = useNavigate();
   const openStudyProgress = (courseKey) =>
     navigate(`/progress/${encodeURIComponent(courseKey)}`);
@@ -487,8 +491,7 @@ const Dashboard = () => {
     }
   }, []);
 
-  // 读取 localStorage 并构建 Study Progress 展示数据
-  const rebuildProgress = React.useCallback(
+  const rebuildProgress = useCallback(
     (list = courses, userId = uid) => {
       const map = {};
       for (const c of list) {
@@ -504,7 +507,7 @@ const Dashboard = () => {
           courseKey: key,
           courseLabel: c.code || c.name || key,
           percent: map[key] ?? 0,
-          course: c.code || c.name || key, 
+          course: c.code || c.name || key,
         };
       });
       setProgressItems(items);
@@ -529,9 +532,8 @@ const Dashboard = () => {
         const base = (enrolledCards.length ? enrolledCards : fallback)
           .map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 }));
         setCourses(base);
-        // 重建进度 & todo list
         rebuildProgress(base, uid);
-        setTodosByCourse(loadTodayTodosForUser(uid, base)); 
+        setTodosByCourse(loadTodayTodosForUser(uid, base));
       } catch (e) {
         console.error("Failed to load enrollments", e?.response?.data || e.message);
         const fallback = readLocalEnrollments(uid);
@@ -540,7 +542,7 @@ const Dashboard = () => {
         const base = fallback.map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 }));
         setCourses(base);
         rebuildProgress(base, uid);
-        setTodosByCourse(loadTodayTodosForUser(uid, base)); 
+        setTodosByCourse(loadTodayTodosForUser(uid, base));
       }
     };
 
@@ -555,7 +557,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (courses?.length) {
       rebuildProgress(courses, uid);
-      setTodosByCourse(loadTodayTodosForUser(uid, courses)); 
+      setTodosByCourse(loadTodayTodosForUser(uid, courses));
     }
   }, [courses, uid, rebuildProgress]);
 
@@ -600,6 +602,78 @@ const Dashboard = () => {
     return () => window.removeEventListener("storage", onStorage);
   }, [uid, courses]);
 
+  // ===================== Notifications (Feedback) =====================
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifs, setNotifs] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+
+  const unreadCount = useMemo(
+    () => (Array.isArray(notifs) ? notifs.filter((n) => !n.is_read).length : 0),
+    [notifs]
+  );
+
+  const fetchNotifications = useCallback(async () => {
+    if (!uid) return;
+    setNotifLoading(true);
+    try {
+      const params = new URLSearchParams({
+        student_id: String(uid),
+        include_related: "true",
+      });
+      const { data } = await http.get(`/feedback?${params.toString()}`);
+      setNotifs(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Failed to load notifications", e?.response?.data || e.message);
+    } finally {
+      setNotifLoading(false);
+    }
+  }, [uid]);
+
+  const markNotificationRead = useCallback(
+    async (id) => {
+      if (!uid) return;
+      try {
+        await http.patch(`/feedback/${id}/read`, { student_id: uid, is_read: true });
+        setNotifs((list) =>
+          list.map((n) => (n.id === id ? { ...n, is_read: true, read_at: new Date().toISOString() } : n))
+        );
+      } catch (e) {
+        console.error("Failed to mark read", e?.response?.data || e.message);
+      }
+    },
+    [uid]
+  );
+
+  const markAllRead = useCallback(async () => {
+    if (!uid) return;
+    const pending = notifs.filter((n) => !n.is_read);
+    for (const n of pending) {
+      try {
+        await http.patch(`/feedback/${n.id}/read`, { student_id: uid, is_read: true });
+      } catch (e) {
+        console.error("Failed to mark one read", e?.response?.data || e.message);
+      }
+    }
+    setNotifs((list) => list.map((n) => ({ ...n, is_read: true, read_at: n.read_at ?? new Date().toISOString() })));
+  }, [uid, notifs]);
+
+  const openNotif = useCallback(async () => {
+    setNotifOpen(true);
+    await fetchNotifications();
+  }, [fetchNotifications]);
+
+  // 首次与轮询（60s）
+  useEffect(() => {
+    if (!uid) {
+      setNotifs([]);
+      return;
+    }
+    fetchNotifications();
+    const id = window.setInterval(fetchNotifications, 60000);
+    return () => window.clearInterval(id);
+  }, [uid, fetchNotifications]);
+
+  // ===================== render =====================
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
@@ -614,7 +688,14 @@ const Dashboard = () => {
             <SearchIconWrapper><SearchIcon /></SearchIconWrapper>
             <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
           </Search>
-          <IconButton><NotificationsIcon /></IconButton>
+
+          <Tooltip title="Notifications">
+            <IconButton onClick={openNotif}>
+              <Badge badgeContent={unreadCount} color="error" overlap="circular">
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
+          </Tooltip>
         </Box>
 
         {/* Title */}
@@ -624,7 +705,7 @@ const Dashboard = () => {
           <Typography variant="h6" sx={{ color: "#7a7a7a" }}>Student</Typography>
         </Box>
 
-        {/* Greating & total rewards & ai button */}
+        {/* Greeting & rewards & AI */}
         <Box sx={{ display: "flex", alignItems: "baseline", gap: 5, mb: 2 }}>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>
             {greeting}, {firstName}! 👋
@@ -651,12 +732,12 @@ const Dashboard = () => {
               </Paper>
             </Grid>
 
-            {/* Exercise Materials */}
+            {/* Todo List */}
             <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "30%" }, maxWidth: { xs: "100%", sm: "50%", md: "30%" }, ml: { md: "45px" } }}>
               <Paper variant="outlined" sx={{ flex: 1, p: 2, width: "100%", borderRadius: 2, boxShadow: 2, border: "1px solid", borderColor: "divider", height: { md: "38vh" } }}>
                 <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Todo List</Typography>
                 <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1, maxHeight: "70%", overflowY: "auto" }}>
-                  {todosByCourse.length === 0 ? (  
+                  {todosByCourse.length === 0 ? (
                     <Typography>No materials</Typography>
                   ) : (
                     todosByCourse.map((g) => (
@@ -683,8 +764,8 @@ const Dashboard = () => {
               sx={{
                 flexGrow: 0,
                 flexShrink: 0,
-                flexBasis: { xs: '100%', sm: '50%', md: '62.5%' },
-                maxWidth: { xs: '100%', sm: '50%', md: '62.5%' },
+                flexBasis: { xs: "100%", sm: "50%", md: "62.5%" },
+                maxWidth: { xs: "100%", sm: "50%", md: "62.5%" },
               }}
             >
               <Paper
@@ -697,15 +778,7 @@ const Dashboard = () => {
                   height: "80%",
                 }}
               >
-                {/* Title + Upper right corner: button */}
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    mb: 1
-                  }}
-                >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
                   <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
                     Study Progress
                   </Typography>
@@ -740,9 +813,98 @@ const Dashboard = () => {
           </Grid>
         </Box>
       </Box>
+
+      {/* ===== Notifications Dialog ===== */}
+      <Dialog open={notifOpen} onClose={() => setNotifOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Feedback Notifications</DialogTitle>
+        <DialogContent dividers>
+          {notifLoading ? (
+            <Box sx={{ py: 4, textAlign: "center" }}>
+              <CircularProgress />
+              <Typography variant="body2" sx={{ mt: 1 }}>Loading…</Typography>
+            </Box>
+          ) : !notifs.length ? (
+            <Typography variant="body2">No notifications.</Typography>
+          ) : (
+            <List dense>
+              {notifs.map((n) => {
+                const courseLabel =
+                  n.course?.code || n.course?.name || (n.course_id ? `Course #${n.course_id}` : "Course");
+                const isUnread = !n.is_read;
+                return (
+                  <ListItemButton
+                    key={n.id}
+                    alignItems="flex-start"
+                    onClick={() => {
+                      if (isUnread) markNotificationRead(n.id);
+                    }}
+                    sx={{
+                      borderRadius: 1,
+                      mb: .5,
+                      bgcolor: isUnread ? "action.hover" : "transparent",
+                    }}
+                  >
+                    <ListItemAvatar>
+                      <Avatar>
+                        {n.assignment_id ? <AssignmentTurnedInIcon /> : <SchoolIcon />}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                            {n.title || "New feedback"}
+                          </Typography>
+                          {isUnread && <Chip size="small" color="error" label="NEW" />}
+                          {courseLabel && (
+                            <Chip size="small" variant="outlined" label={courseLabel} sx={{ ml: .5 }} />
+                          )}
+                          {n.assignment?.title && (
+                            <Chip size="small" variant="outlined" label={n.assignment.title} />
+                          )}
+                        </Box>
+                      }
+                      secondary={
+                        <>
+                          <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                            {n.content}
+                          </Typography>
+                          {n.created_at && (
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(n.created_at).toLocaleString()}
+                            </Typography>
+                          )}
+                        </>
+                      }
+                    />
+                    {!n.is_read && (
+                      <Button
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          markNotificationRead(n.id);
+                        }}
+                      >
+                        Mark read
+                      </Button>
+                    )}
+                  </ListItemButton>
+                );
+              })}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="text" onClick={markAllRead} disabled={!unreadCount}>
+            Mark all as read
+          </Button>
+          <Button variant="contained" onClick={() => setNotifOpen(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
 export default Dashboard;
-
