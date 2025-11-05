@@ -85,17 +85,7 @@ const courses = [
   },
 ];
 
-// Student data (example)
-const studentData = [
-  { name: 'Jack', studentId: 'zXXXXXXXX', course: 'Math101', percent: 30 },
-  { name: 'Suzuki', studentId: 'zXXXXXXXX', course: 'Math108', percent: 55 },
-  { name: 'Tom', studentId: 'zXXXXXXXX', course: 'Math108', percent: 70 },
-  { name: 'Jerry', studentId: 'zXXXXXXXX', course: 'Math101', percent: 85 },
-  { name: 'Alice', studentId: 'zXXXXXXXX', course: 'Math108', percent: 45 },
-  { name: 'Bob', studentId: 'zXXXXXXXX', course: 'Math101', percent: 90 },
-  { name: 'Charlie', studentId: 'zXXXXXXXX', course: 'Math108', percent: 60 },
-  { name: 'Diana', studentId: 'zXXXXXXXX', course: 'Math101', percent: 75 },
-];
+// Student data will be fetched from API
 
 
 // 默认学习相关图片（与Dashboard保持一致）
@@ -128,6 +118,8 @@ export default function Course() {
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   
   // 从后端获取课程信息
   useEffect(() => {
@@ -203,6 +195,46 @@ export default function Course() {
     }
     return null;
   };
+
+  // 从后端获取课程的注册学生列表
+  const fetchStudents = async () => {
+    if (!course || !course.id) return;
+    
+    setStudentsLoading(true);
+    try {
+      const response = await fetch(`http://localhost:5001/courses/${course.id}/students`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Fetched students:', data);
+        
+        // 转换为表格需要的格式
+        const formattedStudents = data.map(student => ({
+          id: student.id,
+          name: `${student.first_name} ${student.last_name}`,
+          studentId: student.username,
+          course: course.code,
+          enrolled_at: student.enrolled_at
+        }));
+        
+        setStudents(formattedStudents);
+      } else {
+        console.error('Failed to fetch students');
+        setStudents([]);
+      }
+    } catch (err) {
+      console.error('Error fetching students:', err);
+      setStudents([]);
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
+  // 当课程加载完成后，获取学生列表
+  useEffect(() => {
+    if (course && course.id) {
+      fetchStudents();
+    }
+  }, [course?.id]);
 
   // 格式化文件大小为可读格式
   const formatFileSize = (bytes) => {
@@ -524,12 +556,30 @@ export default function Course() {
                   </Typography>
                 </Box>
                 
-                {/* Student Progress */}
+                {/* Student Reward */}
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                    Student Progress
+                    🏆 Student Reward
                   </Typography>
-                  <CourseStudentProgress rows={studentData} />
+                  {studentsLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : students.length === 0 ? (
+                    <Box sx={{ 
+                      p: 3, 
+                      textAlign: 'center', 
+                      bgcolor: '#f5f5f5', 
+                      borderRadius: 2,
+                      border: '1px solid rgba(0,0,0,0.1)'
+                    }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No students enrolled in this course yet.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <CourseStudentProgress rows={students} />
+                  )}
                 </Box>
               </Box>
               

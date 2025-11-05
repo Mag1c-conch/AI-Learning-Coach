@@ -1,18 +1,19 @@
 // src/Admin/Pages/Admin/CourseStudentProgress.jsx
 import React, { useMemo, useState } from 'react';
-import { Progress } from 'antd';
 import { Box, IconButton, Typography, Button, TextField } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 export default function CourseStudentProgress({
   rows = [],
-  pageSize = 8,          // 每页条数（
-  height = 420,          // 组件固定高度（可按需微调）
-  maxWidth = 800,       // 增加最大宽度以容纳新列
+  pageSize = 8,          // 每页条数
+  height = 420,          // 组件固定高度
+  maxWidth = 800,       // 最大宽度
 }) {
   const [page, setPage] = useState(1);
-  const [rewards, setRewards] = useState({}); // 存储每个学生的奖励分数
+  const [inputRewards, setInputRewards] = useState({}); // 待发放的奖励分数（输入框中的临时值）
+  const [totalRewards, setTotalRewards] = useState({}); // 累计已发放的总奖励分数
 
   const { total, totalPages, pageRows } = useMemo(() => {
     const total = rows.length;
@@ -27,20 +28,35 @@ export default function CourseStudentProgress({
     setTimeout(() => setPage(1), 0);
   }
 
-  // 处理奖励分数变化
+  // 处理输入框的奖励分数变化（临时值）
   const handleRewardChange = (studentId, value) => {
-    setRewards(prev => ({
+    setInputRewards(prev => ({
       ...prev,
       [studentId]: value
     }));
   };
 
-  // 确认奖励
-  const handleConfirmReward = (studentId) => {
-    const rewardValue = rewards[studentId] || 0;
-    console.log(`Adding ${rewardValue} points to student ${studentId}`);
-    // 这里可以添加实际的API调用来保存奖励
-    // 成功后可以显示成功消息或更新UI
+  // 点击Give按钮，将本次奖励加到累计总分
+  const handleGiveReward = (studentId) => {
+    const pointsToAdd = inputRewards[studentId] || 0;
+    
+    if (pointsToAdd <= 0) {
+      return; // 如果没有要发放的分数，不执行
+    }
+    
+    // 将本次奖励加到累计总分
+    setTotalRewards(prev => ({
+      ...prev,
+      [studentId]: (prev[studentId] || 0) + pointsToAdd
+    }));
+    
+    // 清空输入框
+    setInputRewards(prev => ({
+      ...prev,
+      [studentId]: 0
+    }));
+    
+    console.log(`✅ Gave ${pointsToAdd} points to ${studentId}. Total: ${(totalRewards[studentId] || 0) + pointsToAdd}`);
   };
 
   return (
@@ -64,17 +80,16 @@ export default function CourseStudentProgress({
               <th style={th}>Name</th>
               <th style={th}>Student ID</th>
               <th style={th}>Course</th>
-              <th style={th}>Progress</th>
-              <th style={th}>Reward</th>
+              <th style={th}>Extra Points</th>
+              <th style={th}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {pageRows.map((r, i) => {
-              const value = r.completed ? 100 : Math.max(0, Math.min(100, r.percent ?? 0));
-              const status = value === 100 ? 'success' : (r.status || 'active');
-              // 使用name作为唯一标识符，因为name是唯一的
+              // 使用name作为唯一标识符
               const studentId = r.name;
-              const currentReward = rewards[studentId] || 0;
+              const inputValue = inputRewards[studentId] || 0; // 临时输入值
+              const totalPoints = totalRewards[studentId] || 0; // 累计总分
               
               return (
                 <tr key={`${studentId}-${i}`} style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
@@ -82,23 +97,23 @@ export default function CourseStudentProgress({
                   <td style={{ ...td, color: '#6b7280' }}>{r.studentId}</td>
                   <td style={td}>{r.course}</td>
                   <td style={td}>
-                    <div style={{ maxWidth: 200 }}>
-                      <Progress percent={value} status={status} />
-                    </div>
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                      {totalPoints}
+                    </Typography>
                   </td>
                   <td style={td}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Button
                         size="small"
                         variant="outlined"
-                        onClick={() => handleRewardChange(studentId, Math.max(0, currentReward - 1))}
+                        onClick={() => handleRewardChange(studentId, Math.max(0, inputValue - 1))}
                         sx={{ minWidth: 30, height: 30, p: 0 }}
                       >
                         -
                       </Button>
                       <TextField
                         size="small"
-                        value={currentReward}
+                        value={inputValue}
                         onChange={(e) => {
                           const value = parseInt(e.target.value) || 0;
                           handleRewardChange(studentId, Math.max(0, value));
@@ -121,7 +136,7 @@ export default function CourseStudentProgress({
                       <Button
                         size="small"
                         variant="outlined"
-                        onClick={() => handleRewardChange(studentId, currentReward + 1)}
+                        onClick={() => handleRewardChange(studentId, inputValue + 1)}
                         sx={{ minWidth: 30, height: 30, p: 0 }}
                       >
                         +
@@ -129,23 +144,26 @@ export default function CourseStudentProgress({
                       <Button
                         size="small"
                         variant="contained"
-                        onClick={() => handleConfirmReward(studentId)}
+                        onClick={() => handleGiveReward(studentId)}
+                        disabled={inputValue === 0}
                         sx={{ 
                           height: 30,
                           px: 1,
                           fontSize: '0.75rem',
-                          bgcolor: '#142E4F',
-                          '&:hover': { bgcolor: '#0f223b' }
+                          bgcolor: '#10b981',
+                          '&:hover': { bgcolor: '#059669' },
+                          '&:disabled': { bgcolor: '#e5e7eb' }
                         }}
                       >
-                        Confirm
+                        <EmojiEventsIcon sx={{ fontSize: 14, mr: 0.5 }} />
+                        Give
                       </Button>
                     </Box>
                   </td>
                 </tr>
               );
             })}
-            {/* 若最后一页不足 6 条，用空行填充，保持高度一致 */}
+            {/* 若最后一页不足条数，用空行填充，保持高度一致 */}
             {Array.from({ length: Math.max(0, pageSize - pageRows.length) }).map((_, idx) => (
               <tr key={`placeholder-${idx}`} style={{ height: 36 }}>
                 <td style={td} />

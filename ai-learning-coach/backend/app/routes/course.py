@@ -189,3 +189,40 @@ def list_user_enrollments(user_id):
         }
 
     return jsonify([to_dict(c) for c in courses]), 200
+
+# Get all students enrolled in a course
+@bp.route("/<int:course_id>/students", methods=["GET"])
+def list_course_students(course_id):
+    """
+    获取课程的所有注册学生列表
+    """
+    # 确保课程存在
+    course = Course.query.get_or_404(course_id)
+    
+    # 查询所有注册该课程的学生
+    students = (
+        db.session.query(User)
+        .join(Enrollment, Enrollment.user_id == User.id)
+        .filter(Enrollment.course_id == course_id)
+        .filter(User.role == UserRole.STUDENT)
+        .order_by(User.first_name, User.last_name)
+        .all()
+    )
+    
+    # 返回学生信息
+    result = []
+    for student in students:
+        enrollment = Enrollment.query.filter_by(
+            course_id=course_id,
+            user_id=student.id
+        ).first()
+        
+        result.append({
+            "id": student.id,
+            "first_name": student.first_name,
+            "last_name": student.last_name,
+            "username": student.username,
+            "enrolled_at": enrollment.enrolled_at.isoformat() if enrollment else None
+        })
+    
+    return jsonify(result), 200
