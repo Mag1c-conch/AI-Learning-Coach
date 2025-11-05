@@ -13,12 +13,13 @@ import { styled, alpha } from "@mui/material/styles";
 import InputBase from "@mui/material/InputBase";
 import SearchIcon from "@mui/icons-material/Search";
 import CircleIcon from "@mui/icons-material/Circle";
-import NotificationsIcon from "@mui/icons-material/Notifications";
+// import NotificationsIcon from "@mui/icons-material/Notifications"; // ❌ 不再需要
 import Sidebar from "../components/Sidebar.jsx";
 import { CircularProgress, circularProgressClasses } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
 import { ButtonBase } from "@mui/material";
 import http from "../api/http";
+import NotificationsBell from "../components/Notifications.jsx"; // ✅ 全局同步小铃铛
 
 /** ========= 常量 & 工具 ========= */
 const ENROLL_EVENT = "enrollment:updated";
@@ -563,7 +564,7 @@ function CourseDetail() {
     return (done / total) * 100;
   }, [assignments]);
 
-// 课程唯一键：优先 code，没 code 用 id
+  // 课程唯一键：优先 code，没 code 用 id
   const courseKey =
     currentCourse?.code ??
     (currentCourse?.id != null ? String(currentCourse.id) : "course");
@@ -647,7 +648,7 @@ function CourseDetail() {
       >
         <Divider sx={{ position: "sticky", top: 56, zIndex: 1, mb: 2, opacity: 0.5 }} />
 
-        {/* 右上角 Search + 通知 */}
+        {/* 右上角 Search + 全局通知 */}
         <Box
           sx={{
             display: "flex",
@@ -664,9 +665,8 @@ function CourseDetail() {
             </SearchIconWrapper>
             <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
           </Search>
-          <IconButton aria-label="Notifications">
-            <NotificationsIcon />
-          </IconButton>
+          {/* ✅ 统一的通知铃铛（与 Dashboard 等页面共享数据和弹窗） */}
+          <NotificationsBell />
         </Box>
 
         {/* 页面标题 */}
@@ -800,7 +800,6 @@ function CourseDetail() {
             </ButtonBase>
           </Paper>
 
-
           {/* Assignments（仅任务型 materials） */}
           <Paper elevation={1} sx={{ gridColumn: "1 / -1", p: 2, borderRadius: 2, mt: 5 }}>
             <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
@@ -829,23 +828,21 @@ function CourseDetail() {
                   key={a.id}
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: { xs: "1fr", md: "auto auto 2fr 1fr auto" }, // 勾选 | 类型 | 标题 | 剩余时间 | 提交
+                    gridTemplateColumns: { xs: "1fr", md: "auto 2fr auto" }, // 类型 | 标题 | 提交/剩余
                     alignItems: "center",
                     columnGap: 2,
                     rowGap: 2,
                     py: 1.2,
                   }}
                 >
-
                   <Chip label={prettyKind(kind)} size="small" variant="outlined" sx={kindChipSX(kind)} />
 
                   <Typography fontWeight={600} noWrap title={a.title}>
                     {a.title}
                   </Typography>
 
-                  {timeLeft && <Chip label={timeLeft} size="small" variant="outlined" sx={timeLeftChipSX} />}
-
-                  <Box sx={{ justifySelf: "end", display: "flex", gap: 1 }}>
+                  <Box sx={{ justifySelf: "end", display: "flex", gap: 1, alignItems: "center" }}>
+                    {timeLeft && <Chip label={timeLeft} size="small" variant="outlined" sx={timeLeftChipSX} />}
                     <Button
                       size="small"
                       variant="contained"

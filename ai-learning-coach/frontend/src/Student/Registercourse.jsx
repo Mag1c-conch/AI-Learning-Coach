@@ -15,7 +15,7 @@ import {
 import { styled, alpha } from "@mui/material/styles";
 import Sidebar from "../components/Sidebar.jsx";
 import SearchIcon from "@mui/icons-material/Search";
-import NotificationsIcon from "@mui/icons-material/Notifications";
+import NotificationsBell from "../components/Notifications.jsx";
 import CircleIcon from "@mui/icons-material/Circle";
 import { DataGrid } from "@mui/x-data-grid";
 import http from "../api/http";
@@ -204,7 +204,7 @@ const Registercourse = () => {
             <SearchIconWrapper><SearchIcon /></SearchIconWrapper>
             <SearchInput placeholder="course code / teacher" value={query} onChange={(e) => setQuery(e.target.value)} />
           </Search>
-          <IconButton><NotificationsIcon /></IconButton>
+          <IconButton><NotificationsBell /></IconButton>
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>

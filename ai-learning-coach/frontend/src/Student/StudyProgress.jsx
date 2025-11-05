@@ -21,7 +21,7 @@ import {
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
-import NotificationsIcon from "@mui/icons-material/Notifications";
+import NotificationsBell from "../components/Notifications.jsx";
 import CircleIcon from "@mui/icons-material/Circle";
 import Sidebar from "../components/Sidebar.jsx";
 import { useParams, useNavigate } from "react-router-dom";
@@ -522,7 +522,7 @@ function StudyProgress() {
             <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
           </Search>
           <IconButton>
-            <NotificationsIcon />
+            <NotificationsBell />
           </IconButton>
         </Box>
 

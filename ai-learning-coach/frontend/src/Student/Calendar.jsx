@@ -7,7 +7,7 @@ import {
 import { styled, alpha } from "@mui/material/styles";
 import InputBase from "@mui/material/InputBase";
 import SearchIcon from "@mui/icons-material/Search";
-import NotificationsIcon from "@mui/icons-material/Notifications";
+import NotificationsBell from "../components/Notifications.jsx";
 import CircleIcon from "@mui/icons-material/Circle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import Sidebar from "../components/Sidebar.jsx";
@@ -222,7 +222,7 @@ export default function TimeTable() {
             />
           </Search>
           <IconButton>
-            <NotificationsIcon />
+            <NotificationsBell />
           </IconButton>
         </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>

@@ -13,35 +13,20 @@ import {
   CardContent,
   Divider,
   CircularProgress,
-  Badge,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  List,
-  ListItemButton,
-  ListItemText,
-  ListItemAvatar,
-  Avatar,
-  Chip,
-  Button,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import { circularProgressClasses } from "@mui/material/CircularProgress";
 import Sidebar from "../components/Sidebar.jsx";
 import SearchIcon from "@mui/icons-material/Search";
-import NotificationsIcon from "@mui/icons-material/Notifications";
 import CircleIcon from "@mui/icons-material/Circle";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
-import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
-import SchoolIcon from "@mui/icons-material/School";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
 import http from "../api/http";
+import NotificationsBell from "../components/Notifications.jsx"; // ✅ 新增：全局小铃铛
 
 // ===== Search box format =====
 const Search = styled("div")(({ theme }) => ({
@@ -602,77 +587,6 @@ const Dashboard = () => {
     return () => window.removeEventListener("storage", onStorage);
   }, [uid, courses]);
 
-  // ===================== Notifications (Feedback) =====================
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [notifs, setNotifs] = useState([]);
-  const [notifLoading, setNotifLoading] = useState(false);
-
-  const unreadCount = useMemo(
-    () => (Array.isArray(notifs) ? notifs.filter((n) => !n.is_read).length : 0),
-    [notifs]
-  );
-
-  const fetchNotifications = useCallback(async () => {
-    if (!uid) return;
-    setNotifLoading(true);
-    try {
-      const params = new URLSearchParams({
-        student_id: String(uid),
-        include_related: "true",
-      });
-      const { data } = await http.get(`/feedback?${params.toString()}`);
-      setNotifs(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error("Failed to load notifications", e?.response?.data || e.message);
-    } finally {
-      setNotifLoading(false);
-    }
-  }, [uid]);
-
-  const markNotificationRead = useCallback(
-    async (id) => {
-      if (!uid) return;
-      try {
-        await http.patch(`/feedback/${id}/read`, { student_id: uid, is_read: true });
-        setNotifs((list) =>
-          list.map((n) => (n.id === id ? { ...n, is_read: true, read_at: new Date().toISOString() } : n))
-        );
-      } catch (e) {
-        console.error("Failed to mark read", e?.response?.data || e.message);
-      }
-    },
-    [uid]
-  );
-
-  const markAllRead = useCallback(async () => {
-    if (!uid) return;
-    const pending = notifs.filter((n) => !n.is_read);
-    for (const n of pending) {
-      try {
-        await http.patch(`/feedback/${n.id}/read`, { student_id: uid, is_read: true });
-      } catch (e) {
-        console.error("Failed to mark one read", e?.response?.data || e.message);
-      }
-    }
-    setNotifs((list) => list.map((n) => ({ ...n, is_read: true, read_at: n.read_at ?? new Date().toISOString() })));
-  }, [uid, notifs]);
-
-  const openNotif = useCallback(async () => {
-    setNotifOpen(true);
-    await fetchNotifications();
-  }, [fetchNotifications]);
-
-  // 首次与轮询（60s）
-  useEffect(() => {
-    if (!uid) {
-      setNotifs([]);
-      return;
-    }
-    fetchNotifications();
-    const id = window.setInterval(fetchNotifications, 60000);
-    return () => window.clearInterval(id);
-  }, [uid, fetchNotifications]);
-
   // ===================== render =====================
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
@@ -689,13 +603,8 @@ const Dashboard = () => {
             <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
           </Search>
 
-          <Tooltip title="Notifications">
-            <IconButton onClick={openNotif}>
-              <Badge badgeContent={unreadCount} color="error" overlap="circular">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
-          </Tooltip>
+          {/* ✅ 统一使用全局小铃铛（任何页面都同样放一个即可同步） */}
+          <NotificationsBell />
         </Box>
 
         {/* Title */}
@@ -813,96 +722,6 @@ const Dashboard = () => {
           </Grid>
         </Box>
       </Box>
-
-      {/* ===== Notifications Dialog ===== */}
-      <Dialog open={notifOpen} onClose={() => setNotifOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Feedback Notifications</DialogTitle>
-        <DialogContent dividers>
-          {notifLoading ? (
-            <Box sx={{ py: 4, textAlign: "center" }}>
-              <CircularProgress />
-              <Typography variant="body2" sx={{ mt: 1 }}>Loading…</Typography>
-            </Box>
-          ) : !notifs.length ? (
-            <Typography variant="body2">No notifications.</Typography>
-          ) : (
-            <List dense>
-              {notifs.map((n) => {
-                const courseLabel =
-                  n.course?.code || n.course?.name || (n.course_id ? `Course #${n.course_id}` : "Course");
-                const isUnread = !n.is_read;
-                return (
-                  <ListItemButton
-                    key={n.id}
-                    alignItems="flex-start"
-                    onClick={() => {
-                      if (isUnread) markNotificationRead(n.id);
-                    }}
-                    sx={{
-                      borderRadius: 1,
-                      mb: .5,
-                      bgcolor: isUnread ? "action.hover" : "transparent",
-                    }}
-                  >
-                    <ListItemAvatar>
-                      <Avatar>
-                        {n.assignment_id ? <AssignmentTurnedInIcon /> : <SchoolIcon />}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                            {n.title || "New feedback"}
-                          </Typography>
-                          {isUnread && <Chip size="small" color="error" label="NEW" />}
-                          {courseLabel && (
-                            <Chip size="small" variant="outlined" label={courseLabel} sx={{ ml: .5 }} />
-                          )}
-                          {n.assignment?.title && (
-                            <Chip size="small" variant="outlined" label={n.assignment.title} />
-                          )}
-                        </Box>
-                      }
-                      secondary={
-                        <>
-                          <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                            {n.content}
-                          </Typography>
-                          {n.created_at && (
-                            <Typography variant="caption" color="text.secondary">
-                              {new Date(n.created_at).toLocaleString()}
-                            </Typography>
-                          )}
-                        </>
-                      }
-                    />
-                    {!n.is_read && (
-                      <Button
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          markNotificationRead(n.id);
-                        }}
-                      >
-                        Mark read
-                      </Button>
-                    )}
-                  </ListItemButton>
-                );
-              })}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" onClick={markAllRead} disabled={!unreadCount}>
-            Mark all as read
-          </Button>
-          <Button variant="contained" onClick={() => setNotifOpen(false)}>
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };
