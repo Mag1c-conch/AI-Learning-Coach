@@ -19,6 +19,7 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
+  CircularProgress,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
@@ -212,6 +213,10 @@ export default function Dashboard() {
   const [courses, setCourses] = useState([]);  // 初始化为空数组，等待从后端加载
   const [coursesLoading, setCoursesLoading] = useState(true);  // 初始为true，显示加载状态
 
+  // —— 学生列表状态
+  const [allStudents, setAllStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+
   // —— 翻页（固定显示 3 张）
   const CARDS_PER_PAGE = 3;
   const [page, setPage] = useState(0);
@@ -313,9 +318,67 @@ export default function Dashboard() {
     }
   };
 
-  // —— 组件挂载时获取课程列表
+  // —— 从后端获取所有学生列表
+  const fetchAllStudents = async () => {
+    const adminId = getCurrentUserId();
+    if (!adminId) {
+      setAllStudents([]);
+      return;
+    }
+    
+    setStudentsLoading(true);
+    try {
+      // 先获取教师的所有课程
+      const coursesResponse = await fetch(`http://localhost:5001/courses?created_by=${adminId}`);
+      if (!coursesResponse.ok) {
+        setAllStudents([]);
+        setStudentsLoading(false);
+        return;
+      }
+      
+      const coursesData = await coursesResponse.json();
+      console.log('Fetching students for courses:', coursesData);
+      
+      // 获取每个课程的学生
+      const studentPromises = coursesData.map(async (course) => {
+        try {
+          const response = await fetch(`http://localhost:5001/courses/${course.id}/students`);
+          if (response.ok) {
+            const students = await response.json();
+            // 为每个学生添加课程信息
+            return students.map(student => ({
+              name: `${student.first_name} ${student.last_name}`,
+              studentId: student.username,
+              course: course.code,
+              percent: 0, // Progress暂时设为0
+              id: student.id,
+              course_id: course.id
+            }));
+          }
+          return [];
+        } catch (err) {
+          console.error(`Error fetching students for course ${course.id}:`, err);
+          return [];
+        }
+      });
+      
+      const allStudentsArrays = await Promise.all(studentPromises);
+      const flattenedStudents = allStudentsArrays.flat();
+      
+      console.log('Fetched all students:', flattenedStudents);
+      setAllStudents(flattenedStudents);
+    } catch (err) {
+      console.error('Error fetching all students:', err);
+      setAllStudents([]);
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
+  // —— 组件挂载时获取课程列表和学生列表
   useEffect(() => {
     fetchCourses();
+    fetchAllStudents();
   }, []);
 
   // —— 处理表单输入
@@ -673,20 +736,33 @@ export default function Dashboard() {
         >
           <Typography variant="h6" sx={{ m: 0 }}>Student Progress</Typography>
         </Box>
-        <StudentProgress
-          rows={[
-            { name: 'Jack',   studentId: 'zXXXXXXXX', course: 'Math101', percent: 30 },
-            { name: 'Suzuki', studentId: 'zXXXXXXXX', course: 'Math108', percent: 55 },
-            { name: 'Tom',    studentId: 'zXXXXXXXX', course: 'Math108', percent: 70 },
-            { name: 'Jerry',  studentId: 'zXXXXXXXX', course: 'Math101', completed: true },
-            { name: 'Jack',   studentId: 'zXXXXXXXX', course: 'Math101', percent: 30 },
-            { name: 'Suzuki', studentId: 'zXXXXXXXX', course: 'Math108', percent: 55 },
-            { name: 'Tom',    studentId: 'zXXXXXXXX', course: 'Math108', percent: 70 },
-            { name: 'Jerry',  studentId: 'zXXXXXXXX', course: 'Math101', completed: true },
-            { name: 'Amy',    studentId: 'zYYYYYYYY', course: 'Math108', percent: 10 },
-            { name: 'Bob',    studentId: 'zZZZZZZZZ', course: 'Math101', percent: 45 },
-          ]}
-        />
+        {studentsLoading ? (
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            py: 4,
+            border: '1px solid rgba(0,0,0,0.2)',
+            borderRadius: 2,
+            bgcolor: '#fff'
+          }}>
+            <CircularProgress />
+            <Typography sx={{ ml: 2, color: '#6b7280' }}>Loading students...</Typography>
+          </Box>
+        ) : allStudents.length === 0 ? (
+          <Box sx={{ 
+            p: 3, 
+            textAlign: 'center', 
+            bgcolor: '#f5f5f5', 
+            borderRadius: 2,
+            border: '1px solid rgba(0,0,0,0.1)'
+          }}>
+            <Typography variant="body2" color="text.secondary">
+              No students enrolled in your courses yet.
+            </Typography>
+          </Box>
+        ) : (
+          <StudentProgress rows={allStudents} />
+        )}
       </Box>
 
       {/* Model：Add  */}
