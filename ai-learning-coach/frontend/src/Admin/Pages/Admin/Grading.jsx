@@ -676,23 +676,21 @@ export default function Grading() {
                         mt: 2,
                         border: "2px solid #e0e0e0",
                         borderRadius: 1,
-                        height: 400,
+                        height: 600,
                         position: "relative",
-                        bgcolor: "#f5f5f5",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        bgcolor: "#fff",
+                        overflow: "hidden",
                       }}
                     >
-                      <Box sx={{ textAlign: "center" }}>
-                        <PictureAsPdfIcon sx={{ fontSize: 64, color: "#d32f2f", mb: 2 }} />
-                        <Typography variant="body2" color="text.secondary">
-                          PDF File: {submission.original_name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                          Click "Download File" button above to view full content
-                        </Typography>
-                      </Box>
+                      <iframe
+                        src={`http://localhost:5001/materials/${submission.id}/download?preview=true`}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          border: "none",
+                        }}
+                        title="PDF Preview"
+                      />
                     </Box>
                   )}
 

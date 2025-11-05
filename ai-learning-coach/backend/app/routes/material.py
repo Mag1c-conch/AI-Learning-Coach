@@ -331,6 +331,7 @@ def download_material(material_id: int):
     """
     Streams the stored file associated with the material record.
     Returns 200 with the file content when available.
+    Query parameter 'preview=true' to view inline instead of download.
     """
     material = Material.query.get_or_404(material_id)
 
@@ -338,9 +339,12 @@ def download_material(material_id: int):
     if not os.path.isfile(file_path):
         abort(404, description="file not found on server")
 
+    # 支持预览模式
+    preview_mode = request.args.get('preview', 'false').lower() in ['true', '1', 'yes']
+    
     return send_file(
         file_path,
-        as_attachment=True,
+        as_attachment=not preview_mode,  # preview模式时as_attachment=False
         download_name=material.original_name,
     )
 
