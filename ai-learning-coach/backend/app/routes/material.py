@@ -1,8 +1,9 @@
 ﻿from flask import Blueprint, abort, current_app, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 import os
-from datetime import datetime
-from sqlalchemy import or_
+from datetime import datetime, timezone
+from sqlalchemy import or_, select
+from zoneinfo import ZoneInfo
 
 from ..extensions import db
 from ..models import Assignment, Course, Enrollment, Material, User, UserRole
@@ -15,7 +16,6 @@ def _reserve_unique_filename(directory: str, filename: str) -> str:
     name, ext = os.path.splitext(safe_name)
     candidate = safe_name
     counter = 1
-
     while os.path.exists(os.path.join(directory, candidate)):
         candidate = f"{name}_{counter}{ext}"
         counter += 1
@@ -56,8 +56,6 @@ def _sanitize_custom_basename(name: str) -> str:
     return base
 
 
-
-
 def _parse_bool(value):
     if value is None:
         return None
@@ -71,20 +69,74 @@ def _parse_bool(value):
     return None
 
 
+def _iso_utc(dt: datetime | None) -> str | None:
+    """将 datetime 统一转换为 UTC 的 ISO8601(Z 结尾) 字符串。"""
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def _parse_due_date(raw):
+    """
+    解析多种可能格式的截止时间：
+    - ISO8601（含/不含时区，'Z' 也可）
+    - 'YYYY-MM-DD'（默认补 23:59:59）
+    - 'YYYY-MM-DD HH:mm' / 'YYYY-MM-DD HH:mm:ss'
+    - 时间戳（秒或毫秒，数字或数字字符串）
+    无时区的输入按本地时区（config: LOCAL_TZ，默认 Australia/Sydney）解释；
+    最终返回 tz-aware 的 UTC datetime。
+    """
     if not raw:
         return None
+
+    LOCAL_TZ = ZoneInfo(current_app.config.get("LOCAL_TZ", "Australia/Sydney"))
+
+    # 已经是 datetime
     if isinstance(raw, datetime):
-        return raw
-    normalized = str(raw).strip()
-    if not normalized:
+        dt = raw
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=LOCAL_TZ)
+        return dt.astimezone(timezone.utc)
+
+    s = str(raw).strip()
+    if not s:
         return None
-    if normalized.endswith("Z"):
-        normalized = normalized[:-1] + "+00:00"
+
+    # 纯数字 → 时间戳
+    if s.isdigit():
+        iv = int(s)
+        if iv < 10**12:  # 秒
+            return datetime.fromtimestamp(iv, tz=timezone.utc)
+        return datetime.fromtimestamp(iv / 1000, tz=timezone.utc)  # 毫秒
+
+    # 兼容 'Z' 结尾
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+
+    # 'YYYY-MM-DD' → 当天 23:59:59，本地时区
+    if len(s) == 10 and s[4] == "-" and s[7] == "-" and s[:4].isdigit():
+        try:
+            base = datetime.strptime(s, "%Y-%m-%d")
+            dt = base.replace(hour=23, minute=59, second=59, tzinfo=LOCAL_TZ)
+            return dt.astimezone(timezone.utc)
+        except ValueError:
+            abort(400, description="assignment_due_date invalid 'YYYY-MM-DD'")
+
+    # 'YYYY-MM-DD HH:mm(:ss)?' → 替空格为 'T'
+    if " " in s and s[4] == "-" and s[7] == "-":
+        s = s.replace(" ", "T")
+
+    # 一般 ISO8601
     try:
-        return datetime.fromisoformat(normalized)
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=LOCAL_TZ)
+        return dt.astimezone(timezone.utc)
     except ValueError:
-        abort(400, description="assignment_due_date must be ISO 8601 formatted datetime string")
+        abort(400, description="assignment_due_date must be ISO8601/date/timestamp")
+
 
 def _build_submission_stored_name(course_dir: str, assignment: Assignment, student: User, original_name: str) -> tuple[str, str]:
     assignment_dir = os.path.join(course_dir, str(assignment.id))
@@ -124,13 +176,10 @@ def list_materials():
     - course_id: int, filter materials by course
     - include_submissions: bool, when true include student assignment submissions (default false)
     Returns 200 with an array of material JSON objects.
+    注：为带有 assignment_id 的 materials 注入最小 assignment 字段（含 UTC/ISO 的 due_date）。
     """
     course_id = request.args.get("course_id", type=int)
-    include_submissions = request.args.get("include_submissions", "false").lower() in {
-        "true",
-        "1",
-        "yes",
-    }
+    include_submissions = request.args.get("include_submissions", "false").lower() in {"true", "1", "yes"}
 
     query = Material.query
     if course_id is not None:
@@ -141,7 +190,29 @@ def list_materials():
         query = query.filter(or_(Material.assignment_id.is_(None), Material.file_type != "assignment_submission"))
 
     materials = query.order_by(Material.uploaded_at.desc()).all()
-    return jsonify([material.to_dict() for material in materials]), 200
+
+    # 批量查 assignment，避免前端因缺少 due_date 只能退回 uploaded_at
+    assign_ids = {m.assignment_id for m in materials if m.assignment_id}
+    assign_map = {}
+    if assign_ids:
+        rows = db.session.execute(
+            select(Assignment).where(Assignment.id.in_(assign_ids))
+        ).scalars().all()
+        for a in rows:
+            assign_map[a.id] = a
+
+    out = []
+    for m in materials:
+        d = m.to_dict()
+        if m.assignment_id and m.assignment_id in assign_map:
+            a = assign_map[m.assignment_id]
+            d["assignment"] = {
+                "id": a.id,
+                "title": a.title,
+                "due_date": _iso_utc(a.due_date),  # 标准化为 Z 结尾
+            }
+        out.append(d)
+    return jsonify(out), 200
 
 
 # upload new material to a course (only admin)
@@ -174,7 +245,6 @@ def upload_material():
 
     course = Course.query.get_or_404(course_id)
     user = User.query.get_or_404(uploaded_by)
-
     if user.role != UserRole.ADMIN:
         abort(403, description="only administrators may upload materials")
 
@@ -204,9 +274,7 @@ def upload_material():
         else:
             title_candidate = request.form.get("assignment_title")
             if not title_candidate:
-                title_candidate = custom_name or os.path.splitext(original_name)[0]
-            if not title_candidate:
-                title_candidate = f"{file_type.title()} task"
+                title_candidate = custom_name or os.path.splitext(original_name)[0] or f"{file_type.title()} task"
 
             description = (
                 request.form.get("assignment_description")
@@ -226,7 +294,7 @@ def upload_material():
                 teacher_id=user.id,
                 title=title_candidate,
                 description=description,
-                due_date=due_date,
+                due_date=due_date,  # 已标准化为 UTC tz-aware
                 optional=bool(optional_flag) if optional_flag is not None else False,
             )
             db.session.add(assignment)
@@ -272,8 +340,13 @@ def upload_material():
 
     payload = material.to_dict()
     if assignment:
-        payload["assignment"] = assignment.to_dict()
+        # 将 due_date 以 Z 结尾 ISO 字符串返回，方便前端稳定解析
+        payload["assignment"] = {
+            **assignment.to_dict(),
+            "due_date": _iso_utc(assignment.due_date),
+        }
     return jsonify(payload), 201
+
 
 @bp.route("/<int:material_id>", methods=["DELETE"])
 def delete_material(material_id: int):
@@ -292,6 +365,7 @@ def delete_material(material_id: int):
         abort(403, description="only administrators may delete materials")
 
     material = Material.query.get_or_404(material_id)
+
     assignment_to_remove = None
     extra_materials = []
     if material.assignment_id and material.file_type in {"assignment", "quiz", "lab"}:
@@ -325,6 +399,7 @@ def delete_material(material_id: int):
         db.session.rollback()
         abort(500, description=str(exc))
 
+
 # 下载文件
 @bp.route("/<int:material_id>/download", methods=["GET"])
 def download_material(material_id: int):
@@ -334,7 +409,6 @@ def download_material(material_id: int):
     Query parameter 'preview=true' to view inline instead of download.
     """
     material = Material.query.get_or_404(material_id)
-
     file_path = _material_file_path(material)
     if not os.path.isfile(file_path):
         abort(404, description="file not found on server")
@@ -347,6 +421,7 @@ def download_material(material_id: int):
         as_attachment=not preview_mode,  # preview模式时as_attachment=False
         download_name=material.original_name,
     )
+
 
 # 提交文件（students）
 @bp.route("/assignments/<int:assignment_id>/submissions", methods=["POST"])
@@ -382,14 +457,11 @@ def submit_assignment_material(assignment_id: int):
     os.makedirs(course_dir, exist_ok=True)
 
     assignment_dir, stored_name = _build_submission_stored_name(
-        course_dir,
-        assignment,
-        student,
-        file.filename,
+        course_dir, assignment, student, file.filename
     )
     file_path = os.path.join(assignment_dir, stored_name)
 
-    # Replace previous submissions from same student
+    # 替换同一学生的旧提交
     previous_submissions = Material.query.filter_by(
         assignment_id=assignment.id,
         uploaded_by=student.id,
@@ -458,5 +530,3 @@ def list_assignment_submissions(assignment_id: int):
 
     submissions = query.order_by(Material.uploaded_at.desc()).all()
     return jsonify([_material_with_student_dict(m) for m in submissions]), 200
-
-
