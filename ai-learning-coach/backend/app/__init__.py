@@ -6,7 +6,7 @@ import os
 from redis import Redis
 
 from .extensions import db, migrate
-from .routes import ai_assistant, assignment, auth, course, feedback, material
+from .routes import ai_assistant, assignment, auth, course,material
 
 
 def create_app():
@@ -83,7 +83,7 @@ def create_app():
     # ai assistant blueprint
     app.register_blueprint(ai_assistant.bp)
     # feedback notifications blueprint
-    app.register_blueprint(feedback.bp)
+    #app.register_blueprint(feedback.bp)
     return app
 
 
