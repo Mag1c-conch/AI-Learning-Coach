@@ -1,9 +1,6 @@
-import React, { useMemo, useState, useEffect } from "react";
-import {
-  Box,
-  Typography,
-  IconButton,
-} from "@mui/material";
+// src/Student/TimeTable.jsx
+import React, { useState, useEffect } from "react";
+import { Box, Typography, IconButton, Button } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import InputBase from "@mui/material/InputBase";
 import SearchIcon from "@mui/icons-material/Search";
@@ -14,47 +11,123 @@ import Sidebar from "../components/Sidebar.jsx";
 import { Badge, Calendar, Modal, Form, Input, Select, TimePicker, message } from "antd";
 import dayjs from "dayjs";
 
-// Search box format
+/* ================= Search box ================= */
 const Search = styled("div")(({ theme }) => ({
-    position: "relative",
-    borderRadius: theme.shape.borderRadius,
-    backgroundColor: theme.palette.action.hover,
-    "&:hover": {
-      backgroundColor: alpha(theme.palette.common.black, 0.1),
-    },
-    display: "flex",
-    alignItems: "center",
-    mr: theme.spacing(2),
-    ml: 0,
-    width: "200px",
-    pl: theme.spacing(1),
-    [theme.breakpoints.up("sm")]: {
-      width: "250px",
-    },
-  }));
-  
-  const SearchIconWrapper = styled("div")(({ theme }) => ({
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    p: theme.spacing(0, 1),
-    height: "100%",
-    color: "rgba(0,0,0,0.5)",
-  }));
-  
-  const StyledInputBase = styled(InputBase)(({ theme }) => ({
-    color: "inherit",
-    width: "100%",
-    "& .MuiInputBase-input": {
-      p: theme.spacing(1, 1, 1, 0),
-      transition: theme.transitions.create("width"),
-      width: "100%",
-    },
-  }));
+  position: "relative",
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: theme.palette.action.hover,
+  "&:hover": { backgroundColor: alpha(theme.palette.common.black, 0.1) },
+  display: "flex",
+  alignItems: "center",
+  marginRight: theme.spacing(2),
+  marginLeft: 0,
+  width: "200px",
+  paddingLeft: theme.spacing(1),
+  [theme.breakpoints.up("sm")]: { width: "250px" },
+}));
 
+const SearchIconWrapper = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: theme.spacing(0, 1),
+  height: "100%",
+  color: "rgba(0,0,0,0.5)",
+}));
+
+const StyledInputBase = styled(InputBase)(({ theme }) => ({
+  color: "inherit",
+  width: "100%",
+  "& .MuiInputBase-input": {
+    padding: theme.spacing(1, 1, 1, 0),
+    transition: theme.transitions.create("width"),
+    width: "100%",
+  },
+}));
+
+/* ============== Date key（要在前面，后面函数会用到） ============== */
 const toKey = (value) => value.format("DD/MM/YYYY");
 
+/* ============== Shared helpers（与 StudyProgress 对齐） ============== */
+function getCurrentUserId() {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    const user = JSON.parse(token);
+    return user?.id || user?.user_id || null;
+  } catch {
+    return null;
+  }
+}
+
+// StudyProgress 写入 AI 计划事件用的 Key
+const TT_KEY = (uid) => `timetableEvents:${uid || "anon"}`;
+
+// 读取 AI 计划事件（StudyProgress 那边写入的）
+function ttGetEvents(uid) {
+  try {
+    const raw = localStorage.getItem(TT_KEY(uid));
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+/** ISO -> Day.js；容错非法值 */
+function safeParseISO(iso) {
+  const d = dayjs(iso);
+  return d.isValid() ? d : null;
+}
+
+/** 把 AI 计划事件数组 -> 当前日历本地结构的差量 { "DD/MM/YYYY": [task...] } */
+function aiEventsToCalendarDelta(events) {
+  const delta = {};
+  for (const e of Array.isArray(events) ? events : []) {
+    // e: { title, start(ISO), end(ISO), courseId?, materialId?, meta? }
+    const start = safeParseISO(e.start);
+    if (!start) continue;
+
+    const key = toKey(start);
+    const time = start.format("HH:mm");
+    const title = e.title || "Study Session";
+    const id =
+      e.id ||
+      `${e.start}|${e.end}|${title}|${e.courseId ?? ""}|${e.materialId ?? ""}`;
+
+    if (!delta[key]) delta[key] = [];
+    delta[key].push({
+      id,
+      title,
+      type: "success", // AntD 绿色点
+      time,
+      desc: (e.meta && e.meta.source === "ai-plan") ? "AI Plan" : undefined,
+    });
+  }
+  return delta;
+}
+
+/** 合并差量到现有 tasks（按 id 去重） */
+function mergeCalendarTasks(oldTasks, delta) {
+  const next = { ...oldTasks };
+  for (const [key, arr] of Object.entries(delta)) {
+    const prev = next[key] || [];
+    const seen = new Set(prev.map((t) => t.id));
+    const merged = [...prev];
+    for (const t of arr) {
+      if (!seen.has(t.id)) {
+        merged.push(t);
+        seen.add(t.id);
+      }
+    }
+    if (merged.length) next[key] = merged;
+  }
+  return next;
+}
+
 export default function TimeTable() {
+  const uid = getCurrentUserId();
+
   const [tasks, setTasks] = useState(() => {
     try {
       const raw = localStorage.getItem("calendar_tasks_v1");
@@ -64,16 +137,50 @@ export default function TimeTable() {
     }
   });
 
-  // chose date
+  // chosen date
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
-  // store in localcategory
+
+  /* ====== 本地持久化 ====== */
   useEffect(() => {
     localStorage.setItem("calendar_tasks_v1", JSON.stringify(tasks));
   }, [tasks]);
 
-  // popup window for individual tasks
+  /* ====== 首次加载：导入已存在的 AI 计划事件 ====== */
+  useEffect(() => {
+    const events = ttGetEvents(uid);
+    if (events.length) {
+      const delta = aiEventsToCalendarDelta(events);
+      setTasks((prev) => mergeCalendarTasks(prev, delta));
+    }
+  }, [uid]);
+
+  /* ====== 监听 StudyProgress 的广播：有新“同步到 Timetable”时导入 ====== */
+  useEffect(() => {
+    const onUpdated = () => {
+      const events = ttGetEvents(uid);
+      const delta = aiEventsToCalendarDelta(events);
+      setTasks((prev) => mergeCalendarTasks(prev, delta));
+      message.success("Imported study plan to calendar");
+    };
+    window.addEventListener("timetable:updated", onUpdated);
+    return () => window.removeEventListener("timetable:updated", onUpdated);
+  }, [uid]);
+
+  /* ====== 手动导入按钮（可选） ====== */
+  const handleManualImport = () => {
+    const events = ttGetEvents(uid);
+    const delta = aiEventsToCalendarDelta(events);
+    if (!Object.keys(delta).length) {
+      message.info("No AI plan events to import");
+      return;
+    }
+    setTasks((prev) => mergeCalendarTasks(prev, delta));
+    message.success("Imported study plan to calendar");
+  };
+
+  /* ====== 选择日期 → 打开新增任务弹窗 ====== */
   const handleSelectDate = (value) => {
     setSelectedDate(value);
     setModalOpen(true);
@@ -81,7 +188,7 @@ export default function TimeTable() {
     form.setFieldsValue({ type: "success", time: dayjs("09:00", "HH:mm") });
   };
 
-  // update new tasks
+  /* ====== 新增任务（手动添加） ====== */
   const handleAddTask = async () => {
     try {
       const values = await form.validateFields();
@@ -99,21 +206,23 @@ export default function TimeTable() {
       });
       setModalOpen(false);
       message.success("Task added");
-    } catch (e) {
+    } catch {
+      /* ignore */
     }
   };
 
-  // delate task
-  const handleDeleteTask = (key /* DateKey */, id /* task id */) => {
+  /* ====== 删除任务 ====== */
+  const handleDeleteTask = (key, id) => {
     setTasks((prev) => {
       const next = { ...prev };
       next[key] = (next[key] || []).filter((t) => t.id !== id);
-      if (!next[key].length) delete next[key]; 
+      if (!next[key].length) delete next[key];
       return next;
     });
     message.success("Task deleted");
   };
 
+  /* ====== 月单元格（可自定义展示统计） ====== */
   const monthCellRender = (value) => {
     if (value.month() === 8) {
       return (
@@ -126,18 +235,14 @@ export default function TimeTable() {
     return null;
   };
 
-  // day task
-  const dateCellRender = (value /* dayjs */) => {
+  /* ====== 日期单元格：渲染任务列表 ====== */
+  const dateCellRender = (value) => {
     const key = toKey(value);
     const list = tasks[key] || [];
-
     if (!list.length) return null;
 
     return (
-      <ul
-        className="events"
-        style={{ textAlign: "left", paddingLeft: 0, margin: 0 }}
-      >
+      <ul className="events" style={{ textAlign: "left", paddingLeft: 0, margin: 0 }}>
         {list.map((item) => (
           <li
             key={item.id}
@@ -152,15 +257,13 @@ export default function TimeTable() {
           >
             <Badge
               status={item.type} // "success"|"warning"|"error"
-              text={
-                item.time ? `${item.time} · ${item.title}` : item.title
-              }
+              text={item.time ? `${item.time} · ${item.title}` : item.title}
             />
             <IconButton
               aria-label="delete task"
               size="small"
               onClick={(e) => {
-                e.stopPropagation(); 
+                e.stopPropagation();
                 handleDeleteTask(key, item.id);
               }}
             >
@@ -172,7 +275,6 @@ export default function TimeTable() {
     );
   };
 
-  
   const cellRender = (current, info) => {
     if (info.type === "date") return dateCellRender(current);
     if (info.type === "month") return monthCellRender(current);
@@ -192,6 +294,7 @@ export default function TimeTable() {
           position: "relative",
         }}
       >
+        {/* 顶部分割线 */}
         <Box
           sx={{
             position: "absolute",
@@ -202,6 +305,8 @@ export default function TimeTable() {
             backgroundColor: "rgba(21,19,19,0.3)",
           }}
         />
+
+        {/* 右上角工具区 */}
         <Box
           sx={{
             display: "flex",
@@ -216,15 +321,17 @@ export default function TimeTable() {
             <SearchIconWrapper>
               <SearchIcon />
             </SearchIconWrapper>
-            <StyledInputBase
-              placeholder="Search"
-              inputProps={{ "aria-label": "Search" }}
-            />
+            <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
           </Search>
           <IconButton>
             <NotificationsBell />
           </IconButton>
+          <Button variant="outlined" size="small" onClick={handleManualImport}>
+            Import AI Plan
+          </Button>
         </Box>
+
+        {/* 标题 */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
           <Typography variant="h4" sx={{ fontWeight: 800 }}>
             Calendar
@@ -234,6 +341,8 @@ export default function TimeTable() {
             Student
           </Typography>
         </Box>
+
+        {/* 日历 */}
         <Box
           sx={{
             width: "100%",
@@ -248,7 +357,7 @@ export default function TimeTable() {
         >
           <Calendar
             cellRender={cellRender}
-            onSelect={handleSelectDate}  
+            onSelect={handleSelectDate}
             style={{
               width: "100%",
               fontSize: 16,
@@ -257,6 +366,8 @@ export default function TimeTable() {
             }}
           />
         </Box>
+
+        {/* 新增任务弹窗 */}
         <Modal
           title={`Add Task · ${toKey(selectedDate)}`}
           open={modalOpen}
@@ -265,17 +376,8 @@ export default function TimeTable() {
           onCancel={() => setModalOpen(false)}
           destroyOnClose
         >
-          <Form
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            initialValues={{ type: "success" }}
-          >
-            <Form.Item
-              label="Title"
-              name="title"
-              rules={[{ required: true, message: "Please enter a title" }]}
-            >
+          <Form form={form} layout="vertical" requiredMark={false} initialValues={{ type: "success" }}>
+            <Form.Item label="Title" name="title" rules={[{ required: true, message: "Please enter a title" }]}>
               <Input placeholder="e.g., Lab 7, Quiz, Meeting..." />
             </Form.Item>
 
@@ -294,10 +396,7 @@ export default function TimeTable() {
             </Form.Item>
 
             <Form.Item label="Description" name="desc">
-              <Input.TextArea
-                placeholder="Optional notes..."
-                autoSize={{ minRows: 2, maxRows: 4 }}
-              />
+              <Input.TextArea placeholder="Optional notes..." autoSize={{ minRows: 2, maxRows: 4 }} />
             </Form.Item>
           </Form>
         </Modal>

@@ -2,6 +2,8 @@
 import enum
 from zoneinfo import ZoneInfo
 
+import json
+
 from .extensions import db
 
 SYDNEY_TZ = ZoneInfo("Australia/Sydney")
@@ -65,6 +67,12 @@ class User(db.Model):
         foreign_keys="AssignmentGrade.student_id",
     )
     conversations = db.relationship("Conversation", back_populates="user", lazy="dynamic")
+    study_plans = db.relationship(
+        "StudyPlan",
+        back_populates="student",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
 
     #  Unique constraint on (username, role)
     __table_args__ = (
@@ -381,4 +389,48 @@ class ConversationMessage(db.Model):
             "role": self.role,
             "content": self.content,
             "created_at": _to_sydney_iso(self.created_at),
+        }
+
+
+class StudyPlan(db.Model):
+    __tablename__ = "study_plans"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    week_start = db.Column(db.Date, nullable=False)
+    week_end = db.Column(db.Date, nullable=False)
+    plan_payload = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+
+    student = db.relationship("User", back_populates="study_plans", lazy="joined")
+
+    __table_args__ = (
+        db.UniqueConstraint("student_id", "week_start", name="uq_study_plans_student_week"),
+    )
+
+    @property
+    def plan(self):
+        if not self.plan_payload:
+            return None
+        try:
+            return json.loads(self.plan_payload)
+        except json.JSONDecodeError:
+            return None
+
+    @plan.setter
+    def plan(self, value):
+        if value is None:
+            raise ValueError("plan cannot be None")
+        self.plan_payload = json.dumps(value, ensure_ascii=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "student_id": self.student_id,
+            "week_start": self.week_start.isoformat(),
+            "week_end": self.week_end.isoformat(),
+            "plan": self.plan,
+            "created_at": _to_sydney_iso(self.created_at),
+            "updated_at": _to_sydney_iso(self.updated_at),
         }
