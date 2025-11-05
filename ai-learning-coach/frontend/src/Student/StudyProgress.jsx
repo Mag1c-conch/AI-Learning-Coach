@@ -613,7 +613,7 @@ function StudyProgress() {
       setSnackOpen(true);
     } catch (e) {
       console.error(e);
-      const msg = e?.response?.data?.error || "生成学习计划失败";
+      const msg = e?.response?.data?.error || "Failed to generate study plan";
       setServerPlanErr(msg);
       alert(msg);
       setSnackMsg(msg);
@@ -629,14 +629,14 @@ function StudyProgress() {
     const lastPlan =
       (typeof window !== "undefined" && window.lastServerPlan) || null;
     if (!uid || !lastPlan) {
-      setSnackMsg("没有可同步的 AI 计划或未登录");
+      setSnackMsg("No AI study plans available to sync or not logged in");
       setSnackSev("error");
       setSnackOpen(true);
       return;
     }
     const events = serverPlanToEvents(lastPlan);
     ttUpsertEvents(uid, events);
-    setSnackMsg(`已同步 ${events.length} 个任务到 Timetable`);
+    setSnackMsg(`Successfully synced ${events.length} tasks to the Timetable`);
     setSnackSev("success");
     setSnackOpen(true);
   };
