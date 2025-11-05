@@ -1,8 +1,10 @@
 ﻿# app/routes/ai_assistant.py
 import json
+from datetime import datetime, time, timedelta
+from typing import Dict, Optional
 
 from flask import Blueprint, abort, current_app, jsonify, request
-from app.models import Assignment, Course, Enrollment, Material, User, UserRole
+from app.models import Assignment, Course, Enrollment, Material, StudyPlan, SYDNEY_TZ, User, UserRole
 
 from ..extensions import db
 from ..services import chat_storage
@@ -10,6 +12,31 @@ from ..services.assistant import _load_material_text, process_assistant_request
 from ..services.ai import generate_reply
 
 bp = Blueprint("ai_assistant", __name__)
+
+_PLAN_WINDOW_START = time(8, 0)
+_PLAN_WINDOW_END = time(18, 0)
+_DEFAULT_SESSION_MINUTES = 90
+_STUDY_PLAN_PROMPT_TEMPLATE = (
+    "You are an expert study coach. Using the JSON input, craft a personalised study plan.\n"
+    "Create a schedule covering each day from {week_start} to {week_end} inclusive (local time).\n"
+    "Requirements:\n"
+    "- Schedule study blocks only between 08:00 and 18:00.\n"
+    "- Every task must focus on a single material or assignment and include `course_id`; include `material_id` when one is provided, otherwise use null.\n"
+    "- Provide concise titles and actionable descriptions.\n"
+    "- Respect upcoming due dates and distribute the workload evenly.\n"
+    "Return strict JSON (no markdown) following this schema:\n"
+    "{{\n"
+    '  \"student_id\": <int>,\n'
+    '  \"week_start\": \"YYYY-MM-DD\",\n'
+    '  \"week_end\": \"YYYY-MM-DD\",\n'
+    '  \"days\": [\n'
+    "    {{\"date\": \"YYYY-MM-DD\", \"tasks\": [\n"
+    "      {{\"title\": str, \"description\": str, \"course_id\": int, \"material_id\": int or null, \"start_time\": \"HH:MM\", \"end_time\": \"HH:MM\"}}\n"
+    "    ]}}\n"
+    "  ]\n"
+    "}}\n"
+    "If information is missing, make reasonable assumptions and still produce a full seven-day plan."
+)
 
 
 @bp.route("/assistant/chat", methods=["POST", "OPTIONS"])
@@ -245,11 +272,12 @@ def grade_submission():
         response_payload["parse_error"] = "model response was not valid JSON"
 
     return jsonify(response_payload), 200
+
+# generate study plan for a student
 @bp.route("/get_plan", methods=["POST"])
 def get_plan():
     payload = request.get_json(silent=True) or {}
-    student_id=payload.get('student_id')
-    # validate input
+    student_id = payload.get("student_id")
     if not student_id:
         abort(400, description="missing required fields")
     student = User.query.get_or_404(student_id)
@@ -262,30 +290,352 @@ def get_plan():
         .order_by(Course.created_at.desc())
         .all()
     )
-    course_info = ""
-    for course in courses:
-        course_info += f"Course Code:{course.code}\nCouse Name: {course.name}\nCourse Description: {course.description}\n"
-        course_info += "Assignments\n\n"
-        assignments = Assignment.query.filter_by(course_id=course.id).order_by(Assignment.due_date.asc()).all()
-        for assignment in assignments:
-            course_info += f"Assignment: {assignment.title}\nDescription:{assignment.description}\nDue Date{assignment.due_date}\n"
-        
-    messages = [{"role": "user", "content": course_info}]
-    system_prompt = "You are an expert in study planning and I will give you the courses and assignments, you should generate an study plan for today."
+    course_ids = [course.id for course in courses]
 
-    if not isinstance(messages, list) or not messages:
-        abort(400, description="messages must be a non-empty list")
+    materials = []
+    if course_ids:
+        materials = (
+            db.session.query(Material)
+            .filter(Material.course_id.in_(course_ids))
+            .order_by(Material.week_number.asc(), Material.uploaded_at.asc())
+            .all()
+        )
 
+    assignments = []
+    if course_ids:
+        assignments = (
+            db.session.query(Assignment)
+            .filter(Assignment.course_id.in_(course_ids))
+            .order_by(Assignment.due_date.asc())
+            .all()
+        )
+
+    week_start, week_end = _determine_week_window()
+    plan_context = _build_plan_context(student, courses, assignments, materials, week_start, week_end)
+    messages = [{"role": "user", "content": json.dumps(plan_context, ensure_ascii=False)}]
+    system_prompt = _build_study_plan_prompt(week_start, week_end)
+
+    plan_payload: Optional[dict] = None
+    plan_source = "ai"
     try:
-        reply = generate_reply(messages, system_prompt=system_prompt)
+        reply = generate_reply(
+            messages,
+            system_prompt=system_prompt,
+            temperature=0.2,
+            max_output_tokens=2048,
+        )
+        plan_payload = _parse_json_reply(reply)
     except ValueError as err:
         abort(400, description=str(err))
     except RuntimeError as err:
-        abort(502, description=str(err))
+        current_app.logger.exception("Failed to call Gemini for study plan: %s", err)
+        plan_payload = None
 
-    return jsonify(
-        {
-            "reply": reply,
-            "model": current_app.config.get("GEMINI_MODEL", "gemini-2.5-flash"),
+    if plan_payload is None:
+        plan_source = "fallback"
+        current_app.logger.warning("Using fallback study plan generation for student_id=%s", student_id)
+        plan_payload = _build_fallback_plan(student, courses, materials, week_start, week_end)
+
+    normalized_plan = _normalize_plan_payload(
+        plan_payload,
+        student_id=student.id,
+        week_start=week_start,
+        week_end=week_end,
+        course_ids=course_ids,
+        material_ids=[material.id for material in materials],
+    )
+
+    if not any(day.get("tasks") for day in normalized_plan.get("days", [])):
+        plan_source = "fallback"
+        fallback_payload = _build_fallback_plan(student, courses, materials, week_start, week_end)
+        normalized_plan = _normalize_plan_payload(
+            fallback_payload,
+            student_id=student.id,
+            week_start=week_start,
+            week_end=week_end,
+            course_ids=course_ids,
+            material_ids=[material.id for material in materials],
+        )
+
+    metadata = normalized_plan.setdefault("metadata", {})
+    metadata["source"] = plan_source
+    metadata["generated_at"] = datetime.now(SYDNEY_TZ).isoformat()
+
+    plan_record = (
+        StudyPlan.query.filter_by(student_id=student.id, week_start=week_start).one_or_none()
+    )
+    if plan_record:
+        plan_record.week_end = week_end
+        plan_record.plan = normalized_plan
+    else:
+        plan_record = StudyPlan(
+            student_id=student.id,
+            week_start=week_start,
+            week_end=week_end,
+        )
+        plan_record.plan = normalized_plan
+        db.session.add(plan_record)
+
+    db.session.commit()
+    return jsonify(plan_record.to_dict()), 200
+
+# get study plan for a student
+@bp.route("/assistant/study_plan/<int:student_id>", methods=["GET"])
+def retrieve_study_plan(student_id: int):
+    query = StudyPlan.query.filter_by(student_id=student_id)
+    week_start_param = request.args.get("week_start")
+    if week_start_param:
+        try:
+            week_start_date = datetime.strptime(week_start_param, "%Y-%m-%d").date()
+        except ValueError:
+            abort(400, description="week_start must follow YYYY-MM-DD format")
+        query = query.filter(StudyPlan.week_start == week_start_date)
+
+    plan = query.order_by(StudyPlan.week_start.desc(), StudyPlan.updated_at.desc()).first()
+    if not plan:
+        abort(404, description="study plan not found")
+    return jsonify(plan.to_dict()), 200
+
+
+def _determine_week_window():
+    today = datetime.now(SYDNEY_TZ).date()
+    week_start = today + timedelta(days=1)
+    week_end = week_start + timedelta(days=6)
+    return week_start, week_end
+
+
+def _build_study_plan_prompt(week_start, week_end):
+    return _STUDY_PLAN_PROMPT_TEMPLATE.format(
+        week_start=week_start.isoformat(),
+        week_end=week_end.isoformat(),
+    )
+
+
+def _build_plan_context(student, courses, assignments, materials, week_start, week_end):
+    course_context: Dict[int, Dict[str, object]] = {}
+    for course in courses:
+        course_context[course.id] = {
+            "id": course.id,
+            "code": course.code,
+            "name": course.name,
+            "description": course.description,
+            "assignments": [],
+            "materials": [],
         }
-    ), 200
+
+    for assignment in assignments:
+        entry = course_context.get(assignment.course_id)
+        if not entry:
+            continue
+        if len(entry["assignments"]) >= 10:
+            continue
+        entry["assignments"].append(_summarize_assignment(assignment))
+
+    materials_per_course: Dict[int, int] = {}
+    for material in materials:
+        entry = course_context.get(material.course_id)
+        if not entry:
+            continue
+        count = materials_per_course.get(material.course_id, 0)
+        if count >= 8:
+            continue
+        entry["materials"].append(_summarize_material(material))
+        materials_per_course[material.course_id] = count + 1
+
+    return {
+        "student": {
+            "id": student.id,
+            "first_name": student.first_name,
+            "last_name": student.last_name,
+        },
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "courses": list(course_context.values()),
+        "stats": {
+            "course_count": len(courses),
+            "assignment_count": len(assignments),
+            "material_count": len(materials),
+        },
+    }
+
+
+def _summarize_assignment(assignment):
+    return {
+        "id": assignment.id,
+        "course_id": assignment.course_id,
+        "title": assignment.title,
+        "description": assignment.description,
+        "due_date": assignment.due_date.isoformat() if assignment.due_date else None,
+        "optional": assignment.optional,
+    }
+
+
+def _summarize_material(material, preview_limit: int = 600):
+    summary = {
+        "id": material.id,
+        "course_id": material.course_id,
+        "title": material.original_name,
+        "file_type": material.file_type,
+        "week_number": material.week_number,
+        "uploaded_at": material.uploaded_at.isoformat() if material.uploaded_at else None,
+    }
+    try:
+        preview = _load_material_text(material, limit=preview_limit)
+    except Exception as exc:  # noqa: BLE001 - best effort preview
+        current_app.logger.debug("Unable to extract preview for material %s: %s", material.id, exc)
+    else:
+        if preview:
+            summary["preview"] = preview
+    return summary
+
+
+def _normalize_plan_payload(payload, student_id, week_start, week_end, course_ids, material_ids):
+    course_set = set(course_ids or [])
+    material_set = set(material_ids or [])
+    allowed_dates = [
+        (week_start + timedelta(days=offset)).isoformat() for offset in range((week_end - week_start).days + 1)
+    ]
+    allowed_date_set = set(allowed_dates)
+
+    normalized = {
+        "student_id": student_id,
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "days": [],
+    }
+
+    raw_days = payload.get("days") if isinstance(payload, dict) else None
+    if not isinstance(raw_days, list):
+        raw_days = []
+
+    day_map: Dict[str, Dict[str, object]] = {}
+    for raw_day in raw_days:
+        if not isinstance(raw_day, dict):
+            continue
+        date_value = raw_day.get("date")
+        if not isinstance(date_value, str) or date_value not in allowed_date_set:
+            continue
+        raw_tasks = raw_day.get("tasks") if isinstance(raw_day.get("tasks"), list) else []
+        normalized_tasks = []
+        for task in raw_tasks:
+            normalized_task = _normalize_task(task, course_ids, course_set, material_set)
+            if normalized_task:
+                normalized_tasks.append(normalized_task)
+        day_map[date_value] = {"date": date_value, "tasks": normalized_tasks}
+
+    for date_str in allowed_dates:
+        normalized["days"].append(day_map.get(date_str, {"date": date_str, "tasks": []}))
+
+    return normalized
+
+
+def _normalize_task(task, course_ids, course_set, material_set):
+    if not isinstance(task, dict):
+        return None
+
+    title = task.get("title") or "Study Session"
+    description = task.get("description") or ""
+
+    course_id = task.get("course_id")
+    try:
+        course_id_int = int(course_id)
+    except (TypeError, ValueError):
+        course_id_int = course_ids[0] if course_ids else None
+    else:
+        if course_id_int not in course_set:
+            course_id_int = course_ids[0] if course_ids else None
+
+    material_id = task.get("material_id")
+    try:
+        material_id_int = int(material_id)
+    except (TypeError, ValueError):
+        material_id_int = None
+    else:
+        if material_id_int not in material_set:
+            material_id_int = None
+
+    start_time = _parse_time_value(task.get("start_time")) or time(9, 0)
+    start_time = max(start_time, _PLAN_WINDOW_START)
+    end_time = _parse_time_value(task.get("end_time")) or _add_minutes(start_time, _DEFAULT_SESSION_MINUTES)
+    end_time = min(end_time, _PLAN_WINDOW_END)
+
+    if end_time <= start_time:
+        adjusted = _add_minutes(start_time, 60)
+        if adjusted > _PLAN_WINDOW_END:
+            return None
+        end_time = adjusted
+
+    return {
+        "title": str(title),
+        "description": str(description),
+        "course_id": course_id_int,
+        "material_id": material_id_int,
+        "start_time": start_time.strftime("%H:%M"),
+        "end_time": end_time.strftime("%H:%M"),
+    }
+
+
+def _parse_time_value(value: Optional[str]):
+    if isinstance(value, time):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value.strip(), "%H:%M").time()
+        except ValueError:
+            return None
+    return None
+
+
+def _add_minutes(start_time: time, minutes: int):
+    baseline = datetime.combine(datetime.now(SYDNEY_TZ).date(), start_time)
+    baseline += timedelta(minutes=minutes)
+    return baseline.time()
+
+
+def _build_fallback_plan(student, courses, materials, week_start, week_end):
+    day_dates = [week_start + timedelta(days=offset) for offset in range((week_end - week_start).days + 1)]
+    plan = {
+        "student_id": student.id,
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "days": [{"date": day.isoformat(), "tasks": []} for day in day_dates],
+    }
+
+    course_lookup = {course.id: course for course in courses}
+    slots = [("09:00", "10:30"), ("10:45", "12:15"), ("13:30", "15:00"), ("15:15", "16:45")]
+    max_tasks = len(plan["days"]) * len(slots)
+
+    if materials:
+        for index, material in enumerate(materials[:max_tasks]):
+            day_entry = plan["days"][index % len(plan["days"])]
+            slot = slots[index % len(slots)]
+            course = course_lookup.get(material.course_id)
+            course_name = f"{course.name} - " if course else ""
+            task_title = f"{course_name}{material.original_name}"
+            day_entry["tasks"].append(
+                {
+                    "title": task_title,
+                    "description": "Review the material and capture key takeaways.",
+                    "course_id": material.course_id,
+                    "material_id": material.id,
+                    "start_time": slot[0],
+                    "end_time": slot[1],
+                }
+            )
+    else:
+        default_course_id = courses[0].id if courses else None
+        generic_slots = [("09:00", "11:00"), ("14:00", "16:00")]
+        for idx, day_entry in enumerate(plan["days"]):
+            slot = generic_slots[idx % len(generic_slots)]
+            day_entry["tasks"].append(
+                {
+                    "title": "Independent Study",
+                    "description": "Use this block to revise course content or explore supplementary materials.",
+                    "course_id": default_course_id,
+                    "material_id": None,
+                    "start_time": slot[0],
+                    "end_time": slot[1],
+                }
+            )
+
+    return plan
