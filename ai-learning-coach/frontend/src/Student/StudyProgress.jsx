@@ -18,6 +18,8 @@ import {
   IconButton,
   Checkbox,
   Tooltip,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
@@ -27,7 +29,7 @@ import Sidebar from "../components/Sidebar.jsx";
 import { useParams, useNavigate } from "react-router-dom";
 import http from "../api/http";
 
-// search boc
+/* ===================== Search box ===================== */
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
   borderRadius: theme.shape.borderRadius,
@@ -59,6 +61,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
+/* ===================== Helpers (auth & enrollments) ===================== */
 function getCurrentUserId() {
   try {
     const token = localStorage.getItem("token");
@@ -80,6 +83,21 @@ const loadEnrollments = (uid) => {
     return [];
   }
 };
+
+/* ===================== API to backend study plan ===================== */
+/** 生成并保存下周学习计划（后端会优先调 Gemini，失败自动 fallback） */
+async function apiCreatePlan(studentId) {
+  const res = await http.post("/get_plan", { student_id: studentId });
+  return res.data; // StudyPlan 对象（通常形如 { ..., plan: {...} }）
+}
+/** 读取学习计划（可选 week_start=YYYY-MM-DD，不传取最近一条） */
+async function apiGetPlan(studentId, weekStart) {
+  const qs = weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : "";
+  const res = await http.get(`/assistant/study_plan/${studentId}${qs}`);
+  return res.data;
+}
+
+/* ===================== Type helpers ===================== */
 const prettyType = (t) => {
   const s = String(t || "").toLowerCase();
   if (s === "assignment" || s === "assignments" || s === "ass") return "Assignments";
@@ -89,23 +107,21 @@ const prettyType = (t) => {
   return "Others";
 };
 function typeFromMaterial(m) {
-    const t = String(m.file_type || "").toLowerCase();
-    const name = String(m.stored_name || m.original_name || "").toLowerCase();
-  
-    // 识别 assignment / quiz / lab
-    if (t.includes("assignment") || name.includes("assignment") || /\b(a|assn|hw)\d+\b/.test(name)) {
-      return "Assignments";
-    }
-    if (t.includes("quiz") || name.includes("quiz")) return "Quizzes";
-    if (t.includes("lab")  || name.includes("lab"))  return "Labs";
-    return "Materials";
-  }
-  
+  const t = String(m.file_type || "").toLowerCase();
+  const name = String(m.stored_name || m.original_name || "").toLowerCase();
 
-//进度(课程）
+  if (t.includes("assignment") || name.includes("assignment") || /\b(a|assn|hw)\d+\b/.test(name)) {
+    return "Assignments";
+  }
+  if (t.includes("quiz") || name.includes("quiz")) return "Quizzes";
+  if (t.includes("lab") || name.includes("lab")) return "Labs";
+  return "Materials";
+}
+
+/* ===================== Local progress storage ===================== */
 const progressKey = (uid, courseKey) => `sp:progress:${uid || "anon"}:${courseKey || "course"}`;
 const courseProgressKey = (uid, courseKey) =>
-    `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
+  `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
 function loadProgress(uid, courseKey) {
   try {
     return JSON.parse(localStorage.getItem(progressKey(uid, courseKey)) || "{}");
@@ -119,7 +135,7 @@ function saveProgress(uid, courseKey, obj) {
   } catch {}
 }
 
-//Donut
+/* ===================== Donut ===================== */
 function ProgressDonut({ value = 0, size = 160, thickness = 7 }) {
   const safe = Math.max(0, Math.min(100, Math.round(value)));
   return (
@@ -164,27 +180,43 @@ function ProgressDonut({ value = 0, size = 160, thickness = 7 }) {
   );
 }
 
-//学习计划
+/* ===================== Local quick plan (round-robin) ===================== */
 function roundRobinDistribute(items, days = 7, perDayCap = Infinity) {
-    const buckets = Array.from({ length: days }, () => []);
-    if (!Array.isArray(items) || !items.length) return buckets;
-    let i = 0;
-    for (const it of items) {
-      let tries = 0;
-      while (tries < days && buckets[i % days].length >= perDayCap) {
-        i++;
-        tries++;
-      }
-      buckets[i % days].push(it);
+  const buckets = Array.from({ length: days }, () => []);
+  if (!Array.isArray(items) || !items.length) return buckets;
+  let i = 0;
+  for (const it of items) {
+    let tries = 0;
+    while (tries < days && buckets[i % days].length >= perDayCap) {
       i++;
+      tries++;
     }
-    return buckets;
+    buckets[i % days].push(it);
+    i++;
   }
-  
+  return buckets;
+}
+function expandByRemainder(t, percent = 0, step = 25) {
+  const left = Math.max(0, 100 - (Number(percent) || 0));
+  const n = Math.max(1, Math.ceil(left / step));
+  if (n === 1) return [{ title: t.title, type: t.type, part: null }];
+
+  const arr = [];
+  for (let i = 1; i <= n; i++) {
+    arr.push({
+      title: `${t.title} (${i}/${n})`,
+      type: t.type,
+      part: `${i}/${n}`,
+    });
+  }
+  return arr;
+}
+
+/* ===================== Study plan dialog ===================== */
 function StudyPlanDialog({ open, onClose, plan, startLabel = "Today" }) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Generated Study Plan</DialogTitle>
+      <DialogTitle>Generated Study Plan (Local / AI)</DialogTitle>
       <DialogContent dividers>
         {plan.map((p) => (
           <Box key={p.day} sx={{ mb: 2 }}>
@@ -210,15 +242,85 @@ function StudyPlanDialog({ open, onClose, plan, startLabel = "Today" }) {
   );
 }
 
-//读取今天的学习计划
+/* ===================== Map server plan -> dialog data ===================== */
+function mapServerPlanToDialog(planObj, courses = []) {
+  if (!planObj || !Array.isArray(planObj.days)) return [];
+  const { days } = planObj;
+
+  const courseMap = new Map();
+  for (const c of Array.isArray(courses) ? courses : []) {
+    courseMap.set(c.id, c.code || c.name || String(c.id));
+  }
+
+  const sorted = [...days].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  return sorted.map((d, idx) => {
+    const items = (Array.isArray(d.tasks) ? d.tasks : []).map((t) => {
+      const code = t.course_id != null ? courseMap.get(t.course_id) : null;
+      const time =
+        t.start_time && t.end_time ? ` (${t.start_time}–${t.end_time})` : "";
+      const label = [
+        t.title || "Study Session",
+        code ? ` · ${code}` : "",
+        time,
+      ].join("");
+      return { title: label, type: "Server" };
+    });
+    return { day: idx + 1, items };
+  });
+}
+
+/* ===================== Timetable 同步工具 ===================== */
+const TT_KEY = (uid) => `timetableEvents:${uid || "anon"}`;
+
+// 后端 plan_payload -> 日历事件数组
+function serverPlanToEvents(planObj) {
+  if (!planObj || !Array.isArray(planObj.days)) return [];
+  const out = [];
+  for (const d of planObj.days) {
+    const dateStr = d.date; // YYYY-MM-DD
+    for (const t of d.tasks || []) {
+      if (!t.start_time || !t.end_time) continue;
+      const startISO = new Date(`${dateStr}T${t.start_time}:00`).toISOString();
+      const endISO   = new Date(`${dateStr}T${t.end_time}:00`).toISOString();
+      out.push({
+        title: t.title || "Study Session",
+        start: startISO,
+        end: endISO,
+        courseId: t.course_id ?? null,
+        materialId: t.material_id ?? null,
+        meta: { source: "ai-plan" },
+      });
+    }
+  }
+  return out;
+}
+
+// 写入/合并本地事件并广播
+function ttUpsertEvents(uid, newEvents = []) {
+  try {
+    const raw = localStorage.getItem(TT_KEY(uid));
+    const old = raw ? JSON.parse(raw) : [];
+    const keyOf = (e) => `${e.start}|${e.end}|${e.title}|${e.courseId ?? ""}|${e.materialId ?? ""}`;
+    const seen = new Set(old.map(keyOf));
+    const merged = [...old];
+    for (const ev of newEvents) {
+      const k = keyOf(ev);
+      if (!seen.has(k)) {
+        merged.push(ev);
+        seen.add(k);
+      }
+    }
+    localStorage.setItem(TT_KEY(uid), JSON.stringify(merged));
+    window.dispatchEvent(new CustomEvent("timetable:updated", { detail: { count: merged.length } }));
+  } catch {}
+}
+
+/* ===================== Keys for storing plan (today) ===================== */
 const planStorageKey = (uid, courseKey, dateStr) =>
   `studyPlan:${uid || "anon"}:${courseKey || "course"}:${dateStr}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
-
-//生成和课程卡一致的 key：code 优先，缺失时用 id
 const courseKeyFromCourse = (c) => c?.code ?? (c?.id != null ? String(c.id) : "course");
-
-//返回[{ courseKey, courseLabel, items:[{title,type}...] }, ...]
 function loadTodayTodosForUser(uid, courseList = []) {
   const t = todayStr();
   const out = [];
@@ -237,8 +339,7 @@ function loadTodayTodosForUser(uid, courseList = []) {
   return out;
 }
 
-
-//click 0/25/50/75/100 
+/* ===================== Progress chip ===================== */
 function PercentChip({ value = 0, onChange }) {
   const next = () => {
     const steps = [0, 25, 50, 75, 100];
@@ -264,29 +365,14 @@ function PercentChip({ value = 0, onChange }) {
   );
 }
 
-function expandByRemainder(t, percent = 0, step = 25) {
-    const left = Math.max(0, 100 - (Number(percent) || 0));
-    const n = Math.max(1, Math.ceil(left / step)); 
-    if (n === 1) return [{ title: t.title, type: t.type, part: null }];
-  
-    const arr = [];
-    for (let i = 1; i <= n; i++) {
-      arr.push({
-        title: `${t.title} (${i}/${n})`,
-        type: t.type,
-        part: `${i}/${n}`,
-      });
-    }
-    return arr;
-}
-//StudyProgress
+/* ===================== Main component ===================== */
 function StudyProgress() {
-  const { code: codeParam, id: idParam } = useParams(); 
+  const { code: codeParam, id: idParam } = useParams();
   const rawParam = codeParam ?? idParam ?? null;
   const navigate = useNavigate();
   const uid = getCurrentUserId();
 
-  /* 选课和当前课程 */
+  // enrollments & current course
   const [enrolled, setEnrolled] = useState(() => loadEnrollments(uid));
   useEffect(() => setEnrolled(loadEnrollments(uid)), [uid]);
 
@@ -304,7 +390,7 @@ function StudyProgress() {
   const courseKey =
     currentCourse?.code ?? (currentCourse?.id != null ? String(currentCourse.id) : "course");
 
-  /* 拉取数据 */
+  // fetch tasks
   const [tasks, setTasks] = useState([]); // {id,title,type,percent}
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
@@ -313,43 +399,48 @@ function StudyProgress() {
     let alive = true;
     async function fetchAll() {
       const cid = currentCourse?.id;
-      if (!cid) { setTasks([]); return; }
-      setLoading(true); setErr(null);
+      if (!cid) {
+        setTasks([]);
+        return;
+      }
+      setLoading(true);
+      setErr(null);
       try {
         const [assRes, matRes] = await Promise.all([
           http.get("/assignments", { params: { course_id: cid } }).catch(() => ({ data: [] })),
-          http.get("/materials",   { params: { course_id: cid, include_submissions: false } }).catch(() => ({ data: [] })),
+          http
+            .get("/materials", { params: { course_id: cid, include_submissions: false } })
+            .catch(() => ({ data: [] })),
         ]);
-  
-        // 取出本课程本地保存的进度
-        const saved = loadProgress(uid, courseKey);  
-  
-        // 1) materials 
+
+        const saved = loadProgress(uid, courseKey);
+
+        // materials
         const matsRaw = Array.isArray(matRes.data) ? matRes.data : [];
         const materialItems = matsRaw
-          .filter(m => m.file_type !== "assignment_submission")
-          .map(m => {
+          .filter((m) => m.file_type !== "assignment_submission")
+          .map((m) => {
             const id = `mat-${m.id}`;
             return {
               id,
               title: m.stored_name || m.original_name || "Untitled",
-              type: typeFromMaterial(m),                               
+              type: typeFromMaterial(m),
               dueAt: m.assignment?.due_date || m.due_date || m.deadline || null,
               assignmentId: m.assignment_id ?? m.assignment?.id ?? null,
-              percent: Number(saved?.[id]) || 0,                       
+              percent: Number(saved?.[id]) || 0,
             };
           });
-  
-        // 2) 去重
+
+        // avoid duplicate assignments
         const coveredAssignmentIds = new Set(
-          materialItems.map(m => m.assignmentId).filter(Boolean)
+          materialItems.map((m) => m.assignmentId).filter(Boolean)
         );
-  
-        // 3) assignments
+
+        // assignments
         const assRaw = Array.isArray(assRes.data) ? assRes.data : [];
         const assignmentItems = assRaw
-          .filter(a => !coveredAssignmentIds.has(a.id))
-          .map(a => {
+          .filter((a) => !coveredAssignmentIds.has(a.id))
+          .map((a) => {
             const id = `ass-${a.id}`;
             return {
               id,
@@ -357,29 +448,34 @@ function StudyProgress() {
               type: "Assignments",
               dueAt: a.due_date || null,
               assignmentId: a.id,
-              percent: Number(saved?.[id]) || 0,                  
+              percent: Number(saved?.[id]) || 0,
             };
           });
-  
+
         const merged = [...materialItems, ...assignmentItems];
         if (alive) setTasks(merged);
       } catch (e) {
-        if (alive) { setErr("Failed to load data"); setTasks([]); }
+        if (alive) {
+          setErr("Failed to load data");
+          setTasks([]);
+        }
       } finally {
         if (alive) setLoading(false);
       }
     }
     fetchAll();
-    return () => { alive = false; };
-  }, [currentCourse?.id, courseKey, uid]);  
-  
-  /* select */
+    return () => {
+      alive = false;
+    };
+  }, [currentCourse?.id, courseKey, uid]);
+
+  // selected
   const [selected, setSelected] = useState([]);
   useEffect(() => setSelected(tasks.map((t) => t.id)), [tasks]);
   const toggleSelect = (id) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  /* 学生进度更新 */
+  // update progress
   const setTaskPercent = (id, percent) => {
     setTasks((prev) => {
       const next = prev.map((t) => (t.id === id ? { ...t, percent } : t));
@@ -390,14 +486,13 @@ function StudyProgress() {
     });
   };
 
-  /* calculate progress */
+  // overall
   const overall = useMemo(() => {
     if (!tasks.length) return 0;
     const sum = tasks.reduce((s, t) => s + (Number(t.percent) || 0), 0);
     return Math.round(sum / tasks.length);
   }, [tasks]);
-    
-  // total progress
+
   useEffect(() => {
     localStorage.setItem(courseProgressKey(uid, courseKey), String(overall));
     window.dispatchEvent(
@@ -407,10 +502,10 @@ function StudyProgress() {
     );
   }, [overall, uid, courseKey]);
 
-  // Assignments / Labs / Quizzes / Materials
+  // type summary
   const typeSummary = useMemo(() => {
     const wanted = new Set(["Assignments", "Labs", "Quizzes", "Materials"]);
-    const groups = new Map(); // type => { total, sumPercent }
+    const groups = new Map(); // type => { total, sum }
     for (const t of tasks) {
       const type = prettyType(t.type);
       if (!wanted.has(type)) continue;
@@ -428,34 +523,37 @@ function StudyProgress() {
       }))
       .sort((a, b) => (order[a.type] || 9) - (order[b.type] || 9));
   }, [tasks]);
-  
 
-  /* 生成学习计划  */
+  // study plan dialog + snack
   const [planOpen, setPlanOpen] = useState(false);
   const [planData, setPlanData] = useState([]);
-  //生成学习计划（未到100%会拆成多天)
+  const [serverPlanLoading, setServerPlanLoading] = useState(false);
+  const [serverPlanErr, setServerPlanErr] = useState(null);
+
+  const [snackOpen, setSnackOpen] = useState(false);
+  const [snackMsg, setSnackMsg] = useState("");
+  const [snackSev, setSnackSev] = useState("success"); // success | info | warning | error
+
+  // Quick Plan (local)
   const generatePlan = () => {
     const DAYS = 7;
-    const STEP = 25;               
-    const perDayCapCore = Infinity;  
-    const perDayCapMat  = Infinity;  
-  
-    const saved = loadProgress(uid, courseKey); // { [taskId]: percent }
-  
+    const STEP = 25;
+    const perDayCapCore = Infinity;
+    const perDayCapMat = Infinity;
+
+    const saved = loadProgress(uid, courseKey);
     const pick = tasks
       .filter((t) => selected.includes(t.id))
       .map((t) => ({ ...t, type: prettyType(t.type) }));
-  
+
     const coreTypes = new Set(["Assignments", "Labs", "Quizzes"]);
     const coreList = pick.filter((t) => coreTypes.has(t.type));
-    const matList  = pick.filter((t) => t.type === "Materials");
-  
-    // 按截止时间做排序，让近 due 的更靠前
+    const matList = pick.filter((t) => t.type === "Materials");
+
     const byDue = (a, b) => new Date(a.dueAt || 0) - new Date(b.dueAt || 0);
     coreList.sort(byDue);
     matList.sort(byDue);
-  
-    // 把每个任务按剩余度拆成多次 session
+
     const coreSessions = coreList.flatMap((t) => {
       const p = Number(saved?.[t.id]) || 0;
       return expandByRemainder(t, p, STEP);
@@ -464,23 +562,85 @@ function StudyProgress() {
       const p = Number(saved?.[t.id]) || 0;
       return expandByRemainder(t, p, STEP);
     });
-  
-    // 分别平均分配到 7 天
+
     const coreBuckets = roundRobinDistribute(coreSessions, DAYS, perDayCapCore);
-    const matBuckets  = roundRobinDistribute(matSessions, DAYS, perDayCapMat);
-  
-    // 合并到每天（任务在前、Materials 在后）
+    const matBuckets = roundRobinDistribute(matSessions, DAYS, perDayCapMat);
+
     const plan = Array.from({ length: DAYS }, (_, i) => {
-      const items = [
-        ...coreBuckets[i],
-        ...matBuckets[i],
-      ].map((it) => ({ title: it.title, type: it.type }));
+      const items = [...coreBuckets[i], ...matBuckets[i]].map((it) => ({
+        title: it.title,
+        type: it.type,
+      }));
       return { day: i + 1, items };
     });
-  
+
     setPlanData(plan);
     setPlanOpen(true);
-  };  
+    setSnackMsg("Quick plan generated");
+    setSnackSev("success");
+    setSnackOpen(true);
+  };
+
+  // AI Plan (server)
+  const generatePlanFromServer = async () => {
+    const studentId = uid;
+    if (!studentId) {
+      const msg = "未登录或无法识别学生ID";
+      alert(msg);
+      setSnackMsg(msg);
+      setSnackSev("error");
+      setSnackOpen(true);
+      return;
+    }
+    setServerPlanLoading(true);
+    setServerPlanErr(null);
+    try {
+      const created = await apiCreatePlan(studentId); // 生成并保存
+      // 兼容两种返回：{ plan: {...} } 或直接 {...}
+      const planDict = created?.plan ?? created;
+      // 保存一份用于“同步到日历”
+      if (typeof window !== "undefined") {
+        window.lastServerPlan = planDict;
+      }
+
+      const planForDialog = mapServerPlanToDialog(planDict, enrolled);
+      setPlanData(planForDialog);
+      setPlanOpen(true);
+
+      const source = planDict?.metadata?.source;
+      setSnackMsg(source === "fallback" ? "Plan generated (fallback)" : "AI plan generated");
+      setSnackSev("success");
+      setSnackOpen(true);
+    } catch (e) {
+      console.error(e);
+      const msg = e?.response?.data?.error || "生成学习计划失败";
+      setServerPlanErr(msg);
+      alert(msg);
+      setSnackMsg(msg);
+      setSnackSev("error");
+      setSnackOpen(true);
+    } finally {
+      setServerPlanLoading(false);
+    }
+  };
+
+  // 一键同步到 Timetable（日历）
+  const handleSyncToTimetable = () => {
+    const lastPlan =
+      (typeof window !== "undefined" && window.lastServerPlan) || null;
+    if (!uid || !lastPlan) {
+      setSnackMsg("没有可同步的 AI 计划或未登录");
+      setSnackSev("error");
+      setSnackOpen(true);
+      return;
+    }
+    const events = serverPlanToEvents(lastPlan);
+    ttUpsertEvents(uid, events);
+    setSnackMsg(`已同步 ${events.length} 个任务到 Timetable`);
+    setSnackSev("success");
+    setSnackOpen(true);
+  };
+
   const courseLabel = currentCourse?.code || "Course";
 
   return (
@@ -544,17 +704,19 @@ function StudyProgress() {
           </Typography>
         </Paper>
 
-        {/*  Study Plan + Donut */}
+        {/* Study Plan + Donut */}
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
           {/* Study Plan */}
           <Paper sx={{ p: 2, borderRadius: 2, boxShadow: 2, height: { md: 350 } }}>
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>
                 Study Plan
               </Typography>
+
+              {/* 后端 AI 计划 */}
               <Button
                 variant="contained"
-                onClick={generatePlan}
+                onClick={generatePlanFromServer}
                 sx={{
                   textTransform: "none",
                   backgroundColor: "#1f2a44",
@@ -566,11 +728,26 @@ function StudyProgress() {
                   boxShadow: 3,
                   "&:hover": { backgroundColor: "#1a2438", boxShadow: 6 },
                 }}
-                disabled={tasks.length === 0}
+                disabled={serverPlanLoading}
               >
-                Generate Plan
+                {serverPlanLoading ? "Generating..." : "AI Plan (Next 7d)"}
+              </Button>
+
+              {/* 同步到 Timetable */}
+              <Button
+                variant="outlined"
+                onClick={handleSyncToTimetable}
+                sx={{ textTransform: "none", borderRadius: "12px", px: 1.5, py: 1 }}
+              >
+                Sync to Timetable
               </Button>
             </Box>
+
+            {serverPlanErr && (
+              <Typography color="error" variant="caption" sx={{ ml: 0.5 }}>
+                {serverPlanErr}
+              </Typography>
+            )}
 
             {/* task list */}
             <Box
@@ -611,7 +788,7 @@ function StudyProgress() {
                       <Box
                         sx={{
                           display: "grid",
-                          gridTemplateColumns: "auto 1fr auto auto", 
+                          gridTemplateColumns: "auto 1fr auto auto",
                           alignItems: "center",
                           columnGap: 1,
                         }}
@@ -621,17 +798,12 @@ function StudyProgress() {
                           {it.title}
                         </Typography>
 
-                        {/* student mark */}
                         <PercentChip
                           value={Number(it.percent) || 0}
                           onChange={(v) => setTaskPercent(it.id, v)}
                         />
 
-                        <Checkbox
-                          checked={checked}
-                          onChange={() => toggleSelect(it.id)}
-                          sx={{ ml: 1 }}
-                        />
+                        <Checkbox checked={checked} onChange={() => toggleSelect(it.id)} sx={{ ml: 1 }} />
                       </Box>
                     </Box>
                   );
@@ -705,15 +877,23 @@ function StudyProgress() {
           </Box>
         </Paper>
 
-        {/* study plan pop */}
-        <StudyPlanDialog
-          open={planOpen}
-          onClose={() => setPlanOpen(false)}
-          plan={planData}
-          startLabel="Today"
-        />
+        {/* Study plan dialog */}
+        <StudyPlanDialog open={planOpen} onClose={() => setPlanOpen(false)} plan={planData} startLabel="Today" />
+
+        {/* Snackbar 提示 */}
+        <Snackbar
+          open={snackOpen}
+          autoHideDuration={3000}
+          onClose={() => setSnackOpen(false)}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        >
+          <Alert onClose={() => setSnackOpen(false)} severity={snackSev} variant="filled" sx={{ boxShadow: 2 }}>
+            {snackMsg}
+          </Alert>
+        </Snackbar>
       </Box>
     </Box>
   );
 }
-export default StudyProgress
+
+export default StudyProgress;

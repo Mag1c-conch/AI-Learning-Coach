@@ -25,28 +25,25 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
+import { PickersDay } from "@mui/x-date-pickers/PickersDay";
+import dayjs from "dayjs";
 import http from "../api/http";
-import NotificationsBell from "../components/Notifications.jsx"; // ✅ 新增：全局小铃铛
+import NotificationsBell from "../components/Notifications.jsx";
 
-// ===== Search box format =====
+// ===== Search box =====
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
   borderRadius: theme.shape.borderRadius,
   backgroundColor: theme.palette.action.hover,
-  "&:hover": {
-    backgroundColor: alpha(theme.palette.common.black, 0.1),
-  },
+  "&:hover": { backgroundColor: alpha(theme.palette.common.black, 0.1) },
   display: "flex",
   alignItems: "center",
   mr: theme.spacing(2),
   ml: 0,
   width: "200px",
   pl: theme.spacing(1),
-  [theme.breakpoints.up("sm")]: {
-    width: "250px",
-  },
+  [theme.breakpoints.up("sm")]: { width: "250px" },
 }));
-
 const SearchIconWrapper = styled("div")(({ theme }) => ({
   display: "flex",
   alignItems: "center",
@@ -55,7 +52,6 @@ const SearchIconWrapper = styled("div")(({ theme }) => ({
   height: "100%",
   color: "rgba(0,0,0,0.5)",
 }));
-
 const StyledInputBase = styled(InputBase)(({ theme }) => ({
   color: "inherit",
   width: "100%",
@@ -66,7 +62,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
-// ===== Course sliding component =====
+// ===== Course slider =====
 function CoursesSlider({ courses = [], progressMap = {} }) {
   const slidingRef = useRef(null);
   const scrollingCards = (dir = 1) => {
@@ -93,11 +89,7 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
         {courses.map((course) => (
           <Box
             key={course.id ?? course.code}
-            sx={{
-              flex: "0 0 auto",
-              width: { xs: 260, sm: 300, md: 340 },
-              scrollSnapAlign: "start",
-            }}
+            sx={{ flex: "0 0 auto", width: { xs: 260, sm: 300, md: 340 }, scrollSnapAlign: "start" }}
           >
             <Box
               component={Link}
@@ -437,7 +429,105 @@ function readLocalEnrollments(userId) {
   }
 }
 
-// ===== Dashboard component =====
+/* ====== 把 timetableEvents 里的“今天”任务合并进 Dashboard Todo ====== */
+const TT_KEY = (uid) => `timetableEvents:${uid || "anon"}`;
+function ttGetEvents(uid) {
+  try {
+    const raw = localStorage.getItem(TT_KEY(uid));
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// 从 timetableEvents 取今天事件，按课程聚合成 {courseKey, courseLabel, items:[{title, time?}]}
+function todayTodosFromAIEvents(uid, courses = []) {
+  const events = ttGetEvents(uid);
+  if (!events.length || !Array.isArray(courses) || !courses.length) return [];
+
+  const today = todayISO();
+
+  const courseMap = new Map();
+  for (const c of courses) {
+    const key = c.code ?? (c.id != null ? String(c.id) : "course");
+    const label = c.code || c.name || key;
+    courseMap.set(String(c.id), { key, label });
+    if (c.code) courseMap.set(c.code, { key, label });
+  }
+
+  const byCourse = new Map();
+  for (const e of events) {
+    if (!e?.start || typeof e.start !== "string") continue;
+
+    const d = dayjs(e.start);
+    if (!d.isValid()) continue;
+    const dateLocal = d.format("YYYY-MM-DD");
+    if (dateLocal !== today) continue;
+
+    const title = e.title || "Study Session";
+    const time = d.format("HH:mm");
+
+    let ck = "course";
+    let clabel = "Others";
+    if (e.courseId != null && courseMap.has(String(e.courseId))) {
+      const meta = courseMap.get(String(e.courseId));
+      ck = meta.key;
+      clabel = meta.label;
+    }
+
+    const list = byCourse.get(ck) || { courseKey: ck, courseLabel: clabel, items: [] };
+    list.items.push({ title: time ? `${time} · ${title}` : title });
+    byCourse.set(ck, list);
+  }
+
+  return Array.from(byCourse.values());
+}
+
+// 合并本地 studyPlan:today + timetableEvents:today（按 courseKey & title 去重）
+function mergeTodayTodos(uid, courses = []) {
+  const localTodos = loadTodayTodosForUser(uid, courses);
+  const aiTodos = todayTodosFromAIEvents(uid, courses);
+
+  const map = new Map();
+  for (const g of [...localTodos, ...aiTodos]) {
+    const existed =
+      map.get(g.courseKey) || { courseKey: g.courseKey, courseLabel: g.courseLabel, items: [] };
+    const seen = new Set(existed.items.map((x) => x.title));
+    for (const it of g.items) {
+      if (!seen.has(it.title)) {
+        existed.items.push(it);
+        seen.add(it.title);
+      }
+    }
+    map.set(g.courseKey, existed);
+  }
+  const out = Array.from(map.values()).filter((g) => g.items.length > 0);
+  out.sort((a, b) => String(a.courseLabel).localeCompare(String(b.courseLabel)));
+  return out;
+}
+
+/* ====== 精准打点：从 timetableEvents 计算有任务的日期（本地时区） ====== */
+function computeMarkedDates(uid) {
+  const events = ttGetEvents(uid);
+  const validDays = new Set();
+  for (const e of events) {
+    if (!e?.start) continue;
+    const d = dayjs(e.start);
+    if (!d.isValid()) continue;
+    validDays.add(d.format("YYYY-MM-DD"));
+  }
+  return Array.from(validDays).sort((a, b) => a.localeCompare(b));
+}
+
+// ===== Dashboard =====
 const Dashboard = () => {
   const [sliderCourses, setSliderCourses] = useState(defaultCoursesData);
   const [uid, setUid] = useState(getCurrentUserId());
@@ -446,6 +536,10 @@ const Dashboard = () => {
   const [courses, setCourses] = useState([]);
   const [progressMap, setProgressMap] = useState({});
   const [progressItems, setProgressItems] = useState([]);
+
+  // 小日历打点
+  const [markedDates, setMarkedDates] = useState(() => computeMarkedDates(getCurrentUserId()));
+
   const navigate = useNavigate();
   const openStudyProgress = (courseKey) =>
     navigate(`/progress/${encodeURIComponent(courseKey)}`);
@@ -506,6 +600,7 @@ const Dashboard = () => {
         setSliderCourses(defaultCoursesData);
         setCourses([]);
         setTodosByCourse([]);
+        setMarkedDates([]);
         return;
       }
       try {
@@ -518,7 +613,10 @@ const Dashboard = () => {
           .map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 }));
         setCourses(base);
         rebuildProgress(base, uid);
-        setTodosByCourse(loadTodayTodosForUser(uid, base));
+
+        // ✅ 合并今天待办 & 刷新小日历打点
+        setTodosByCourse(mergeTodayTodos(uid, base));
+        setMarkedDates(computeMarkedDates(uid));
       } catch (e) {
         console.error("Failed to load enrollments", e?.response?.data || e.message);
         const fallback = readLocalEnrollments(uid);
@@ -527,7 +625,9 @@ const Dashboard = () => {
         const base = fallback.map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 }));
         setCourses(base);
         rebuildProgress(base, uid);
-        setTodosByCourse(loadTodayTodosForUser(uid, base));
+
+        setTodosByCourse(mergeTodayTodos(uid, base));
+        setMarkedDates(computeMarkedDates(uid));
       }
     };
 
@@ -542,7 +642,8 @@ const Dashboard = () => {
   useEffect(() => {
     if (courses?.length) {
       rebuildProgress(courses, uid);
-      setTodosByCourse(loadTodayTodosForUser(uid, courses));
+      setTodosByCourse(mergeTodayTodos(uid, courses));
+      setMarkedDates(computeMarkedDates(uid));
     }
   }, [courses, uid, rebuildProgress]);
 
@@ -557,7 +658,8 @@ const Dashboard = () => {
       );
     };
     const onPlanUpdated = () => {
-      setTodosByCourse(loadTodayTodosForUser(uid, courses));
+      setTodosByCourse(mergeTodayTodos(uid, courses));
+      setMarkedDates(computeMarkedDates(uid));
     };
     window.addEventListener("courseProgress:updated", onProgressUpdated);
     window.addEventListener("studyplan:updated", onPlanUpdated);
@@ -567,10 +669,22 @@ const Dashboard = () => {
     };
   }, [uid, courses]);
 
+  // ✅ 监听 Timetable 同步完成（StudyProgress 同步后会广播 timetable:updated）
+  useEffect(() => {
+    const onTimetableUpdated = () => {
+      setTodosByCourse(mergeTodayTodos(uid, courses));
+      setMarkedDates(computeMarkedDates(uid));
+    };
+    window.addEventListener("timetable:updated", onTimetableUpdated);
+    return () => window.removeEventListener("timetable:updated", onTimetableUpdated);
+  }, [uid, courses]);
+
+  // 监听 localStorage 对 timetableEvents 的直接修改
   useEffect(() => {
     const onStorage = (e) => {
       if (!e.key) return;
       const pfx1 = `courseProgress:${uid || "anon"}:`;
+      const ttKey = TT_KEY(uid);
       const pfx2 = `studyPlan:${uid || "anon"}:`;
       if (e.key.startsWith(pfx1)) {
         const course_key = e.key.slice(pfx1.length);
@@ -579,13 +693,41 @@ const Dashboard = () => {
         setProgressItems((items) =>
           items.map((it) => (it.courseKey === course_key ? { ...it, percent: v } : it))
         );
-      } else if (e.key.startsWith(pfx2)) {
-        setTodosByCourse(loadTodayTodosForUser(uid, courses));
+      } else if (e.key.startsWith(pfx2) || e.key === ttKey) {
+        setTodosByCourse(mergeTodayTodos(uid, courses));
+        setMarkedDates(computeMarkedDates(uid));
       }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [uid, courses]);
+
+  // ========= 自定义小日历日期单元（带小圆点） =========
+  const markedSet = useMemo(() => new Set(markedDates), [markedDates]);
+
+  const DotDay = (props) => {
+    const { day, outsideCurrentMonth, ...other } = props;
+    const hasEvent = markedSet.has(day.format("YYYY-MM-DD"));
+    return (
+      <Box sx={{ position: "relative" }}>
+        <PickersDay day={day} outsideCurrentMonth={outsideCurrentMonth} {...other} />
+        {hasEvent && (
+          <Box
+            sx={{
+              position: "absolute",
+              left: "50%",
+              bottom: 6,
+              transform: "translateX(-50%)",
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              bgcolor: "primary.main",
+            }}
+          />
+        )}
+      </Box>
+    );
+  };
 
   // ===================== render =====================
   return (
@@ -602,8 +744,6 @@ const Dashboard = () => {
             <SearchIconWrapper><SearchIcon /></SearchIconWrapper>
             <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
           </Search>
-
-          {/* ✅ 统一使用全局小铃铛（任何页面都同样放一个即可同步） */}
           <NotificationsBell />
         </Box>
 
@@ -614,27 +754,17 @@ const Dashboard = () => {
           <Typography variant="h6" sx={{ color: "#7a7a7a" }}>Student</Typography>
         </Box>
 
-        {/* Greeting & rewards & AI */}
-        <Box sx={{ display: "flex", alignItems: "baseline", gap: 5, mb: 2 }}>
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>
-            {greeting}, {firstName}! 👋
-          </Typography>
-          <Typography variant="h7" sx={{ fontWeight: 700 }}>
-            Total Rewards:
-            <Box component="span" sx={{ fontWeight: 800, ml: 1 }}>{totalRewards}</Box>
-          </Typography>
-          <Paper elevation={1} sx={{ display: "flex", alignItems: "center", gap: 2, px: 1.5, py: 0.5, ml: "auto" }}>
-            <SmartToyIcon fontSize="small" />
-            <Typography variant="body1">AI</Typography>
-          </Paper>
-        </Box>
-
         <Box sx={{ mt: 2, pb: 2, width: "100%", height: "100%" }}>
           <Grid container spacing={3} sx={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", height: "100%", width: "100%" }}>
             {/* Courses */}
             <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "60%" }, maxWidth: { xs: "100%", sm: "50%", md: "60%" } }}>
               <Paper sx={{ p: 3, height: "85%", width: "97.5%", borderRadius: 2, boxShadow: 2 }}>
-                <Typography component={Link} to="/courses" variant="h5" sx={{ fontWeight: 700, mb: 2, textDecoration: "none", color: "inherit", "&:hover": { textDecoration: "underline" } }}>
+                <Typography
+                  component={Link}
+                  to="/courses"
+                  variant="h5"
+                  sx={{ fontWeight: 700, mb: 2, textDecoration: "none", color: "inherit", "&:hover": { textDecoration: "underline" } }}
+                >
                   Courses
                 </Typography>
                 <CoursesSlider courses={sliderCourses} progressMap={progressMap} />
@@ -691,31 +821,21 @@ const Dashboard = () => {
                   <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
                     Study Progress
                   </Typography>
-                  <Box
-                    component="button"
-                    style={{
-                      border: "none",
-                      padding: "10px 14px",
-                      borderRadius: 6,
-                      background: "#1f2a44",
-                      color: "white",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                    onClick={() => console.log("Generate study plan")}
-                  >
-                    Generate study Plan
-                  </Box>
+                  {/* 按你的要求：已删除“Generate study Plan”按钮 */}
                 </Box>
                 <ProgressSlider items={progressItems} onOpen={openStudyProgress} />
               </Paper>
             </Grid>
 
-            {/* Calendar */}
+            {/* Calendar with dots */}
             <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "30%" }, maxWidth: { xs: "100%", sm: "50%", md: "30%" }, mt: { md: "2px" }, ml: { md: "15px" } }}>
               <Paper sx={{ p: 2, height: "85%", width: "100%", borderRadius: 2, boxShadow: 2 }}>
                 <LocalizationProvider dateAdapter={AdapterDayjs}>
-                  <DateCalendar />
+                  <DateCalendar
+                    disableHighlightToday={false}
+                    // 使用 slots 自定义日期单元，显示小圆点
+                    slots={{ day: DotDay }}
+                  />
                 </LocalizationProvider>
               </Paper>
             </Grid>
