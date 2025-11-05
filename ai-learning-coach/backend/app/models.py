@@ -52,6 +52,18 @@ class User(db.Model):
         lazy="selectin",
         foreign_keys="Feedback.student_id",
     )
+    assignment_grades_given = db.relationship(
+        "AssignmentGrade",
+        back_populates="grader",
+        lazy="selectin",
+        foreign_keys="AssignmentGrade.graded_by",
+    )
+    assignment_grades_received = db.relationship(
+        "AssignmentGrade",
+        back_populates="student",
+        lazy="selectin",
+        foreign_keys="AssignmentGrade.student_id",
+    )
     conversations = db.relationship("Conversation", back_populates="user", lazy="selectin")
 
     #  Unique constraint on (username, role)
@@ -165,6 +177,12 @@ class Assignment(db.Model):
     course = db.relationship("Course", back_populates="assignments", lazy="joined")
     teacher = db.relationship("User", back_populates="assignments_created", lazy="joined")
     submissions = db.relationship("Material", back_populates="assignment", lazy="selectin")
+    grades = db.relationship(
+        "AssignmentGrade",
+        back_populates="assignment",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     def to_dict(self):
         return {
@@ -177,6 +195,75 @@ class Assignment(db.Model):
             "optional": bool(self.optional),
             "created_at": _to_sydney_iso(self.created_at),
         }
+
+
+class AssignmentGrade(db.Model):
+    __tablename__ = "assignment_grades"
+
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey("assignments.id"), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    graded_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    score = db.Column(db.Float, nullable=False)
+    comment = db.Column(db.Text, nullable=True)
+    graded_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        onupdate=datetime.now(timezone.utc),
+    )
+
+    assignment = db.relationship("Assignment", back_populates="grades", lazy="joined")
+    student = db.relationship(
+        "User",
+        foreign_keys=[student_id],
+        back_populates="assignment_grades_received",
+        lazy="joined",
+    )
+    grader = db.relationship(
+        "User",
+        foreign_keys=[graded_by],
+        back_populates="assignment_grades_given",
+        lazy="joined",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("assignment_id", "student_id", name="uq_assignment_grade_assignment_student"),
+    )
+
+    def to_dict(self, include_related: bool = False):
+        data = {
+            "id": self.id,
+            "assignment_id": self.assignment_id,
+            "student_id": self.student_id,
+            "graded_by": self.graded_by,
+            "score": self.score,
+            "comment": self.comment,
+            "graded_at": _to_sydney_iso(self.graded_at),
+            "updated_at": _to_sydney_iso(self.updated_at),
+        }
+        if include_related:
+            data["student"] = (
+                {
+                    "id": self.student.id,
+                    "first_name": self.student.first_name,
+                    "last_name": self.student.last_name,
+                    "username": self.student.username,
+                }
+                if self.student
+                else None
+            )
+            data["graded_by_user"] = (
+                {
+                    "id": self.grader.id,
+                    "first_name": self.grader.first_name,
+                    "last_name": self.grader.last_name,
+                    "username": self.grader.username,
+                }
+                if self.grader
+                else None
+            )
+        return data
 
 
 class Feedback(db.Model):
