@@ -242,12 +242,20 @@ export default function Grading() {
     setError(null);
     
     try {
-      const { data } = await http.post('/assistant/grade_submission', {
+      console.log("Sending AI grading request:", {
         material_id: selectedSubmission,
         teacher_id: user.id,
+        max_score: 100
+      });
+
+      const { data } = await http.post('/assistant/grade_submission', {
+        material_id: parseInt(selectedSubmission),
+        teacher_id: parseInt(user.id),
         max_score: 100,
         rubric: "Please grade the assignment based on its content and provide detailed strengths and improvement suggestions."
       });
+
+      console.log("AI grading response:", data);
 
       if (data.grading) {
         setGradingResult(data.grading);
@@ -259,12 +267,34 @@ export default function Grading() {
         alert("AI grading completed!");
       } else if (data.parse_error) {
         setError("AI response format error: " + data.parse_error);
+        alert("AI response format error: " + data.parse_error);
       }
     } catch (error) {
-      console.error("AI grading error:", error);
-      const errorMsg = error?.response?.data?.error || error.message || "AI grading failed";
+      console.error("AI grading error details:", {
+        error,
+        response: error?.response,
+        status: error?.response?.status,
+        data: error?.response?.data,
+        message: error.message
+      });
+      
+      let errorMsg = "AI grading failed";
+      if (error?.response?.status === 404) {
+        errorMsg = "Resource not found. Please check:\n- Is the submission valid?\n- Is your account an admin?\n- Does the assignment exist?";
+      } else if (error?.response?.status === 403) {
+        errorMsg = "Permission denied. Only the assignment owner can grade submissions.";
+      } else if (error?.response?.status === 400) {
+        errorMsg = error?.response?.data?.error || error?.response?.data?.description || "Invalid request parameters";
+      } else if (error?.response?.data?.error) {
+        errorMsg = error.response.data.error;
+      } else if (error?.response?.data?.description) {
+        errorMsg = error.response.data.description;
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+      
       setError(errorMsg);
-      alert("AI grading failed: " + errorMsg);
+      alert("AI grading failed:\n" + errorMsg);
     } finally {
       setAiGrading(false);
     }
@@ -337,30 +367,100 @@ export default function Grading() {
     }
   };
 
-  const handleFeedbackSend = () => {
+  const handleFeedbackSend = async () => {
     if (!feedbackContent.trim()) {
       alert("Please enter or generate feedback content first");
       return;
     }
     
-    console.log("Sending feedback:", { 
-      submission: selectedSubmission,
-      content: feedbackContent 
-    });
-    // TODO: Implement sending feedback to student (e.g., via email or notification)
-    alert("Feedback sent to student (feature to be implemented)");
+    const user = getCurrentUser();
+    if (!user || !user.id) {
+      alert("User not logged in");
+      return;
+    }
+    
+    // 获取当前选中的提交，从中获取学生ID
+    const submission = submissions.find(s => s.id === parseInt(selectedSubmission));
+    if (!submission || !submission.uploaded_by) {
+      alert("Cannot identify student for this submission");
+      return;
+    }
+    
+    try {
+      console.log("Sending feedback:", {
+        teacher_id: user.id,
+        student_id: submission.uploaded_by,
+        course_id: parseInt(selectedCourse),
+        content: feedbackContent
+      });
+
+      await http.post('/feedback', {
+        teacher_id: user.id,
+        student_id: submission.uploaded_by,
+        course_id: selectedCourse ? parseInt(selectedCourse) : null,
+        content: feedbackContent
+      });
+      
+      alert("✅ Feedback sent to student successfully!");
+      setFeedbackContent(""); // 清空反馈框
+    } catch (error) {
+      console.error("Failed to send feedback:", error);
+      const errorMsg = error?.response?.data?.error || error?.response?.data?.description || error.message;
+      alert("❌ Failed to send feedback: " + errorMsg);
+    }
   };
 
-  const handleGradeSubmit = () => {
-    console.log("Submitting grade:", { 
-      course: selectedCourse, 
-      assignment: selectedAssignment,
-      submission: selectedSubmission, 
-      score, 
-      comments 
-    });
-    // TODO: Implement saving grade to backend
-    alert("Grade recorded (feature to be implemented)");
+  const handleGradeSubmit = async () => {
+    if (!selectedSubmission || !score) {
+      alert("Please select a submission and enter a score");
+      return;
+    }
+
+    const user = getCurrentUser();
+    if (!user || !user.id) {
+      alert("User not logged in");
+      return;
+    }
+
+    // 获取当前选中的提交
+    const submission = submissions.find(s => s.id === parseInt(selectedSubmission));
+    if (!submission) {
+      alert("Submission not found");
+      return;
+    }
+
+    try {
+      console.log("Submitting grade:", { 
+        course: selectedCourse, 
+        assignment: selectedAssignment,
+        submission: selectedSubmission, 
+        score, 
+        comments,
+        student_id: submission.uploaded_by
+      });
+
+      // 如果有评语，也作为反馈发送给学生
+      if (comments.trim()) {
+        const feedbackContent = `📊 Grade: ${score}/100\n\n${comments}`;
+        
+        await http.post('/feedback', {
+          teacher_id: user.id,
+          student_id: submission.uploaded_by,
+          course_id: selectedCourse ? parseInt(selectedCourse) : null,
+          content: feedbackContent
+        });
+      }
+      
+      alert("✅ Grade recorded and feedback sent to student!");
+      
+      // 可选：清空表单
+      // setScore("");
+      // setComments("");
+    } catch (error) {
+      console.error("Failed to submit grade:", error);
+      const errorMsg = error?.response?.data?.error || error?.response?.data?.description || error.message;
+      alert("❌ Failed to submit grade: " + errorMsg);
+    }
   };
 
   return (

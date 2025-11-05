@@ -31,28 +31,28 @@ class User(db.Model):
     last_name = db.Column(db.String(80), nullable=False)
     role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.STUDENT)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
-    # Relationships
-    courses_created = db.relationship("Course", back_populates="creator", lazy="selectin")
-    enrollments = db.relationship("Enrollment", back_populates="student", lazy="selectin")
+    # Relationships - 使用lazy="dynamic"避免自动加载大量数据
+    courses_created = db.relationship("Course", back_populates="creator", lazy="dynamic")
+    enrollments = db.relationship("Enrollment", back_populates="student", lazy="dynamic")
     assignments_created = db.relationship(
         "Assignment",
         back_populates="teacher",
-        lazy="selectin",
+        lazy="dynamic",
         foreign_keys="Assignment.teacher_id",
     )
     feedback_sent = db.relationship(
         "Feedback",
         back_populates="teacher",
-        lazy="selectin",
+        lazy="dynamic",
         foreign_keys="Feedback.teacher_id",
     )
     feedback_received = db.relationship(
         "Feedback",
         back_populates="student",
-        lazy="selectin",
+        lazy="dynamic",
         foreign_keys="Feedback.student_id",
     )
-    conversations = db.relationship("Conversation", back_populates="user", lazy="selectin")
+    conversations = db.relationship("Conversation", back_populates="user", lazy="dynamic")
 
     #  Unique constraint on (username, role)
     __table_args__ = (
@@ -74,14 +74,14 @@ class Course(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
 
     creator = db.relationship("User", back_populates="courses_created", lazy="joined")
-    enrollments = db.relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
-    assignments = db.relationship("Assignment", back_populates="course", cascade="all, delete-orphan", lazy="selectin")
-    materials = db.relationship("Material", back_populates="course", cascade="all, delete-orphan", lazy="selectin")
+    enrollments = db.relationship("Enrollment", back_populates="course", cascade="all, delete-orphan", lazy="dynamic")
+    assignments = db.relationship("Assignment", back_populates="course", cascade="all, delete-orphan", lazy="dynamic")
+    materials = db.relationship("Material", back_populates="course", cascade="all, delete-orphan", lazy="dynamic")
     feedback_entries = db.relationship(
         "Feedback",
         back_populates="course",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="dynamic",
         single_parent=True,
     )
 
@@ -164,7 +164,7 @@ class Assignment(db.Model):
 
     course = db.relationship("Course", back_populates="assignments", lazy="joined")
     teacher = db.relationship("User", back_populates="assignments_created", lazy="joined")
-    submissions = db.relationship("Material", back_populates="assignment", lazy="selectin")
+    submissions = db.relationship("Material", back_populates="assignment", lazy="dynamic")
 
     def to_dict(self):
         return {
@@ -262,7 +262,7 @@ class Conversation(db.Model):
         "ConversationMessage",
         back_populates="conversation",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="dynamic",
         order_by="ConversationMessage.created_at",
     )
 

@@ -215,7 +215,7 @@ def grade_submission():
         "}\n"
         f"The numeric score must be between 0 and {max_score}. "
         "Provide at least one mistake entry when issues are found; if the work is excellent, return an empty list and explain why. "
-        "Use concise Simplified Chinese for all text values. "
+        "Use concise English for all text values. "
         "Do not include markdown or additional prose outside the JSON object."
     )
 

@@ -209,8 +209,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   // —— 课程列表状态
-  const [courses, setCourses] = useState(recentCourses);
-  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [courses, setCourses] = useState([]);  // 初始化为空数组，等待从后端加载
+  const [coursesLoading, setCoursesLoading] = useState(true);  // 初始为true，显示加载状态
 
   // —— 翻页（固定显示 3 张）
   const CARDS_PER_PAGE = 3;
@@ -266,6 +266,8 @@ export default function Dashboard() {
     setCoursesLoading(true);
     const adminId = getCurrentUserId();
 
+    console.log("Fetching courses for admin ID:", adminId);
+
     if (!adminId) {
       console.warn("Unable to determine current admin id; course list will be empty.");
       setCourses([]);
@@ -274,9 +276,17 @@ export default function Dashboard() {
     }
 
     try {
-      const response = await fetch(`http://localhost:5001/courses?created_by=${encodeURIComponent(adminId)}`);
+      const url = `http://localhost:5001/courses?created_by=${encodeURIComponent(adminId)}`;
+      console.log("Fetching courses from:", url);
+      
+      const response = await fetch(url);
+      
+      console.log("Courses API response status:", response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log("Fetched courses data:", data);
+        
         // 将后端数据转换为前端格式
         const formattedCourses = data.map((course, index) => ({
           id: course.id,
@@ -286,10 +296,18 @@ export default function Dashboard() {
           image: course.image_url || defaultCourseImages[index % defaultCourseImages.length],
           studentCount: 0, // TODO: 从enrollments计算
         }));
+        
+        console.log("Setting courses to:", formattedCourses);
         setCourses(formattedCourses);
+      } else {
+        console.error("Failed to fetch courses, status:", response.status);
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        setCourses([]);
       }
     } catch (err) {
       console.error("Failed to fetch courses:", err);
+      setCourses([]);
     } finally {
       setCoursesLoading(false);
     }
