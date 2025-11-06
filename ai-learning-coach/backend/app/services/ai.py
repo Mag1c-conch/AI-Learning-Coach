@@ -75,16 +75,19 @@ def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **
     contents = _format_messages(messages)
     gen_config = _pick_generation_config(generation_kwargs)
 
-    # ✅ 注意：系统提示放进 config，而不是顶层 system_instruction
-    base_config = {"system_instruction": system_prompt} if system_prompt else None
+    # ✅ 合并config：包含system_instruction和generation参数
+    config = {}
+    if system_prompt:
+        config["system_instruction"] = system_prompt
+    # 将generation参数合并到config中
+    if gen_config:
+        config.update(gen_config)
 
     try:
         resp = client.models.generate_content(
             model=model_name,
             contents=contents,
-            config=base_config,                 # <—— 放这里
-            generation_config=gen_config or None,
-            safety_settings=_DEFAULT_SAFETY,
+            config=config if config else None,
         )
     except Exception as exc:
         raise RuntimeError(f"Gemini API call failed: {exc}") from exc
@@ -106,9 +109,11 @@ def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **
         resp2 = client.models.generate_content(
             model="gemini-1.5-flash",
             contents=[{"role": "user", "parts": [{"text": last_user}]}],
-            config={"system_instruction": (system_prompt or "")[:2000]},
-            generation_config={"temperature": 0.1, "max_output_tokens": 512},
-            safety_settings=_DEFAULT_SAFETY,
+            config={
+                "system_instruction": (system_prompt or "")[:2000],
+                "temperature": 0.1,
+                "max_output_tokens": 512
+            },
         )
         text2 = _extract_text(resp2)
         if text2:

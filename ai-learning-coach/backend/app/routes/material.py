@@ -2,6 +2,7 @@
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy import or_, select
 from zoneinfo import ZoneInfo
 
@@ -69,7 +70,7 @@ def _parse_bool(value):
     return None
 
 
-def _iso_utc(dt: datetime | None) -> str | None:
+def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
     """将 datetime 统一转换为 UTC 的 ISO8601(Z 结尾) 字符串。"""
     if not dt:
         return None
