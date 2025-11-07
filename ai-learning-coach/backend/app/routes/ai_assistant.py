@@ -24,7 +24,7 @@ _STUDY_PLAN_PROMPT_TEMPLATE = (
     "- Every task must focus on a single material or assignment and include `course_id`; include `material_id` when one is provided, otherwise use null.\n"
     "- Provide concise titles and actionable descriptions.\n"
     "- Respect upcoming due dates and distribute the workload evenly.\n"
-    "Return strict JSON (no markdown) following this schema:\n"
+    "- Return strict JSON (no markdown) following this schema:\n"
     "{{\n"
     '  \"student_id\": <int>,\n'
     '  \"week_start\": \"YYYY-MM-DD\",\n'

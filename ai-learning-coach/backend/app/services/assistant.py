@@ -285,12 +285,20 @@ def _load_material_text(material: Material, limit: int = 4000) -> str:
     if not root:
         raise ValueError("未配置上传目录，无法读取资料。")
 
-    file_path = os.path.join(root, str(material.course_id), material.stored_name)
-    if material.assignment_id:
-        file_path = os.path.join(root, str(material.course_id), str(material.assignment_id), material.stored_name)
+    course_dir = os.path.join(root, str(material.course_id))
+    candidate_paths = []
 
-    if not os.path.isfile(file_path):
-        raise FileNotFoundError(file_path)
+    if material.assignment_id:
+        assignment_dir = os.path.join(course_dir, str(material.assignment_id))
+        if material.file_type == "assignment_submission":
+            candidate_paths.append(os.path.join(assignment_dir, "student_uploads", material.stored_name))
+        candidate_paths.append(os.path.join(assignment_dir, material.stored_name))
+
+    candidate_paths.append(os.path.join(course_dir, material.stored_name))
+
+    file_path = next((path for path in candidate_paths if os.path.isfile(path)), None)
+    if not file_path:
+        raise FileNotFoundError(candidate_paths[0])
 
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
