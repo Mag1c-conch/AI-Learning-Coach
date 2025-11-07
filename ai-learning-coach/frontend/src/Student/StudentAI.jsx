@@ -17,12 +17,35 @@ import PersonIcon from "@mui/icons-material/Person";
 import Sidebar from "../components/Sidebar.jsx";
 import CircleIcon from "@mui/icons-material/Circle";
 
+// === 新增：Markdown 渲染依赖 ===
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
+
 const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5001";
 const DEFAULT_GREETING = {
   role: "model",
   content:
     "Hello! I'm your AI teaching assistant. I can help you answer course-related questions, assist in creating teaching plans, analyze student progress, and more. How can I help you today?",
 };
+
+// === 新增：对“长串无换行”的文本做兜底自动排版（题号、选项、Answer）===
+function autoFormatQA(raw) {
+  if (typeof raw !== "string") return raw;
+
+  let t = raw;
+
+  // 题号独立段： 1. 2. 3. …
+  t = t.replace(/\s*(\d+)\.\s+/g, "\n\n$1. ");
+
+  // 选项独立行成列表： A) B) C) D)
+  t = t.replace(/\s([A-D])\)\s+/g, "\n- $1) ");
+
+  // 答案加粗并换行
+  t = t.replace(/\s*Answer:\s*/gi, "\n**Answer:** ");
+
+  return t.trim();
+}
 
 export default function AiAssistance() {
   const [conversationId, setConversationId] = useState(null);
@@ -156,20 +179,23 @@ export default function AiAssistance() {
     setLoading(true);
 
     try {
-      const systemPrompt = `You are a professional AI teaching assistant, primarily helping students with:
-1. Answering course content and teaching-related questions
-2. Assisting in creating teaching plans and course schedules
-3. Analyzing student progress and learning situations
-4. Providing teaching suggestions and best practices
-5. Assisting in managing course resources and assignments
+      // === 更新：更强的 Markdown 指南 ===
+      const systemPrompt = `You are a professional AI teaching assistant.
 
-Please answer students' questions in a professional, friendly, and clear manner.`;
+Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
+- Start with a short heading when helpful.
+- Use numbered lists for questions (each question on its own line).
+- For options, put each on a new line with "- A) ...", "- B) ...", etc.
+- Put the final answer on a separate line as **Answer:** <letter>.
+- Use fenced code blocks for code (e.g., \`\`\`python ... \`\`\`).
+- Keep explanations concise and well-structured.
+`;
 
       const payload = {
         conversation_id: conversationId,
         user_id: userId,
         messages: [{ role: "user", content: userMessage }],
-        system_prompt: systemPrompt,
+        system_prompt: systemPrompt, // 前端传给后端
       };
 
       if (!conversationId) {
@@ -221,12 +247,96 @@ Please answer students' questions in a professional, friendly, and clear manner.
   };
 
   const formatMessage = (content) => {
-    const safe = typeof content === "string" ? content : String(content ?? "");
-    return safe.split("\n\n").map((paragraph, idx) => (
-      <Typography key={idx} sx={{ mb: idx === 0 ? 0 : 1.5, lineHeight: 1.6 }}>
-        {paragraph}
-      </Typography>
-    ));
+    const raw =
+      typeof content === "string"
+        ? content
+        : "```json\n" + JSON.stringify(content ?? "", null, 2) + "\n```";
+
+    const text = autoFormatQA(raw);
+
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
+        components={{
+          p: ({ node, ...props }) => (
+            <Typography
+              sx={{ lineHeight: 1.8, mb: 1.2, whiteSpace: "pre-wrap" }}
+              {...props}
+            />
+          ),
+          li: ({ node, ...props }) => (
+            <li style={{ marginBottom: 6 }} {...props} />
+          ),
+          code: ({ inline, className, children, ...props }) => {
+            if (inline) {
+              return (
+                <code
+                  style={{
+                    background: "rgba(2,122,255,.08)",
+                    padding: "2px 6px",
+                    borderRadius: 6,
+                    fontFamily:
+                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                  }}
+                  {...props}
+                >
+                  {children}
+                </code>
+              );
+            }
+            return (
+              <pre
+                style={{
+                  padding: 12,
+                  borderRadius: 10,
+                  overflowX: "auto",
+                  border: "1px solid rgba(0,0,0,0.06)",
+                  background: "#fafafa",
+                  margin: 0,
+                }}
+              >
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              </pre>
+            );
+          },
+          h1: ({ node, ...props }) => (
+            <Typography variant="h5" sx={{ mt: 2, mb: 1 }} {...props} />
+          ),
+          h2: ({ node, ...props }) => (
+            <Typography variant="h6" sx={{ mt: 2, mb: 1 }} {...props} />
+          ),
+          table: ({ node, ...props }) => (
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{ borderCollapse: "collapse", width: "100%" }}
+                {...props}
+              />
+            </div>
+          ),
+          th: ({ node, ...props }) => (
+            <th
+              style={{
+                borderBottom: "1px solid #e0e0e0",
+                textAlign: "left",
+                padding: 8,
+              }}
+              {...props}
+            />
+          ),
+          td: ({ node, ...props }) => (
+            <td
+              style={{ borderBottom: "1px solid #f0f0f0", padding: 8 }}
+              {...props}
+            />
+          ),
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    );
   };
 
   if (initialLoading) {
@@ -249,10 +359,7 @@ Please answer students' questions in a professional, friendly, and clear manner.
 
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
-      {/* 左侧：Sidebar */}
       <Sidebar />
-
-      {/* 右侧：主内容区（可滚动） */}
       <Box
         sx={{
           flex: 1,
@@ -262,7 +369,6 @@ Please answer students' questions in a professional, friendly, and clear manner.
           position: "relative",
         }}
       >
-        {/* 顶部细线，和 Dashboard 视觉保持一致（可选） */}
         <Box
           sx={{
             position: "absolute",
@@ -274,7 +380,6 @@ Please answer students' questions in a professional, friendly, and clear manner.
           }}
         />
 
-        {/* 标题栏（右侧顶部） */}
         <Box
           sx={{
             display: "flex",
@@ -307,7 +412,6 @@ Please answer students' questions in a professional, friendly, and clear manner.
           </Box>
         </Box>
 
-        {/* 你的聊天卡片保留：用一个容器包起来，宽度控制在 960 内，更美观 */}
         <Box
           sx={{
             display: "flex",
