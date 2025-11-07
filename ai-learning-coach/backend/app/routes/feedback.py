@@ -1,4 +1,5 @@
 from flask import Blueprint, abort, jsonify, request
+from datetime import datetime, timezone
 
 from ..extensions import db
 from ..models import Course, Feedback, User, UserRole
@@ -112,3 +113,53 @@ def list_feedback():
 
     entries = query.all()
     return jsonify([entry.to_dict(include_related=include_related) for entry in entries]), 200
+
+
+@bp.route("/<int:feedback_id>/read", methods=["PATCH"])
+def mark_feedback_read(feedback_id):
+    """
+    标记单条反馈为已读。需要提供 student_id 和 is_read 字段。
+    只有反馈的接收者（学生）可以标记为已读。
+    """
+    payload = _require_json()
+    
+    student_id = _coerce_int("student_id", payload.get("student_id"))
+    is_read = _parse_bool(payload.get("is_read"), default=True)
+    
+    feedback = Feedback.query.get_or_404(feedback_id)
+    
+    # 验证只有该反馈的接收者可以标记为已读
+    if feedback.student_id != student_id:
+        abort(403, description="you can only mark your own feedback as read")
+    
+    feedback.is_read = is_read
+    if is_read and not feedback.read_at:
+        feedback.read_at = datetime.now(timezone.utc)
+    elif not is_read:
+        feedback.read_at = None
+    
+    db.session.commit()
+    
+    return jsonify(feedback.to_dict(include_related=True)), 200
+
+
+@bp.route("/<int:feedback_id>", methods=["DELETE"])
+def delete_feedback(feedback_id):
+    """
+    删除单条反馈。
+    只有反馈的接收者（学生）可以删除自己的反馈。
+    """
+    student_id = request.args.get("student_id", type=int)
+    if not student_id:
+        abort(400, description="student_id is required")
+    
+    feedback = Feedback.query.get_or_404(feedback_id)
+    
+    # 验证只有该反馈的接收者可以删除
+    if feedback.student_id != student_id:
+        abort(403, description="you can only delete your own feedback")
+    
+    db.session.delete(feedback)
+    db.session.commit()
+    
+    return jsonify({"message": "feedback deleted successfully"}), 200

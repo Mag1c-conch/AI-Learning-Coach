@@ -22,6 +22,7 @@ import {
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import SchoolIcon from "@mui/icons-material/School";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useSyncExternalStore } from "react";
 import http from "../api/http";
 
@@ -121,6 +122,32 @@ const createStore = () => {
     });
   };
 
+  const deleteFeedback = async (id) => {
+    const uid = state.uid;
+    if (!uid) return;
+    try {
+      await http.delete(`/feedback/${id}?student_id=${uid}`);
+      setState({
+        list: state.list.filter((n) => n.id !== id),
+      });
+    } catch (e) {
+      console.error("Failed to delete feedback", e?.response?.data || e.message);
+    }
+  };
+
+  const deleteAllFeedback = async () => {
+    const uid = state.uid;
+    if (!uid) return;
+    for (const n of state.list) {
+      try {
+        await http.delete(`/feedback/${n.id}?student_id=${uid}`);
+      } catch (e) {
+        console.error("Failed to delete one feedback", e?.response?.data || e.message);
+      }
+    }
+    setState({ list: [] });
+  };
+
   // 公开 API
   return {
     subscribe,
@@ -129,6 +156,8 @@ const createStore = () => {
     fetchNotifications,
     markNotificationRead,
     markAllRead,
+    deleteFeedback,
+    deleteAllFeedback,
     unreadCount,
     // 供外界在登录/登出时更新 uid
     setUid: (uid) => setState({ uid }),
@@ -230,17 +259,32 @@ export default function NotificationsBell() {
                         </>
                       }
                     />
-                    {!n.is_read && (
-                      <Button
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                      {!n.is_read && (
+                        <Button
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            store.markNotificationRead(n.id);
+                          }}
+                        >
+                          Mark read
+                        </Button>
+                      )}
+                      <IconButton
                         size="small"
+                        color="error"
                         onClick={(e) => {
                           e.stopPropagation();
-                          store.markNotificationRead(n.id);
+                          if (window.confirm("Delete this feedback?")) {
+                            store.deleteFeedback(n.id);
+                          }
                         }}
+                        sx={{ alignSelf: "flex-end" }}
                       >
-                        Mark read
-                      </Button>
-                    )}
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
                   </ListItemButton>
                 );
               })}
@@ -248,6 +292,18 @@ export default function NotificationsBell() {
           )}
         </DialogContent>
         <DialogActions>
+          <Button 
+            variant="text" 
+            color="error" 
+            onClick={() => {
+              if (window.confirm("Delete all feedback? This action cannot be undone.")) {
+                store.deleteAllFeedback();
+              }
+            }} 
+            disabled={!list.length}
+          >
+            Delete all
+          </Button>
           <Button variant="text" onClick={() => store.markAllRead()} disabled={!unread}>
             Mark all as read
           </Button>

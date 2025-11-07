@@ -130,6 +130,23 @@ def get_conversation(conversation_id: int):
     return jsonify(data), 200
 
 
+@bp.route("/assistant/conversations/<int:conversation_id>", methods=["DELETE"])
+def delete_conversation_route(conversation_id: int):
+    """
+    删除指定的对话及其所有消息。
+    需要提供 user_id 参数验证所有权。
+    """
+    user_id = request.args.get("user_id", type=int)
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    success = chat_storage.delete_conversation(conversation_id, user_id)
+    if not success:
+        return jsonify({"error": "conversation not found or access denied"}), 404
+
+    return jsonify({"message": "conversation deleted successfully"}), 200
+
+
 def _parse_json_reply(text: str):
     if not text:
         return None

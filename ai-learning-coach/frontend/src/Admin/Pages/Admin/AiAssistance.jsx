@@ -13,6 +13,8 @@ import {
 import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { Button } from '@mui/material';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5001';
 const DEFAULT_GREETING = {
@@ -221,6 +223,32 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
     }
   };
 
+  const handleClearChat = async () => {
+    if (!window.confirm('Clear all chat history? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      if (conversationId && userId) {
+        await fetch(
+          `${API_BASE}/assistant/conversations/${conversationId}?user_id=${userId}`,
+          { method: 'DELETE' }
+        );
+        if (conversationStorageKey) {
+          localStorage.removeItem(conversationStorageKey);
+        }
+      }
+      setConversationId(null);
+      setMessages([DEFAULT_GREETING]);
+      setConversationTitle('AI Teaching Assistant');
+      setInputValue('');
+      setError(null);
+    } catch (err) {
+      console.error('Failed to clear chat:', err);
+      setError('Failed to clear chat history');
+    }
+  };
+
   const formatMessage = (content) => {
     const safe = typeof content === 'string' ? content : String(content ?? '');
     return safe
@@ -276,7 +304,7 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
           <Avatar sx={{ bgcolor: '#ffffff22', width: 48, height: 48 }}>
             <SmartToyIcon sx={{ color: '#fff' }} />
           </Avatar>
-          <Box>
+          <Box sx={{ flex: 1 }}>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
               AI Teaching Assistant
             </Typography>
@@ -289,6 +317,22 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
               </Typography>
             )}
           </Box>
+          <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<DeleteIcon />}
+            onClick={handleClearChat}
+            disabled={!conversationId || loading}
+            sx={{
+              borderColor: 'rgba(255,255,255,0.3)',
+              '&:hover': {
+                borderColor: 'rgba(255,255,255,0.6)',
+                bgcolor: 'rgba(255,255,255,0.1)',
+              },
+            }}
+          >
+            Clear Chat
+          </Button>
         </Box>
 
         <Box

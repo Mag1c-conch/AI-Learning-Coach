@@ -142,12 +142,10 @@ def _parse_due_date(raw):
 def _build_submission_stored_name(course_dir: str, assignment: Assignment, student: User, original_name: str) -> tuple[str, str]:
     assignment_dir = os.path.join(course_dir, str(assignment.id))
     os.makedirs(assignment_dir, exist_ok=True)
-    student_upload_dir = os.path.join(assignment_dir, "student_uploads")
-    os.makedirs(student_upload_dir, exist_ok=True)
 
     _, original_ext = os.path.splitext(original_name)
     stored_name = f"{student.id}{original_ext}"
-    return student_upload_dir, stored_name
+    return assignment_dir, stored_name
 
 
 def _material_with_student_dict(material: Material) -> dict:

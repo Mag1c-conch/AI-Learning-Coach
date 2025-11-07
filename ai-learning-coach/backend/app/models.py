@@ -282,6 +282,8 @@ class Feedback(db.Model):
     teacher_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     student_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     content = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    read_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     updated_at = db.Column(
         db.DateTime,
@@ -310,6 +312,8 @@ class Feedback(db.Model):
             "teacher_id": self.teacher_id,
             "student_id": self.student_id,
             "content": self.content,
+            "is_read": self.is_read,
+            "read_at": _to_sydney_iso(self.read_at) if self.read_at else None,
             "created_at": _to_sydney_iso(self.created_at),
             "updated_at": _to_sydney_iso(self.updated_at),
         }
