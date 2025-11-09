@@ -1,11 +1,11 @@
-﻿# app/services/ai.py
+# app/services/ai.py
 from typing import List, Dict, Any
 from google import genai
 from flask import current_app
 
 _SUPPORTED_ROLES = {"user", "model"}
 
-# 尽量宽松的安全阈值，减少被误拦
+# Use relaxed safety thresholds to reduce false positives
 _DEFAULT_SAFETY = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
@@ -39,7 +39,7 @@ def _pick_generation_config(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 def _extract_text(resp) -> str:
-    # 优先用 resp.text；为空则从 candidates 里取
+    # Prefer resp.text; fall back to iterating over candidates
     text = getattr(resp, "text", None)
     if text:
         return text.strip()
@@ -69,17 +69,17 @@ def _finish_info(resp) -> Dict[str, Any]:
 
 def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **generation_kwargs) -> str:
     client = _get_client()
-    # ✅ 用真实存在的默认模型；也可在 .env 里覆盖 GEMINI_MODEL
+    # Use a real default model but allow overriding GEMINI_MODEL via .env
     model_name = current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash")
 
     contents = _format_messages(messages)
     gen_config = _pick_generation_config(generation_kwargs)
 
-    # ✅ 合并config：包含system_instruction和generation参数
+    # Merge config so it contains both system_instruction and generation parameters
     config = {}
     if system_prompt:
         config["system_instruction"] = system_prompt
-    # 将generation参数合并到config中
+    # Incorporate generation parameters into the final config
     if gen_config:
         config.update(gen_config)
 
@@ -98,7 +98,7 @@ def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **
 
     current_app.logger.warning("Gemini returned no text. details=%s", _finish_info(resp))
 
-    # 简单回退重试（只用最后一条 user，缩短 system，改成更稳的 flash）
+    # Simple retry: use only the last user message, shorten the system prompt, and switch to flash
     last_user = ""
     for m in reversed(messages or []):
         if (m.get("role") or "").lower() == "user" and m.get("content"):

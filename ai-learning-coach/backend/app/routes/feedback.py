@@ -41,9 +41,9 @@ def _parse_bool(value, default=None):
 @bp.route("", methods=["POST"])
 def create_feedback():
     """
-    创建一条新的反馈记录。请求体必须包含 teacher_id、student_id 和 content 字段，course_id 字段可选。
-    只有教师（UserRole.ADMIN）才能发送反馈，且反馈只能发送给学生（UserRole.STUDENT）。
-    如果指定了 course_id，则教师必须是该课程的创建者。
+    Create a feedback record. The body must include teacher_id, student_id, and content (course_id is optional).
+    Only teachers (UserRole.ADMIN) may send feedback, and recipients must be students (UserRole.STUDENT).
+    When course_id is present, the teacher must own that course.
     """
     payload = _require_json()
 
@@ -85,9 +85,9 @@ def create_feedback():
 @bp.route("", methods=["GET"])
 def list_feedback():
     """
-    如果提供了 teacher_id、student_id 或 course_id 参数，则返回相应的反馈记录列表。
-    可以选择性地使用 include_related 参数来决定是否包含相关的教师、学生和课程信息。
-    可以使用 limit 参数来限制返回的记录数量。
+    Return feedback entries filtered by teacher_id, student_id, or course_id (at least one is required).
+    The include_related flag controls whether related teacher, student, and course data are included.
+    Use limit to cap how many entries are returned.
     """
     query = Feedback.query
 
@@ -118,8 +118,8 @@ def list_feedback():
 @bp.route("/<int:feedback_id>/read", methods=["PATCH"])
 def mark_feedback_read(feedback_id):
     """
-    标记单条反馈为已读。需要提供 student_id 和 is_read 字段。
-    只有反馈的接收者（学生）可以标记为已读。
+    Mark a feedback entry as read. Requires student_id and the desired is_read flag.
+    Only the recipient student may update the read status.
     """
     payload = _require_json()
     
@@ -128,7 +128,7 @@ def mark_feedback_read(feedback_id):
     
     feedback = Feedback.query.get_or_404(feedback_id)
     
-    # 验证只有该反馈的接收者可以标记为已读
+    # Ensure only the recipient student can update the read status
     if feedback.student_id != student_id:
         abort(403, description="you can only mark your own feedback as read")
     
@@ -146,8 +146,7 @@ def mark_feedback_read(feedback_id):
 @bp.route("/<int:feedback_id>", methods=["DELETE"])
 def delete_feedback(feedback_id):
     """
-    删除单条反馈。
-    只有反馈的接收者（学生）可以删除自己的反馈。
+    Delete a feedback entry. Only the recipient student may remove it.
     """
     student_id = request.args.get("student_id", type=int)
     if not student_id:
@@ -155,7 +154,7 @@ def delete_feedback(feedback_id):
     
     feedback = Feedback.query.get_or_404(feedback_id)
     
-    # 验证只有该反馈的接收者可以删除
+    # Ensure only the recipient student can delete the feedback
     if feedback.student_id != student_id:
         abort(403, description="you can only delete your own feedback")
     

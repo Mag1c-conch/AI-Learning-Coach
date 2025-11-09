@@ -1,4 +1,4 @@
-﻿# app/services/assistant.py
+# app/services/assistant.py
 """Task routing logic for the AI assistant with conversation persistence support."""
 from __future__ import annotations
 
@@ -84,11 +84,11 @@ def process_assistant_request(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     missing = _ensure_list(classification.get("missing"))
 
     if missing:
-        missing_str = "、".join(missing)
+        missing_str = ", ".join(missing)
         return {
             "task": task,
             "missing": missing,
-            "text": f"要继续执行该任务，还需要提供以下信息：{missing_str}。",
+            "text": f"Provide the following details before we can continue: {missing_str}.",
         }
 
     handler = _TASK_HANDLERS.get(task, _handle_general_chat)
@@ -118,7 +118,7 @@ def _handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, 
     except FileNotFoundError:
         return {
             "task": "generate_practice",
-            "text": "资料文件不存在，无法生成习题。",
+            "text": "Material file does not exist; unable to generate practice questions.",
         }
     except ValueError as exc:
         return {
@@ -150,7 +150,7 @@ def _handle_wrong_answer_hint(messages: List[Dict[str, Any]], params: Dict[str, 
         return {
             "task": "wrong_answer_hint",
             "missing": ["student_answer"],
-            "text": "请提供学生的回答内容。",
+            "text": "Please provide the student's answer.",
         }
 
     correct_answer = params.get("correct_answer")
@@ -191,13 +191,13 @@ def _resolve_material(params: Dict[str, Any]):
         except (TypeError, ValueError):
             return None, {
                 "task": "generate_practice",
-                "text": "无效的 material_id，请提供整数。",
+                "text": "Invalid material_id. Please provide an integer.",
             }
         material = Material.query.get(material_id)
         if not material:
             return None, {
                 "task": "generate_practice",
-                "text": f"未找到 ID 为 {material_id} 的课程资料。",
+                "text": f"No material found with ID {material_id}.",
             }
         return material, None
 
@@ -205,7 +205,7 @@ def _resolve_material(params: Dict[str, Any]):
         return None, {
             "task": "generate_practice",
             "missing": ["material_name"],
-            "text": "请提供要使用的课程资料名称（material_name）。",
+            "text": "Please provide the material_name you want to use.",
         }
 
     name_str = str(material_name).strip()
@@ -213,7 +213,7 @@ def _resolve_material(params: Dict[str, Any]):
         return None, {
             "task": "generate_practice",
             "missing": ["material_name"],
-            "text": "请输入非空的资料名称。",
+            "text": "Material name cannot be empty.",
         }
 
     lowered = name_str.lower()
@@ -264,17 +264,17 @@ def _resolve_material(params: Dict[str, Any]):
     if not candidates:
         return None, {
             "task": "generate_practice",
-            "text": f"未找到名称包含「{name_str}」的课程资料，请确认文件名或提供 material_id。",
+            "text": f"No material matched '{name_str}'. Verify the file name or provide material_id.",
         }
 
     if len(candidates) > 1:
         names = {candidate.original_name for candidate in candidates}
-        preview = "、".join(sorted(names)[:5])
+        preview = ", ".join(sorted(names)[:5])
         if len(names) > 5:
-            preview += " 等"
+            preview += " ..."
         return None, {
             "task": "generate_practice",
-            "text": f"找到多个匹配的资料：{preview}。请提供更精确的文件名或直接给出 material_id。",
+            "text": f"Multiple materials matched ({preview}). Provide a more precise file name or specify material_id.",
         }
 
     return candidates[0], None
@@ -283,7 +283,7 @@ def _resolve_material(params: Dict[str, Any]):
 def _load_material_text(material: Material, limit: int = 4000) -> str:
     root = current_app.config.get("UPLOAD_FOLDER")
     if not root:
-        raise ValueError("未配置上传目录，无法读取资料。")
+        raise ValueError("UPLOAD_FOLDER is not configured; cannot read materials.")
 
     course_dir = os.path.join(root, str(material.course_id))
     candidate_paths = []
@@ -310,7 +310,7 @@ def _load_material_text(material: Material, limit: int = 4000) -> str:
         try:
             from docx import Document  # type: ignore
         except ImportError as exc:
-            raise ValueError("服务器未安装 python-docx，无法解析 .docx 文件。") from exc
+            raise ValueError("python-docx is not installed on the server; cannot parse .docx files.") from exc
         document = Document(file_path)
         content = "\n".join(paragraph.text for paragraph in document.paragraphs)
     elif ext == ".pdf":
@@ -321,7 +321,7 @@ def _load_material_text(material: Material, limit: int = 4000) -> str:
             try:
                 import PyPDF2  # type: ignore
             except ImportError as exc:
-                raise ValueError("暂未安装 pdfminer.six 或 PyPDF2，无法读取 .pdf 文件。") from exc
+                raise ValueError("Neither pdfminer.six nor PyPDF2 is installed; cannot read .pdf files.") from exc
             try:
                 with open(file_path, "rb") as fh:
                     reader = PyPDF2.PdfReader(fh)
@@ -333,14 +333,14 @@ def _load_material_text(material: Material, limit: int = 4000) -> str:
                             pages.append("")
                     content = "\n".join(pages)
             except Exception as exc:
-                raise ValueError(f"读取 PDF 失败: {exc}") from exc
+                raise ValueError(f"Failed to read PDF: {exc}") from exc
         else:
             try:
                 content = extract_text(file_path) or ""
             except Exception as exc:
-                raise ValueError(f"读取 PDF 失败: {exc}") from exc
+                raise ValueError(f"Failed to read PDF: {exc}") from exc
     else:
-        raise ValueError(f"暂不支持读取该文件类型：{ext or '未知'}。")
+        raise ValueError(f"Unsupported file type: {ext or 'unknown'}.")
 
     return content[:limit]
 
@@ -374,11 +374,11 @@ def _build_practice_prompt(
 
 def _format_questions_text(response: str) -> str:
     if not response:
-        return "模型未返回任何内容。"
+        return "The model did not return any content."
 
     lines = [line.rstrip() for line in response.splitlines() if line.strip()]
     if not lines:
-        return response.strip() or "模型未返回任何内容。"
+        return response.strip() or "The model did not return any content."
 
     return "\n".join(lines)
 

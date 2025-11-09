@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 import enum
 from zoneinfo import ZoneInfo
 
@@ -33,7 +33,7 @@ class User(db.Model):
     last_name = db.Column(db.String(80), nullable=False)
     role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.STUDENT)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
-    # Relationships - 使用lazy="dynamic"避免自动加载大量数据
+    # Relationships - use lazy="dynamic" to avoid loading large collections eagerly
     courses_created = db.relationship("Course", back_populates="creator", lazy="dynamic")
     enrollments = db.relationship("Enrollment", back_populates="student", lazy="dynamic")
     assignments_created = db.relationship(

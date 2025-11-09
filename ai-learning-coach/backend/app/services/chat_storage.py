@@ -173,27 +173,27 @@ def get_conversation_with_history(conversation_id: int, message_limit: Optional[
 
 def delete_conversation(conversation_id: int, user_id: Optional[int] = None) -> bool:
     """
-    删除对话及其所有消息。
-    如果提供了user_id，则验证对话所有权。
+    Delete a conversation and all of its messages.
+    When user_id is provided we verify ownership before removing it.
     """
     conversation = db.session.get(Conversation, conversation_id)
     if not conversation:
         return False
-    
-    # 验证所有权
+
+    # Validate ownership when requested
     if user_id is not None and conversation.user_id != user_id:
         return False
-    
-    # 删除Redis缓存
+
+    # Remove the Redis cache entry
     client = _redis_client()
     if client:
         try:
             client.delete(_redis_key(conversation_id))
         except Exception:
             pass
-    
-    # 删除数据库记录（会级联删除消息）
+
+    # Delete the database record (messages are cascade-deleted)
     db.session.delete(conversation)
     db.session.commit()
-    
+
     return True
