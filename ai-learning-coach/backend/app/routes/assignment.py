@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 from flask import Blueprint, abort, jsonify, request
 
@@ -6,44 +6,6 @@ from ..extensions import db
 from ..models import Assignment, AssignmentGrade, Course, Enrollment, User, UserRole
 
 bp = Blueprint("assignment", __name__, url_prefix="/assignments")
-
-
-def _require_json() -> dict:
-    payload = request.get_json(silent=True)
-    if payload is None:
-        abort(400, description="request payload must be valid JSON")
-    return payload
-
-
-def _parse_bool(value, default=None):
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    normalized = str(value).strip().lower()
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-    return default
-
-
-def _coerce_float(field: str, value):
-    if value is None:
-        abort(400, description=f"{field} is required")
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        abort(400, description=f"{field} must be a number")
-
-
-def _coerce_int(field: str, value):
-    if value is None:
-        abort(400, description=f"{field} is required")
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        abort(400, description=f"{field} must be an integer")
 
 
 def _ensure_student_enrolled(course_id: int, student_id: int) -> None:
@@ -124,11 +86,33 @@ def upsert_assignment_grade(assignment_id: int):
     """
     assignment = Assignment.query.get_or_404(assignment_id)
 
-    payload = _require_json()
+    payload = request.get_json(silent=True)
+    if payload is None:
+        abort(400, description="request payload must be valid JSON")
 
-    teacher_id = _coerce_int("teacher_id", payload.get("teacher_id"))
-    student_id = _coerce_int("student_id", payload.get("student_id"))
-    score = _coerce_float("score", payload.get("score"))
+    teacher_raw = payload.get("teacher_id")
+    if teacher_raw is None:
+        abort(400, description="teacher_id is required")
+    try:
+        teacher_id = int(teacher_raw)
+    except (TypeError, ValueError):
+        abort(400, description="teacher_id must be an integer")
+
+    student_raw = payload.get("student_id")
+    if student_raw is None:
+        abort(400, description="student_id is required")
+    try:
+        student_id = int(student_raw)
+    except (TypeError, ValueError):
+        abort(400, description="student_id must be an integer")
+
+    score_raw = payload.get("score")
+    if score_raw is None:
+        abort(400, description="score is required")
+    try:
+        score = float(score_raw)
+    except (TypeError, ValueError):
+        abort(400, description="score must be a number")
     comment_raw = payload.get("comment")
     comment = str(comment_raw).strip() if comment_raw is not None else None
     if comment == "":
@@ -192,7 +176,11 @@ def list_assignment_grades(assignment_id: int):
         abort(400, description="viewer_id is required")
 
     viewer = User.query.get_or_404(viewer_id)
-    include_related = _parse_bool(request.args.get("include_related"), default=True)
+    include_related_raw = request.args.get("include_related")
+    if include_related_raw is None:
+        include_related = True
+    else:
+        include_related = str(include_related_raw).strip().lower() in {"1", "true", "yes", "on"}
 
     query = AssignmentGrade.query.filter_by(assignment_id=assignment.id)
 

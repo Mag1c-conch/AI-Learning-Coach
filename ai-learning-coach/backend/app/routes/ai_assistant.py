@@ -1,4 +1,4 @@
-﻿# app/routes/ai_assistant.py
+# app/routes/ai_assistant.py
 import json
 from datetime import datetime, time, timedelta
 from typing import Dict, Optional
@@ -133,8 +133,8 @@ def get_conversation(conversation_id: int):
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["DELETE"])
 def delete_conversation_route(conversation_id: int):
     """
-    删除指定的对话及其所有消息。
-    需要提供 user_id 参数验证所有权。
+    Delete the specified conversation and all of its messages.
+    Requires a user_id query parameter to validate ownership.
     """
     user_id = request.args.get("user_id", type=int)
     if not user_id:

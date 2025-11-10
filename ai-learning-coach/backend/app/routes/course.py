@@ -82,7 +82,7 @@ def _build_course_payload(course: Course):
                 teacher_email = value.strip()
                 break
 
-    # 计算课程的注册学生数量
+    # Count how many students are enrolled in the course
     student_count = Enrollment.query.filter_by(course_id=course.id).count()
 
     data = course.to_dict()
@@ -157,7 +157,7 @@ def get_course(course_id):
         data["teacher"] = teacher_name or None
         data["creator_name"] = teacher_name or None
     
-    # 添加学生数量
+    # Add enrolled student count to the payload
     student_count = Enrollment.query.filter_by(course_id=course.id).count()
     data["student_count"] = student_count
     
@@ -194,12 +194,12 @@ def list_user_enrollments(user_id):
 @bp.route("/<int:course_id>/students", methods=["GET"])
 def list_course_students(course_id):
     """
-    获取课程的所有注册学生列表
+    Return all students enrolled in the course.
     """
-    # 确保课程存在
+    # Ensure the course exists
     course = Course.query.get_or_404(course_id)
-    
-    # 查询所有注册该课程的学生
+
+    # Query every student enrolled in the course
     students = (
         db.session.query(User)
         .join(Enrollment, Enrollment.user_id == User.id)
@@ -208,8 +208,8 @@ def list_course_students(course_id):
         .order_by(User.first_name, User.last_name)
         .all()
     )
-    
-    # 返回学生信息
+
+    # Build the response payload
     result = []
     for student in students:
         enrollment = Enrollment.query.filter_by(
