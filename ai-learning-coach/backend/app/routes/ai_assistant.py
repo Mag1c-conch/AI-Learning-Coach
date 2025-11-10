@@ -4,12 +4,14 @@ from datetime import datetime, time, timedelta
 from typing import Dict, Optional
 
 from flask import Blueprint, abort, current_app, jsonify, request
+from flask_jwt_extended import jwt_required
 from app.models import Assignment, Course, Enrollment, Material, StudyPlan, SYDNEY_TZ, User, UserRole
 
 from ..extensions import db
 from ..services import chat_storage
 from ..services.assistant import _load_material_text, process_assistant_request
 from ..services.ai import generate_reply
+from ..auth_utils import resolve_user
 
 bp = Blueprint("ai_assistant", __name__)
 
@@ -40,6 +42,7 @@ _STUDY_PLAN_PROMPT_TEMPLATE = (
 
 
 @bp.route("/assistant/chat", methods=["POST", "OPTIONS"])
+@jwt_required(optional=True)
 def chat():
     if request.method == "OPTIONS":
         return "", 200
@@ -50,14 +53,20 @@ def chat():
         messages = data.get("messages", []) or []
         conversation_id = data.get("conversation_id")
         user_id = data.get("user_id")
+        resolved_user = resolve_user(user_id, allow_token=True, require=False)
+        if resolved_user:
+            user_id = resolved_user.id
         conversation_title = data.get("conversation_title")
 
         if conversation_id:
             conversation = chat_storage.get_conversation(conversation_id)
             if not conversation:
                 return jsonify({"error": "conversation not found"}), 404
-            if conversation.user_id and user_id and conversation.user_id != user_id:
-                return jsonify({"error": "forbidden"}), 403
+            if conversation.user_id:
+                if not user_id:
+                    return jsonify({"error": "authentication required"}), 401
+                if conversation.user_id != user_id:
+                    return jsonify({"error": "forbidden"}), 403
         else:
             conversation = chat_storage.create_conversation(
                 user_id=user_id,
@@ -94,11 +103,11 @@ def chat():
 
 
 @bp.route("/assistant/conversations", methods=["GET"])
+@jwt_required(optional=True)
 def list_conversations():
-    user_id = request.args.get("user_id", type=int)
-    if not user_id:
-        return jsonify({"error": "user_id is required"}), 400
-
+    user_id_param = request.args.get("user_id", type=int)
+    user = resolve_user(user_id_param, allow_token=True, require=True)
+    user_id = user.id
     limit = request.args.get("limit", type=int)
     include_messages = request.args.get("include_messages", "false").lower() in {"true", "1", "yes"}
     message_limit = request.args.get("message_limit", type=int)
@@ -113,8 +122,9 @@ def list_conversations():
 
 
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["GET"])
+@jwt_required(optional=True)
 def get_conversation(conversation_id: int):
-    user_id = request.args.get("user_id", type=int)
+    user_id_param = request.args.get("user_id", type=int)
     message_limit = request.args.get("message_limit", type=int)
 
     data = chat_storage.get_conversation_with_history(conversation_id, message_limit=message_limit)
@@ -122,25 +132,25 @@ def get_conversation(conversation_id: int):
         return jsonify({"error": "conversation not found"}), 404
 
     conv_user_id = data.get("user_id")
-    if conv_user_id and user_id is None:
-        return jsonify({"error": "user_id is required"}), 400
-    if conv_user_id and user_id != conv_user_id:
-        return jsonify({"error": "forbidden"}), 403
+    if conv_user_id:
+        user = resolve_user(user_id_param, allow_token=True, require=True)
+        if conv_user_id != user.id:
+            return jsonify({"error": "forbidden"}), 403
 
     return jsonify(data), 200
 
 
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["DELETE"])
+@jwt_required(optional=True)
 def delete_conversation_route(conversation_id: int):
     """
     Delete the specified conversation and all of its messages.
     Requires a user_id query parameter to validate ownership.
     """
-    user_id = request.args.get("user_id", type=int)
-    if not user_id:
-        return jsonify({"error": "user_id is required"}), 400
+    user_id_param = request.args.get("user_id", type=int)
+    user = resolve_user(user_id_param, allow_token=True, require=True)
 
-    success = chat_storage.delete_conversation(conversation_id, user_id)
+    success = chat_storage.delete_conversation(conversation_id, user.id)
     if not success:
         return jsonify({"error": "conversation not found or access denied"}), 404
 
@@ -165,6 +175,7 @@ def _parse_json_reply(text: str):
 
 
 @bp.route("/assistant/grade_submission", methods=["POST"])
+@jwt_required(optional=True)
 def grade_submission():
     payload = request.get_json(silent=True) or {}
 
@@ -179,10 +190,12 @@ def grade_submission():
     except (TypeError, ValueError):
         abort(400, description="material_id must be an integer")
 
-    try:
-        teacher_id = int(teacher_id_raw)
-    except (TypeError, ValueError):
-        abort(400, description="teacher_id must be an integer")
+    teacher_id = None
+    if teacher_id_raw is not None:
+        try:
+            teacher_id = int(teacher_id_raw)
+        except (TypeError, ValueError):
+            abort(400, description="teacher_id must be an integer")
 
     try:
         max_score = int(max_score_raw)
@@ -192,9 +205,7 @@ def grade_submission():
     if max_score <= 0:
         abort(400, description="max_score must be a positive integer")
 
-    teacher = User.query.get_or_404(teacher_id)
-    if teacher.role != UserRole.ADMIN:
-        abort(403, description="only administrators may grade submissions")
+    teacher = resolve_user(teacher_id, required_role=UserRole.ADMIN, allow_token=True, require=True)
 
     material = Material.query.get_or_404(material_id)
     if material.assignment_id is None:

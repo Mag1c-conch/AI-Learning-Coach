@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -5,7 +7,7 @@ import os
 
 from redis import Redis
 
-from .extensions import db, migrate
+from .extensions import db, migrate, jwt
 from .routes import ai_assistant, assignment, auth, course, feedback, material
 
 
@@ -42,6 +44,12 @@ def create_app():
     app.config["GEMINI_MODEL"] = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     app.config["CHAT_HISTORY_TTL"] = int(os.getenv("CHAT_HISTORY_TTL", 60 * 60 * 24 * 7))
 
+    # JWT / auth configuration
+    app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
+    jwt_minutes = int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", "120"))
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=jwt_minutes)
+    app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+
     # Set database URI - use environment variable if available, otherwise use default SQLite
     db_path = os.path.join(instance_dir, "app.db")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
@@ -52,6 +60,7 @@ def create_app():
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
+    jwt.init_app(app)
     from . import models
 
     redis_client = None
