@@ -29,6 +29,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import StudentProgress from './StudentProgress';
 import CalendarPanel from './CalendarPanel';
+import { authFetch, API_BASE } from "../../../api/http";
 
 
 /* ---------- 你的搜索栏样式 ---------- */
@@ -69,7 +70,8 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 function useDisplayName() {
   return useMemo(() => {
     try {
-      const token = localStorage.getItem('token');
+      const token =
+        window.sessionStorage.getItem('token') || window.localStorage.getItem('token');
       if (token) {
         const userData = JSON.parse(token);
         return userData.first_name || "Admin";
@@ -245,7 +247,8 @@ export default function Dashboard() {
 
   const getCurrentUserId = () => {
     try {
-      const token = localStorage.getItem('token');
+      const token =
+        window.sessionStorage.getItem('token') || window.localStorage.getItem('token');
       if (!token) {
         return null;
       }
@@ -281,10 +284,10 @@ export default function Dashboard() {
     }
 
     try {
-      const url = `http://localhost:5001/courses?created_by=${encodeURIComponent(adminId)}`;
+      const url = `${API_BASE}/courses?created_by=${encodeURIComponent(adminId)}`;
       console.log("Fetching courses from:", url);
       
-      const response = await fetch(url);
+      const response = await authFetch(url);
       
       console.log("Courses API response status:", response.status);
       
@@ -329,7 +332,7 @@ export default function Dashboard() {
     setStudentsLoading(true);
     try {
       // 先获取教师的所有课程
-      const coursesResponse = await fetch(`http://localhost:5001/courses?created_by=${adminId}`);
+      const coursesResponse = await authFetch(`${API_BASE}/courses?created_by=${adminId}`);
       if (!coursesResponse.ok) {
         setAllStudents([]);
         setStudentsLoading(false);
@@ -342,7 +345,7 @@ export default function Dashboard() {
       // 获取每个课程的学生
       const studentPromises = coursesData.map(async (course) => {
         try {
-          const response = await fetch(`http://localhost:5001/courses/${course.id}/students`);
+          const response = await authFetch(`${API_BASE}/courses/${course.id}/students`);
           if (response.ok) {
             const students = await response.json();
             // 为每个学生添加课程信息
@@ -407,7 +410,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:5001/courses', {
+      const response = await authFetch(`${API_BASE}/courses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -473,7 +476,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch(`http://localhost:5001/courses/${selectedCourse.id}`, {
+      const response = await authFetch(`${API_BASE}/courses/${selectedCourse.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

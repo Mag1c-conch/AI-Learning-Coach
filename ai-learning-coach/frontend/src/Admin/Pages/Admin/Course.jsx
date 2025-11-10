@@ -38,6 +38,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
+import { authFetch, API_BASE } from "../../../api/http";
 import CourseStudentProgress from "./CourseStudentProgress";
 
 
@@ -126,7 +127,7 @@ export default function Course() {
     const fetchCourse = async () => {
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:5001/courses');
+        const response = await authFetch(`${API_BASE}/courses`);
         if (response.ok) {
           const data = await response.json();
           // 根据courseId（course.code）找到对应的课程
@@ -186,7 +187,8 @@ export default function Course() {
   // 从localStorage获取当前用户信息
   const getCurrentUser = () => {
     try {
-      const token = localStorage.getItem('token');
+      const token =
+        window.sessionStorage.getItem('token') || window.localStorage.getItem('token');
       if (token) {
         return JSON.parse(token);
       }
@@ -202,7 +204,7 @@ export default function Course() {
     
     setStudentsLoading(true);
     try {
-      const response = await fetch(`http://localhost:5001/courses/${course.id}/students`);
+      const response = await authFetch(`${API_BASE}/courses/${course.id}/students`);
       if (response.ok) {
         const data = await response.json();
         console.log('Fetched students:', data);
@@ -261,7 +263,7 @@ export default function Course() {
     
     setFilesLoading(true);
     try {
-      const response = await fetch(`http://localhost:5001/materials?course_id=${course.id}`);
+      const response = await authFetch(`${API_BASE}/materials?course_id=${course.id}`);
       if (response.ok) {
         const data = await response.json();
         setMaterials(data);
@@ -408,7 +410,7 @@ export default function Course() {
     try {
       // 逐个删除选中的文件
       const deletePromises = Array.from(selectedFiles).map(async (fileId) => {
-        const response = await fetch(`http://localhost:5001/materials/${fileId}?deleted_by=${user.id}`, {
+        const response = await authFetch(`${API_BASE}/materials/${fileId}?deleted_by=${user.id}`, {
           method: 'DELETE'
         });
         if (!response.ok) {
@@ -432,7 +434,7 @@ export default function Course() {
 
   // 处理文件下载
   const handleDownload = (materialId, fileName) => {
-    window.open(`http://localhost:5001/materials/${materialId}/download`, '_blank');
+    window.open(`${API_BASE}/materials/${materialId}/download`, '_blank');
   };
   
   // Keyboard event handler for delete key
@@ -966,7 +968,7 @@ export default function Course() {
                 }
 
                 // 上传文件
-                const response = await fetch('http://localhost:5001/materials', {
+                const response = await authFetch(`${API_BASE}/materials`, {
                   method: 'POST',
                   body: formData
                 });

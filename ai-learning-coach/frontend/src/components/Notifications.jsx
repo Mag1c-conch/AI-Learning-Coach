@@ -29,7 +29,8 @@ import http from "../api/http";
 // ========== 小工具 ==========
 function getCurrentUserId() {
   try {
-    const token = localStorage.getItem("token");
+    const token =
+      window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
     if (!token) return null;
     const u = JSON.parse(token);
     return u?.id || u?.user_id || null;

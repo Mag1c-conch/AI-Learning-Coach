@@ -12,6 +12,9 @@ import {
 } from "antd";
 import "./App.css";
 import signinImage from "../components/signin.jpg";
+import { storeAuthPayload } from "../api/authStorage";
+
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5001";
 
 export default function App() {
   const [form] = Form.useForm();
@@ -63,7 +66,7 @@ export default function App() {
       
       console.log('Sending registration request:', requestBody);
       
-      const response = await fetch('http://localhost:5001/auth/register', {
+      const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,9 +79,7 @@ export default function App() {
 
       if (response.ok && !data.error) {
         message.success('Registration successful! Redirecting...');
-        
-        // Store user data
-        localStorage.setItem('token', JSON.stringify(data));
+        storeAuthPayload(data);
         
         // Redirect based on role
         setTimeout(() => {

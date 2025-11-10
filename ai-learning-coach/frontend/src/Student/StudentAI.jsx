@@ -21,8 +21,7 @@ import CircleIcon from "@mui/icons-material/Circle";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5001";
+import { authFetch, API_BASE } from "../api/http";
 const DEFAULT_GREETING = {
   role: "model",
   content:
@@ -62,7 +61,8 @@ export default function AiAssistance() {
 
   const userInfo = useMemo(() => {
     try {
-      const token = localStorage.getItem("token");
+      const token =
+        window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
       if (!token) return null;
       return JSON.parse(token);
     } catch (err) {
@@ -106,7 +106,7 @@ export default function AiAssistance() {
       let resolvedConversationId = null;
 
       const loadHistory = async (id) => {
-        const resp = await fetch(
+        const resp = await authFetch(
           `${API_BASE}/assistant/conversations/${id}?user_id=${userId}`
         );
         if (!resp.ok) return null;
@@ -135,7 +135,7 @@ export default function AiAssistance() {
           include_messages: "true",
           message_limit: "200",
         });
-        const resp = await fetch(
+        const resp = await authFetch(
           `${API_BASE}/assistant/conversations?${params.toString()}`
         ).catch(() => null);
         if (resp?.ok) {
@@ -204,7 +204,7 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
         setConversationTitle(generatedTitle || "AI Teaching Assistant");
       }
 
-      const res = await fetch(`${API_BASE}/assistant/chat`, {
+      const res = await authFetch(`${API_BASE}/assistant/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -1,9 +1,11 @@
 from datetime import datetime
 
 from flask import Blueprint, abort, jsonify, request
+from flask_jwt_extended import jwt_required
 
 from ..extensions import db
 from ..models import Assignment, AssignmentGrade, Course, Enrollment, User, UserRole
+from ..auth_utils import resolve_user
 
 bp = Blueprint("assignment", __name__, url_prefix="/assignments")
 
@@ -32,6 +34,7 @@ def list_assignments():
 
 
 @bp.route("", methods=["POST"])
+@jwt_required(optional=True)
 def create_assignment():
     data = request.get_json(silent=True) or {}
 
@@ -47,9 +50,8 @@ def create_assignment():
 
     course = Course.query.get_or_404(course_id)
 
-    teacher = User.query.get_or_404(teacher_id)
-    if teacher.role != UserRole.ADMIN:
-        abort(403, description="only administrators may create assignments")
+    teacher = resolve_user(teacher_id, required_role=UserRole.ADMIN, allow_token=True, require=True)
+    teacher_id = teacher.id
 
     try:
         due_date = datetime.fromisoformat(due_date_raw)
@@ -74,6 +76,7 @@ def create_assignment():
 
 
 @bp.route("/<int:assignment_id>/grades", methods=["POST"])
+@jwt_required(optional=True)
 def upsert_assignment_grade(assignment_id: int):
     """
     Creates or updates a grade for a student's assignment submission.
@@ -118,9 +121,8 @@ def upsert_assignment_grade(assignment_id: int):
     if comment == "":
         comment = None
 
-    teacher = User.query.get_or_404(teacher_id)
-    if teacher.role != UserRole.ADMIN:
-        abort(403, description="only teachers may grade assignments")
+    teacher = resolve_user(teacher_id, required_role=UserRole.ADMIN, allow_token=True, require=True)
+    teacher_id = teacher.id
     if teacher.id != assignment.teacher_id:
         abort(403, description="teacher does not own this assignment")
 
@@ -159,6 +161,7 @@ def upsert_assignment_grade(assignment_id: int):
 
 
 @bp.route("/<int:assignment_id>/grades", methods=["GET"])
+@jwt_required(optional=True)
 def list_assignment_grades(assignment_id: int):
     """
     Lists grades for an assignment.
@@ -172,10 +175,9 @@ def list_assignment_grades(assignment_id: int):
     assignment = Assignment.query.get_or_404(assignment_id)
 
     viewer_id = request.args.get("viewer_id", type=int)
-    if not viewer_id:
-        abort(400, description="viewer_id is required")
-
-    viewer = User.query.get_or_404(viewer_id)
+    viewer = resolve_user(viewer_id, allow_token=True, require=True)
+    if viewer_id and viewer_id != viewer.id:
+        abort(403, description="viewer_id does not match authenticated user")
     include_related_raw = request.args.get("include_related")
     if include_related_raw is None:
         include_related = True
@@ -185,8 +187,6 @@ def list_assignment_grades(assignment_id: int):
     query = AssignmentGrade.query.filter_by(assignment_id=assignment.id)
 
     if viewer.role == UserRole.STUDENT:
-        if viewer.id != viewer_id:
-            abort(403, description="students may only view their own grades")
         _ensure_student_enrolled(assignment.course_id, viewer.id)
         query = query.filter_by(student_id=viewer.id)
     elif viewer.role == UserRole.ADMIN:
