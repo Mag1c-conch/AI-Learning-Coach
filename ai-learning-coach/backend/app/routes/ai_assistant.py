@@ -416,7 +416,7 @@ def retrieve_study_plan(student_id: int):
 
 def _determine_week_window():
     today = datetime.now(SYDNEY_TZ).date()
-    week_start = today + timedelta(days=1)
+    week_start = today
     week_end = week_start + timedelta(days=6)
     return week_start, week_end
 
