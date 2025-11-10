@@ -2,7 +2,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Signin from './components/Signin';
 import Signup from './Sign-up/App.jsx';
-import AUTH from './Constant.js';
 import Sidebar from './components/Sidebar.jsx';
 import Dashboard from './Student/Dashboard.jsx';
 import CoursesPage from "./Student/CoursesPage";
@@ -18,10 +17,14 @@ import Registercourse from './Student/Registercourse.jsx';
 // import { Calendar } from 'antd';
 import Calendar from './Student/Calendar.jsx';
 import StudentAI from './Student/StudentAI.jsx';
+import { getStoredAuthPayload } from './api/authStorage';
 
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem(AUTH.TOKEN_KEY));
+  const [token, setToken] = useState(() => {
+    const stored = getStoredAuthPayload();
+    return stored ? JSON.stringify(stored) : null;
+  });
 
   return (
     <BrowserRouter>

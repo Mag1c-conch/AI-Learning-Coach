@@ -64,7 +64,8 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 /* ===================== Helpers (auth & enrollments) ===================== */
 function getCurrentUserId() {
   try {
-    const token = localStorage.getItem("token");
+    const token =
+      window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
     if (!token) return null;
     const user = JSON.parse(token);
     return user?.id || user?.user_id || null;

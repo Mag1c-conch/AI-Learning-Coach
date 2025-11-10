@@ -336,7 +336,8 @@ const progressData = [];
 
 function getCurrentUserId() {
   try {
-    const token = localStorage.getItem("token");
+    const token =
+      window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
     if (!token) return null;
     const u = JSON.parse(token);
     return u?.id || u?.user_id || null;
@@ -563,7 +564,8 @@ const Dashboard = () => {
   }, []);
   const firstName = useMemo(() => {
     try {
-      const token = localStorage.getItem("token");
+      const token =
+        window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
       return token ? (JSON.parse(token)?.first_name || "Student") : "Student";
     } catch {
       return "Student";

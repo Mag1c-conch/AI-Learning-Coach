@@ -15,8 +15,7 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Button } from '@mui/material';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5001';
+import { authFetch, API_BASE } from '../../../api/http';
 const DEFAULT_GREETING = {
   role: 'model',
   content:
@@ -36,7 +35,8 @@ export default function AiAssistance() {
 
   const userInfo = useMemo(() => {
     try {
-      const token = localStorage.getItem('token');
+      const token =
+        window.sessionStorage.getItem('token') || window.localStorage.getItem('token');
       if (!token) return null;
       return JSON.parse(token);
     } catch (err) {
@@ -80,7 +80,7 @@ export default function AiAssistance() {
       let resolvedConversationId = null;
 
       const loadHistory = async (id) => {
-        const resp = await fetch(
+        const resp = await authFetch(
           `${API_BASE}/assistant/conversations/${id}?user_id=${userId}`
         );
         if (!resp.ok) {
@@ -111,7 +111,7 @@ export default function AiAssistance() {
           include_messages: 'true',
           message_limit: '200',
         });
-        const resp = await fetch(
+        const resp = await authFetch(
           `${API_BASE}/assistant/conversations?${params.toString()}`
         ).catch(() => null);
         if (resp?.ok) {
@@ -179,7 +179,7 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
         setConversationTitle(generatedTitle || 'AI Teaching Assistant');
       }
 
-      const res = await fetch(`${API_BASE}/assistant/chat`, {
+      const res = await authFetch(`${API_BASE}/assistant/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -230,7 +230,7 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
 
     try {
       if (conversationId && userId) {
-        await fetch(
+        await authFetch(
           `${API_BASE}/assistant/conversations/${conversationId}?user_id=${userId}`,
           { method: 'DELETE' }
         );

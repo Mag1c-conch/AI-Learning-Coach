@@ -70,7 +70,8 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 function useDisplayName() {
   return useMemo(() => {
     try {
-      const token = localStorage.getItem('token');
+      const token =
+        window.sessionStorage.getItem('token') || window.localStorage.getItem('token');
       if (token) {
         const userData = JSON.parse(token);
         return userData.first_name || "Admin";
@@ -120,7 +121,8 @@ export default function Grading() {
   // 获取当前用户信息
   const getCurrentUser = () => {
     try {
-      const token = localStorage.getItem('token');
+      const token =
+        window.sessionStorage.getItem('token') || window.localStorage.getItem('token');
       if (token) {
         return JSON.parse(token);
       }

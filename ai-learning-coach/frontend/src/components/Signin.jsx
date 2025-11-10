@@ -1,80 +1,89 @@
 // src/components/Signin.jsx
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  Box, Button, TextField, Typography, Radio, RadioGroup,
-  FormControlLabel, Link, Paper, Alert, CircularProgress,
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  Link,
+  Paper,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
 import signinImage from "./signin.jpg";
+import { storeAuthPayload } from "../api/authStorage";
+
+const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5001";
 
 const Signin = ({ setToken }) => {
-  const [userType, setUserType] = useState('student'); // User Identity
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [userType, setUserType] = useState("student");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const handleLogin = async () => {
     if (!email || !password) {
-      setError('Please fill in all fields');
+      setError("Please fill in all fields");
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const response = await fetch('http://localhost:5001/auth/login', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           username: email,
-          password: password,
-          role: userType
+          password,
+          role: userType,
         }),
       });
 
       const data = await response.json();
 
       if (response.ok && !data.error) {
-        // 登录成功
-        const token = JSON.stringify({
-          id: data.id,
-          username: data.username,
-          role: data.role,
-          first_name: data.first_name,
-          last_name: data.last_name
-        });
-        
-        localStorage.setItem('token', token);
-        setToken(token);
-        
-        // 根据角色跳转到不同页面
-        if (userType === 'admin') {
-          navigate('/admin/dashboard');
+        const stored = storeAuthPayload(data) || data;
+        setToken(JSON.stringify(stored));
+
+        if (userType === "admin") {
+          navigate("/admin/dashboard");
         } else {
-          navigate('/dashboard');
+          navigate("/dashboard");
         }
       } else {
-        // 登录失败
-        setError(data.error || 'Login failed');
+        setError(data.error || "Login failed");
       }
     } catch (err) {
-      setError('Network error. Please check if the backend server is running.');
-      console.error('Login error:', err);
+      setError("Network error. Please check if the backend server is running.");
+      console.error("Login error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Box display="flex" minHeight="100vh" justifyContent="center" alignItems="center" bgcolor="#f5f5f5">
+    <Box
+      display="flex"
+      minHeight="100vh"
+      justifyContent="center"
+      alignItems="center"
+      bgcolor="#f5f5f5"
+    >
       <Paper elevation={3} sx={{ display: "flex", width: 800, borderRadius: 2 }}>
         <Box flex={1} p={4}>
-          <Typography variant="h4" mb={3}>Sign In</Typography>
+          <Typography variant="h4" mb={3}>
+            Sign In
+          </Typography>
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -84,16 +93,8 @@ const Signin = ({ setToken }) => {
 
           <Typography variant="subtitle1">User</Typography>
           <RadioGroup row value={userType} onChange={(e) => setUserType(e.target.value)}>
-            <FormControlLabel
-              value="student"
-              control={<Radio color="#142E4F" />}
-              label="Student"
-            />
-            <FormControlLabel
-              value="admin"
-              control={<Radio color="#142E4F" />}
-              label="Admin"
-            />
+            <FormControlLabel value="student" control={<Radio color="primary" />} label="Student" />
+            <FormControlLabel value="admin" control={<Radio color="primary" />} label="Admin" />
           </RadioGroup>
 
           <TextField
@@ -128,22 +129,22 @@ const Signin = ({ setToken }) => {
             disabled={loading}
           >
             {loading ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <CircularProgress size={20} color="inherit" />
                 Signing In...
               </Box>
             ) : (
-              'Sign In'
+              "Sign In"
             )}
           </Button>
 
           <Typography variant="body2" mt={2}>
             Don't have an account?{" "}
-            <Link 
-              component="button" 
-              variant="body2" 
-              onClick={() => navigate('/signup')}
-              underline="always" 
+            <Link
+              component="button"
+              variant="body2"
+              onClick={() => navigate("/signup")}
+              underline="always"
               sx={{ color: "#6F6C6C" }}
             >
               Sign Up
