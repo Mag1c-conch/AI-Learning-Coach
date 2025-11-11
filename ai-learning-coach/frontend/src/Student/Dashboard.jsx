@@ -44,19 +44,21 @@ const Search = styled("div")(({ theme }) => ({
   pl: theme.spacing(1),
   [theme.breakpoints.up("sm")]: { width: "250px" },
 }));
+
 const SearchIconWrapper = styled("div")(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  p: theme.spacing(0, 1),
+  padding: theme.spacing(0, 1),
   height: "100%",
   color: "rgba(0,0,0,0.5)",
 }));
+
 const StyledInputBase = styled(InputBase)(({ theme }) => ({
   color: "inherit",
   width: "100%",
   "& .MuiInputBase-input": {
-    p: theme.spacing(1, 1, 1, 0),
+    padding: theme.spacing(1, 1, 1, 0),
     transition: theme.transitions.create("width"),
     width: "100%",
   },
@@ -430,7 +432,6 @@ function readLocalEnrollments(userId) {
   }
 }
 
-/* ====== 把 timetableEvents 里的“今天”任务合并进 Dashboard Todo ====== */
 const TT_KEY = (uid) => `timetableEvents:${uid || "anon"}`;
 function ttGetEvents(uid) {
   try {
@@ -449,7 +450,7 @@ function todayISO() {
   return `${y}-${m}-${day}`;
 }
 
-// 从 timetableEvents 取今天事件，按课程聚合成 {courseKey, courseLabel, items:[{title, time?}]}
+// 从 timetableEvents 取今天事件，按课程聚合
 function todayTodosFromAIEvents(uid, courses = []) {
   const events = ttGetEvents(uid);
   if (!events.length || !Array.isArray(courses) || !courses.length) return [];
@@ -492,7 +493,7 @@ function todayTodosFromAIEvents(uid, courses = []) {
   return Array.from(byCourse.values());
 }
 
-// 合并本地 studyPlan:today + timetableEvents:today（按 courseKey & title 去重）
+// 合并本地 studyPlan:today + timetableEvents:today
 function mergeTodayTodos(uid, courses = []) {
   const localTodos = loadTodayTodosForUser(uid, courses);
   const aiTodos = todayTodosFromAIEvents(uid, courses);
@@ -515,7 +516,6 @@ function mergeTodayTodos(uid, courses = []) {
   return out;
 }
 
-/* ====== 精准打点：从 timetableEvents 计算有任务的日期（本地时区） ====== */
 function computeMarkedDates(uid) {
   const events = ttGetEvents(uid);
   const validDays = new Set();
@@ -537,8 +537,6 @@ const Dashboard = () => {
   const [courses, setCourses] = useState([]);
   const [progressMap, setProgressMap] = useState({});
   const [progressItems, setProgressItems] = useState([]);
-
-  // 小日历打点
   const [markedDates, setMarkedDates] = useState(() => computeMarkedDates(getCurrentUserId()));
 
   const navigate = useNavigate();
@@ -616,7 +614,6 @@ const Dashboard = () => {
         setCourses(base);
         rebuildProgress(base, uid);
 
-        // ✅ 合并今天待办 & 刷新小日历打点
         setTodosByCourse(mergeTodayTodos(uid, base));
         setMarkedDates(computeMarkedDates(uid));
       } catch (e) {
@@ -671,7 +668,6 @@ const Dashboard = () => {
     };
   }, [uid, courses]);
 
-  // ✅ 监听 Timetable 同步完成（StudyProgress 同步后会广播 timetable:updated）
   useEffect(() => {
     const onTimetableUpdated = () => {
       setTodosByCourse(mergeTodayTodos(uid, courses));
@@ -681,7 +677,6 @@ const Dashboard = () => {
     return () => window.removeEventListener("timetable:updated", onTimetableUpdated);
   }, [uid, courses]);
 
-  // 监听 localStorage 对 timetableEvents 的直接修改
   useEffect(() => {
     const onStorage = (e) => {
       if (!e.key) return;
@@ -704,7 +699,7 @@ const Dashboard = () => {
     return () => window.removeEventListener("storage", onStorage);
   }, [uid, courses]);
 
-  // ========= 自定义小日历日期单元（带小圆点） =========
+  // ========= 小日历自定义日期单元（带小圆点） =========
   const markedSet = useMemo(() => new Set(markedDates), [markedDates]);
 
   const DotDay = (props) => {
@@ -736,36 +731,112 @@ const Dashboard = () => {
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
 
-      <Box className="main-content" sx={{ flex: 1, backgroundColor: "#f5f6fa", p: 3, overflowY: "auto", position: "relative" }}>
-        {/* line */}
-        <Box sx={{ position: "absolute", top: "63px", left: 0, width: "100%", height: "2px", backgroundColor: "rgba(21, 19, 19, 0.3)" }} />
+      <Box
+        className="main-content"
+        sx={{
+          flex: 1,
+          backgroundColor: "#f5f6fa",
 
-        {/* search & notification */}
-        <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 1, position: "absolute", top: 10, right: 20 }}>
-          <Search>
-            <SearchIconWrapper><SearchIcon /></SearchIconWrapper>
-            <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
-          </Search>
-          <NotificationsBell />
+          overflowY: "auto",
+          position: "relative",
+        }}
+      >
+        <Box
+          sx={{
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            mb: 2,
+            bgcolor: "#f5f6fa",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 1,
+            }}
+          >
+            {/* Dashboard · Student */}
+            <Box sx={{ mt: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="h4" sx={{ mr: 2, ml: 2, fontWeight: 800 }}>
+                Dashboard
+              </Typography>
+              <CircleIcon sx={{ fontSize: 10, color: "#B3B3B3" }} />
+              <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
+                Student
+              </Typography>
+            </Box>
+
+            {/* search bar + notification */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Search>
+                <SearchIconWrapper>
+                  <SearchIcon />
+                </SearchIconWrapper>
+                <StyledInputBase
+                  placeholder="Search"
+                  inputProps={{ "aria-label": "Search" }}
+                />
+              </Search>
+              <NotificationsBell />
+            </Box>
+          </Box>
+
+          {/* 分割线 */}
+          <Box
+            sx={{
+              width: "100%",
+              height: "2px",
+              backgroundColor: "rgba(21, 19, 19, 0.3)",
+            }}
+          />
         </Box>
 
-        {/* Title */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>Dashboard</Typography>
-          <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
-          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>Student</Typography>
-        </Box>
-
-        <Box sx={{ mt: 2, pb: 2, width: "100%", height: "100%" }}>
-          <Grid container spacing={3} sx={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", height: "100%", width: "100%" }}>
+        {/* scrollable area */}
+        <Box sx={{ ml: 2, mt: 2, pb: 2, width: "100%", height: "100%" }}>
+          <Grid
+            container
+            spacing={3}
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "stretch",
+              height: "100%",
+              width: "100%",
+            }}
+          >
             {/* Courses */}
-            <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "60%" }, maxWidth: { xs: "100%", sm: "50%", md: "60%" } }}>
-              <Paper sx={{ p: 3, height: "85%", width: "97.5%", borderRadius: 2, boxShadow: 2 }}>
+            <Grid
+              item
+              sx={{
+                flexGrow: 0,
+                flexShrink: 0,
+                flexBasis: { xs: "100%", sm: "50%", md: "60%" },
+                maxWidth: { xs: "100%", sm: "50%", md: "60%" },
+              }}
+            >
+              <Paper
+                sx={{
+                  p: 3,
+                  height: "85%",
+                  width: "97.5%",
+                  borderRadius: 2,
+                  boxShadow: 2,
+                }}
+              >
                 <Typography
                   component={Link}
                   to="/courses"
                   variant="h5"
-                  sx={{ fontWeight: 700, mb: 2, textDecoration: "none", color: "inherit", "&:hover": { textDecoration: "underline" } }}
+                  sx={{
+                    fontWeight: 700,
+                    mb: 2,
+                    textDecoration: "none",
+                    color: "inherit",
+                    "&:hover": { textDecoration: "underline" },
+                  }}
                 >
                   Courses
                 </Typography>
@@ -774,20 +845,59 @@ const Dashboard = () => {
             </Grid>
 
             {/* Todo List */}
-            <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "30%" }, maxWidth: { xs: "100%", sm: "50%", md: "30%" }, ml: { md: "45px" } }}>
-              <Paper variant="outlined" sx={{ flex: 1, p: 2, width: "100%", borderRadius: 2, boxShadow: 2, border: "1px solid", borderColor: "divider", height: { md: "38vh" } }}>
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Todo List</Typography>
-                <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1, maxHeight: "70%", overflowY: "auto" }}>
+            <Grid
+              item
+              sx={{
+                flexGrow: 0,
+                flexShrink: 0,
+                flexBasis: { xs: "100%", sm: "50%", md: "30%" },
+                maxWidth: { xs: "100%", sm: "50%", md: "30%" },
+                ml: { md: "45px" },
+              }}
+            >
+              <Paper
+                variant="outlined"
+                sx={{
+                  flex: 1,
+                  p: 2,
+                  width: "100%",
+                  borderRadius: 2,
+                  boxShadow: 2,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  height: { md: "38vh" },
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
+                  Todo List
+                </Typography>
+                <Box
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 2,
+                    p: 1,
+                    maxHeight: "70%",
+                    overflowY: "auto",
+                  }}
+                >
                   {todosByCourse.length === 0 ? (
                     <Typography>No materials</Typography>
                   ) : (
                     todosByCourse.map((g) => (
                       <Box key={g.courseKey} sx={{ pb: 1.5 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2, mb: .5 }}>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}
+                        >
                           {g.courseLabel}
                         </Typography>
                         {g.items.map((it, idx) => (
-                          <Typography key={idx} variant="body2" sx={{ display: "block", lineHeight: 1.3 }}>
+                          <Typography
+                            key={idx}
+                            variant="body2"
+                            sx={{ display: "block", lineHeight: 1.3 }}
+                          >
                             • {it.title}
                           </Typography>
                         ))}
@@ -819,25 +929,45 @@ const Dashboard = () => {
                   height: "80%",
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    mb: 1,
+                  }}
+                >
                   <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
                     Study Progress
                   </Typography>
-                  {/* 按你的要求：已删除“Generate study Plan”按钮 */}
                 </Box>
                 <ProgressSlider items={progressItems} onOpen={openStudyProgress} />
               </Paper>
             </Grid>
 
             {/* Calendar with dots */}
-            <Grid item sx={{ flexGrow: 0, flexShrink: 0, flexBasis: { xs: "100%", sm: "50%", md: "30%" }, maxWidth: { xs: "100%", sm: "50%", md: "30%" }, mt: { md: "2px" }, ml: { md: "15px" } }}>
-              <Paper sx={{ p: 2, height: "85%", width: "100%", borderRadius: 2, boxShadow: 2 }}>
+            <Grid
+              item
+              sx={{
+                flexGrow: 0,
+                flexShrink: 0,
+                flexBasis: { xs: "100%", sm: "50%", md: "30%" },
+                maxWidth: { xs: "100%", sm: "50%", md: "30%" },
+                mt: { md: "2px" },
+                ml: { md: "15px" },
+              }}
+            >
+              <Paper
+                sx={{
+                  p: 2,
+                  height: "85%",
+                  width: "100%",
+                  borderRadius: 2,
+                  boxShadow: 2,
+                }}
+              >
                 <LocalizationProvider dateAdapter={AdapterDayjs}>
-                  <DateCalendar
-                    disableHighlightToday={false}
-                    // 使用 slots 自定义日期单元，显示小圆点
-                    slots={{ day: DotDay }}
-                  />
+                  <DateCalendar disableHighlightToday={false} slots={{ day: DotDay }} />
                 </LocalizationProvider>
               </Paper>
             </Grid>
