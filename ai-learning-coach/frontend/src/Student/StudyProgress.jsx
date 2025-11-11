@@ -43,6 +43,7 @@ const Search = styled("div")(({ theme }) => ({
   paddingLeft: theme.spacing(1),
   [theme.breakpoints.up("sm")]: { width: "250px" },
 }));
+
 const SearchIconWrapper = styled("div")(({ theme }) => ({
   display: "flex",
   alignItems: "center",
@@ -51,6 +52,7 @@ const SearchIconWrapper = styled("div")(({ theme }) => ({
   height: "100%",
   color: "rgba(0,0,0,0.5)",
 }));
+
 const StyledInputBase = styled(InputBase)(({ theme }) => ({
   color: "inherit",
   width: "100%",
@@ -73,6 +75,7 @@ function getCurrentUserId() {
     return null;
   }
 }
+
 const enrollKey = (uid) => `enrolledCourses:${uid}`;
 const loadEnrollments = (uid) => {
   if (!uid) return [];
@@ -91,6 +94,7 @@ async function apiCreatePlan(studentId) {
   const res = await http.post("/get_plan", { student_id: studentId });
   return res.data; // StudyPlan 对象（通常形如 { ..., plan: {...} }）
 }
+
 /** 读取学习计划（可选 week_start=YYYY-MM-DD，不传取最近一条） */
 async function apiGetPlan(studentId, weekStart) {
   const qs = weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : "";
@@ -107,6 +111,7 @@ const prettyType = (t) => {
   if (s === "materials" || s === "material") return "Materials";
   return "Others";
 };
+
 function typeFromMaterial(m) {
   const t = String(m.file_type || "").toLowerCase();
   const name = String(m.stored_name || m.original_name || "").toLowerCase();
@@ -123,6 +128,7 @@ function typeFromMaterial(m) {
 const progressKey = (uid, courseKey) => `sp:progress:${uid || "anon"}:${courseKey || "course"}`;
 const courseProgressKey = (uid, courseKey) =>
   `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
+
 function loadProgress(uid, courseKey) {
   try {
     return JSON.parse(localStorage.getItem(progressKey(uid, courseKey)) || "{}");
@@ -130,6 +136,7 @@ function loadProgress(uid, courseKey) {
     return {};
   }
 }
+
 function saveProgress(uid, courseKey, obj) {
   try {
     localStorage.setItem(progressKey(uid, courseKey), JSON.stringify(obj));
@@ -197,6 +204,7 @@ function roundRobinDistribute(items, days = 7, perDayCap = Infinity) {
   }
   return buckets;
 }
+
 function expandByRemainder(t, percent = 0, step = 25) {
   const left = Math.max(0, 100 - (Number(percent) || 0));
   const n = Math.max(1, Math.ceil(left / step));
@@ -283,7 +291,7 @@ function serverPlanToEvents(planObj) {
     for (const t of d.tasks || []) {
       if (!t.start_time || !t.end_time) continue;
       const startISO = new Date(`${dateStr}T${t.start_time}:00`).toISOString();
-      const endISO   = new Date(`${dateStr}T${t.end_time}:00`).toISOString();
+      const endISO = new Date(`${dateStr}T${t.end_time}:00`).toISOString();
       out.push({
         title: t.title || "Study Session",
         start: startISO,
@@ -302,7 +310,8 @@ function ttUpsertEvents(uid, newEvents = []) {
   try {
     const raw = localStorage.getItem(TT_KEY(uid));
     const old = raw ? JSON.parse(raw) : [];
-    const keyOf = (e) => `${e.start}|${e.end}|${e.title}|${e.courseId ?? ""}|${e.materialId ?? ""}`;
+    const keyOf = (e) =>
+      `${e.start}|${e.end}|${e.title}|${e.courseId ?? ""}|${e.materialId ?? ""}`;
     const seen = new Set(old.map(keyOf));
     const merged = [...old];
     for (const ev of newEvents) {
@@ -313,15 +322,21 @@ function ttUpsertEvents(uid, newEvents = []) {
       }
     }
     localStorage.setItem(TT_KEY(uid), JSON.stringify(merged));
-    window.dispatchEvent(new CustomEvent("timetable:updated", { detail: { count: merged.length } }));
+    window.dispatchEvent(
+      new CustomEvent("timetable:updated", { detail: { count: merged.length } })
+    );
   } catch {}
 }
 
 /* ===================== Keys for storing plan (today) ===================== */
 const planStorageKey = (uid, courseKey, dateStr) =>
   `studyPlan:${uid || "anon"}:${courseKey || "course"}:${dateStr}`;
+
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const courseKeyFromCourse = (c) => c?.code ?? (c?.id != null ? String(c.id) : "course");
+
+const courseKeyFromCourse = (c) =>
+  c?.code ?? (c?.id != null ? String(c.id) : "course");
+
 function loadTodayTodosForUser(uid, courseList = []) {
   const t = todayStr();
   const out = [];
@@ -389,7 +404,8 @@ function StudyProgress() {
   }, [enrolled, rawParam]);
 
   const courseKey =
-    currentCourse?.code ?? (currentCourse?.id != null ? String(currentCourse.id) : "course");
+    currentCourse?.code ??
+    (currentCourse?.id != null ? String(currentCourse.id) : "course");
 
   // fetch tasks
   const [tasks, setTasks] = useState([]); // {id,title,type,percent}
@@ -473,8 +489,11 @@ function StudyProgress() {
   // selected
   const [selected, setSelected] = useState([]);
   useEffect(() => setSelected(tasks.map((t) => t.id)), [tasks]);
+
   const toggleSelect = (id) =>
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
 
   // update progress
   const setTaskPercent = (id, percent) => {
@@ -650,63 +669,88 @@ function StudyProgress() {
 
       <Box
         className="main-content"
-        sx={{ flex: 1, backgroundColor: "#f5f6fa", p: 3, overflowY: "auto", position: "relative" }}
+        sx={{
+          flex: 1,
+          backgroundColor: "#f5f6fa",
+          overflowY: "auto",
+          position: "relative",
+        }}
       >
-        {/* divide line */}
+        {/* 顶部固定区域：标题 + Student + 搜索 + 通知 + 分割线 */}
         <Box
           sx={{
-            position: "absolute",
-            top: "63px",
-            left: 0,
-            width: "100%",
-            height: "2px",
-            backgroundColor: "rgba(21,19,19,.3)",
-          }}
-        />
-
-        {/* search & notification */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: 1,
-            position: "absolute",
-            top: 10,
-            right: 20,
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            pb: 1,
+            mb: 2,
+            bgcolor: "#f5f6fa",
           }}
         >
-          <Search>
-            <SearchIconWrapper>
-              <SearchIcon />
-            </SearchIconWrapper>
-            <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
-          </Search>
-          <IconButton>
-            <NotificationsBell />
-          </IconButton>
-        </Box>
+          {/* 上面这一行：左边标题，右边搜索 + 通知 */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 1,
+            }}
+          >
+            {/* 左侧：Study Progress · Student */}
+            <Box sx={{ ml: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800 }}>
+                Study Progress
+              </Typography>
+              <CircleIcon sx={{ fontSize: 10, color: "#B3B3B3" }} />
+              <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
+                Student
+              </Typography>
+            </Box>
 
-        {/* title */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            Study Progress
-          </Typography>
-          <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
-          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
-            Student
-          </Typography>
+            {/* 右侧：搜索框 + 通知铃铛 */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Search>
+                <SearchIconWrapper>
+                  <SearchIcon />
+                </SearchIconWrapper>
+                <StyledInputBase
+                  placeholder="Search"
+                  inputProps={{ "aria-label": "Search" }}
+                />
+              </Search>
+              <IconButton>
+                <NotificationsBell />
+              </IconButton>
+            </Box>
+          </Box>
+
+          {/* 分割线 */}
+          <Box
+            sx={{
+              width: "100%",
+              height: "2px",
+              backgroundColor: "rgba(21, 19, 19, 0.3)",
+            }}
+          />
         </Box>
 
         {/* course title card */}
-        <Paper sx={{ p: 2, borderRadius: 2, mb: 3, boxShadow: 5 }}>
+        <Paper sx={{ ml: 2, mr: 2, p: 2, borderRadius: 2, mb: 3, boxShadow: 5 }}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             {courseLabel} · Progress
           </Typography>
         </Paper>
 
         {/* Study Plan + Donut */}
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 3 }}>
+        <Box
+          sx={{
+            ml: 2, 
+            mr: 2, 
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+            gap: 3,
+          }}
+        >
           {/* Study Plan */}
           <Paper sx={{ p: 2, borderRadius: 2, boxShadow: 2, height: { md: 350 } }}>
             <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
@@ -738,14 +782,23 @@ function StudyProgress() {
               <Button
                 variant="outlined"
                 onClick={handleSyncToTimetable}
-                sx={{ textTransform: "none", borderRadius: "12px", px: 1.5, py: 1 }}
+                sx={{
+                  textTransform: "none",
+                  borderRadius: "12px",
+                  px: 1.5,
+                  py: 1,
+                }}
               >
                 Sync to Timetable
               </Button>
             </Box>
 
             {serverPlanErr && (
-              <Typography color="error" variant="caption" sx={{ ml: 0.5 }}>
+              <Typography
+                color="error"
+                variant="caption"
+                sx={{ ml: 0.5 }}
+              >
                 {serverPlanErr}
               </Typography>
             )}
@@ -761,7 +814,9 @@ function StudyProgress() {
                   backgroundColor: "rgba(0,0,0,0.25)",
                   borderRadius: 6,
                 },
-                "&::-webkit-scrollbar-track": { backgroundColor: "transparent" },
+                "&::-webkit-scrollbar-track": {
+                  backgroundColor: "transparent",
+                },
               }}
             >
               {loading && (
@@ -794,8 +849,16 @@ function StudyProgress() {
                           columnGap: 1,
                         }}
                       >
-                        <Chip size="small" label={prettyType(it.type)} variant="outlined" />
-                        <Typography sx={{ fontWeight: 600 }} noWrap title={it.title}>
+                        <Chip
+                          size="small"
+                          label={prettyType(it.type)}
+                          variant="outlined"
+                        />
+                        <Typography
+                          sx={{ fontWeight: 600 }}
+                          noWrap
+                          title={it.title}
+                        >
                           {it.title}
                         </Typography>
 
@@ -804,7 +867,11 @@ function StudyProgress() {
                           onChange={(v) => setTaskPercent(it.id, v)}
                         />
 
-                        <Checkbox checked={checked} onChange={() => toggleSelect(it.id)} sx={{ ml: 1 }} />
+                        <Checkbox
+                          checked={checked}
+                          onChange={() => toggleSelect(it.id)}
+                          sx={{ ml: 1 }}
+                        />
                       </Box>
                     </Box>
                   );
@@ -824,7 +891,7 @@ function StudyProgress() {
         </Box>
 
         {/* Assignments/Labs/Quizzes */}
-        <Paper sx={{ mt: 3, p: 2.5, borderRadius: 2, boxShadow: 2 }}>
+        <Paper sx={{ ml: 2, mr: 2,  mt: 3, p: 2.5, borderRadius: 2, boxShadow: 2 }}>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>
             Assignments by Type
           </Typography>
@@ -871,7 +938,9 @@ function StudyProgress() {
             <Button
               variant="contained"
               sx={{ background: "#1f2a44", "&:hover": { background: "#1a2438" } }}
-              onClick={() => navigate(`/course/${encodeURIComponent(courseKey)}`)}
+              onClick={() =>
+                navigate(`/course/${encodeURIComponent(courseKey)}`)
+              }
             >
               Go to {courseKey}
             </Button>
@@ -879,7 +948,12 @@ function StudyProgress() {
         </Paper>
 
         {/* Study plan dialog */}
-        <StudyPlanDialog open={planOpen} onClose={() => setPlanOpen(false)} plan={planData} startLabel="Today" />
+        <StudyPlanDialog
+          open={planOpen}
+          onClose={() => setPlanOpen(false)}
+          plan={planData}
+          startLabel="Today"
+        />
 
         {/* Snackbar 提示 */}
         <Snackbar
@@ -888,7 +962,12 @@ function StudyProgress() {
           onClose={() => setSnackOpen(false)}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         >
-          <Alert onClose={() => setSnackOpen(false)} severity={snackSev} variant="filled" sx={{ boxShadow: 2 }}>
+          <Alert
+            onClose={() => setSnackOpen(false)}
+            severity={snackSev}
+            variant="filled"
+            sx={{ boxShadow: 2 }}
+          >
             {snackMsg}
           </Alert>
         </Snackbar>
