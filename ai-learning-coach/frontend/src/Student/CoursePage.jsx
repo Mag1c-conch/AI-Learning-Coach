@@ -8,18 +8,18 @@ import {
   Chip,
   Divider,
   Checkbox,
+  CircularProgress,
+  circularProgressClasses,
+  ButtonBase,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import InputBase from "@mui/material/InputBase";
 import SearchIcon from "@mui/icons-material/Search";
 import CircleIcon from "@mui/icons-material/Circle";
-// import NotificationsIcon from "@mui/icons-material/Notifications"; // ❌ 不再需要
 import Sidebar from "../components/Sidebar.jsx";
-import { CircularProgress, circularProgressClasses } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
-import { ButtonBase } from "@mui/material";
 import http from "../api/http";
-import NotificationsBell from "../components/Notifications.jsx"; // ✅ 全局同步小铃铛
+import NotificationsBell from "../components/Notifications.jsx";
 
 /** ========= 常量 & 工具 ========= */
 const ENROLL_EVENT = "enrollment:updated";
@@ -295,15 +295,14 @@ function CourseDetail() {
   const uid = getCurrentUserId();
   const courseProgressKey = (uid, courseKey) =>
     `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
-  
+
   function loadCourseProgress(uid, courseKey) {
     const raw = localStorage.getItem(courseProgressKey(uid, courseKey));
     const n = Number(raw);
     return Number.isFinite(n) ? n : null;
   }
-  
 
-  /** 加载选课信息（后端优先，失败回退本地）+ 跨标签/事件同步 */
+  /** 加载选课信息 */
   useEffect(() => {
     if (!uid) return;
     setEnrolled(loadEnrollments(uid));
@@ -322,7 +321,7 @@ function CourseDetail() {
               code: course?.code || "",
               name: course?.name || course?.title || "",
               meta: course?.description ? `· ${course.description}` : "",
-              progress: course?.progress ?? null, // 若后端有进度则用它
+              progress: course?.progress ?? null,
               teacher: course?.teacher || course?.creator_name || "",
             };
           })
@@ -333,7 +332,6 @@ function CourseDetail() {
         }
       } catch (err) {
         console.error("加载选课信息失败：", err);
-        // 回退到本地已存
         if (!cancelled) setEnrolled(loadEnrollments(uid));
       }
     };
@@ -362,7 +360,7 @@ function CourseDetail() {
     };
   }, [uid]);
 
-  /** 当前课程：优先匹配 id，其次 code；没有就兜底 */
+  /** 当前课程 */
   const currentCourse = useMemo(() => {
     const list = Array.isArray(enrolled) ? enrolled : [];
     if (!list.length) {
@@ -376,6 +374,7 @@ function CourseDetail() {
     }
     return list[0];
   }, [enrolled, rawParam]);
+
   const goToStudyProgress = () => {
     if (!currentCourse) return;
     const path =
@@ -384,7 +383,8 @@ function CourseDetail() {
         : `/progress/${encodeURIComponent(currentCourse?.code || "")}`;
     navigate(path);
   };
-  
+
+  /** 监听 courseProgress:updated + localStorage 变化，触发重新渲染 */
   useEffect(() => {
     const onCourseProgressUpdated = (e) => {
       const { user_id, course_key, value } = e.detail || {};
@@ -393,9 +393,9 @@ function CourseDetail() {
         currentCourse?.code ??
         (currentCourse?.id != null ? String(currentCourse.id) : "course");
       if (course_key !== myKey) return;
-      setEnrolled((prev) => [...prev]); // 渲染重新计算 progressValue
+      setEnrolled((prev) => [...prev]);
     };
-  
+
     const onStorage = (e) => {
       if (!e.key) return;
       const keyPrefix = courseProgressKey(uid, "").replace(/:$/, "");
@@ -403,7 +403,7 @@ function CourseDetail() {
         setEnrolled((prev) => [...prev]);
       }
     };
-  
+
     window.addEventListener("courseProgress:updated", onCourseProgressUpdated);
     window.addEventListener("storage", onStorage);
     return () => {
@@ -411,8 +411,8 @@ function CourseDetail() {
       window.removeEventListener("storage", onStorage);
     };
   }, [uid, currentCourse?.id, currentCourse?.code]);
-  
-  /** 规范路由：将参数重写为规范 id 或 code */
+
+  /** 规范路由 */
   useEffect(() => {
     if (!enrolled.length || !currentCourse) return;
     const desired = currentCourse.id != null ? String(currentCourse.id) : currentCourse.code;
@@ -421,7 +421,7 @@ function CourseDetail() {
     }
   }, [enrolled, currentCourse, rawParam, navigate]);
 
-  /** 加载 materials（并筛出任务型 materials） */
+  /** 加载 materials */
   useEffect(() => {
     let alive = true;
 
@@ -443,13 +443,13 @@ function CourseDetail() {
           return;
         }
 
-        const params = cid && isNumericId(cid) ? { course_id: Number(cid) } : { course_code: String(ccode) };
+        const params =
+          cid && isNumericId(cid) ? { course_id: Number(cid) } : { course_code: String(ccode) };
         const { data } = await http.get("/materials", { params });
         if (!alive) return;
 
         const norm = normalizeMaterials(data);
 
-        // 二次过滤确保只保留当前课程数据
         const courseMatch = (m) => {
           const idOk =
             currentCourse?.id != null &&
@@ -483,11 +483,12 @@ function CourseDetail() {
     };
   }, [currentCourse?.id, currentCourse?.code]);
 
-  /** 老师端上传后刷新 */
+  /** 老师端上传后刷新 materials */
   useEffect(() => {
     const onUpdated = (e) => {
       const { course_id, course_code } = e?.detail ?? {};
-      const sameId = currentCourse?.id && course_id && String(course_id) === String(currentCourse.id);
+      const sameId =
+        currentCourse?.id && course_id && String(course_id) === String(currentCourse.id);
       const sameCode =
         currentCourse?.code && course_code && String(course_code) === String(currentCourse.code);
       if (!sameId && !sameCode) return;
@@ -519,12 +520,11 @@ function CourseDetail() {
     return () => window.removeEventListener("materials:updated", onUpdated);
   }, [currentCourse?.id, currentCourse?.code]);
 
-  /** Assignments：从任务型 materials 构建；支持勾选持久化 */
+  /** Assignments：从任务型 materials 构建 */
   const [assignments, setAssignments] = useState([]);
   useEffect(() => {
     const status = loadAssignmentStatus(uid, currentCourse?.code);
     if (!taskMaterials || taskMaterials.length === 0) {
-      // 无任务型 materials，清空
       setAssignments([]);
       return;
     }
@@ -538,13 +538,13 @@ function CourseDetail() {
       return {
         id: `m-${m.id}`,
         title: m.stored_name || m.original_name || "Untitled",
-        percent: "", // 若后端提供占比可使用
+        percent: "",
         due: "",
-        weight: 0, // 默认 0，走“数量制”兜底
+        weight: 0,
         completed: Boolean(status[`m-${m.id}`]),
         dueAt: when,
-        kind: m.file_type, // quiz / assignment / lab
-        assignmentId: parsedAssignmentId, // 提交用 assignment_id
+        kind: m.file_type,
+        assignmentId: parsedAssignmentId,
         sourceMaterialId: m.id,
         assignment: m.assignment ?? null,
       };
@@ -552,7 +552,7 @@ function CourseDetail() {
     setAssignments(mapped);
   }, [taskMaterials, uid, currentCourse?.code]);
 
-  /** 计算课程进度：优先用后端 progress；否则用完成权重/数量 */
+  /** 计算课程进度 */
   const computedProgress = useMemo(() => {
     const totalWeight = assignments.reduce((s, a) => s + (a.weight || 0), 0);
     if (totalWeight > 0) {
@@ -565,7 +565,6 @@ function CourseDetail() {
     return (done / total) * 100;
   }, [assignments]);
 
-  // 课程唯一键：优先 code，没 code 用 id
   const courseKey =
     currentCourse?.code ??
     (currentCourse?.id != null ? String(currentCourse.id) : "course");
@@ -575,9 +574,9 @@ function CourseDetail() {
   const progressValue =
     savedOverall != null
       ? savedOverall
-      : (typeof currentCourse?.progress === "number" && currentCourse.progress >= 0
-          ? currentCourse.progress
-          : computedProgress);
+      : typeof currentCourse?.progress === "number" && currentCourse.progress >= 0
+      ? currentCourse.progress
+      : computedProgress;
 
   /** 勾选完成并持久化 */
   const toggleAssignment = (id) => {
@@ -642,47 +641,71 @@ function CourseDetail() {
         sx={{
           flex: 1,
           backgroundColor: "#f5f6fa",
-          p: 3,
           overflowY: "auto",
           position: "relative",
         }}
       >
-        <Divider sx={{ position: "sticky", top: 56, zIndex: 1, mb: 2, opacity: 0.5 }} />
-
-        {/* 右上角 Search + 全局通知 */}
+        {/* 顶部固定区域：标题 + Student + 搜索 + 通知 + 分割线 */}
         <Box
           sx={{
-            display: "flex",
-            alignItems: "center",
-            position: "absolute",
-            top: 10,
-            right: 20,
-            gap: 1,
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            pb: 1,
+            mb: 2,
+            bgcolor: "#f5f6fa",
           }}
         >
-          <Search>
-            <SearchIconWrapper>
-              <SearchIcon aria-hidden />
-            </SearchIconWrapper>
-            <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
-          </Search>
-          {/* ✅ 统一的通知铃铛（与 Dashboard 等页面共享数据和弹窗） */}
-          <NotificationsBell />
-        </Box>
+          {/* 标题 + 右上角 Search + 通知 */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 1,
+            }}
+          >
+            {/* 左侧：Course · Student */}
+            <Box sx={{ ml: 2, mt: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="h4" sx={{ mr: 2, fontWeight: 800 }}>
+                Course
+              </Typography>
+              <CircleIcon sx={{ fontSize: 10, color: "#B3B3B3" }} />
+              <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
+                Student
+              </Typography>
+            </Box>
 
-        {/* 页面标题 */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            Course
-          </Typography>
-          <CircleIcon sx={{ marginLeft: "15%", fontSize: 10, color: "#B3B3B3" }} />
-          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
-            Student
-          </Typography>
+            {/* 右侧 Search + 通知 */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Search>
+                <SearchIconWrapper>
+                  <SearchIcon aria-hidden />
+                </SearchIconWrapper>
+                <StyledInputBase
+                  placeholder="Search"
+                  inputProps={{ "aria-label": "Search" }}
+                />
+              </Search>
+              <NotificationsBell />
+            </Box>
+          </Box>
+
+          {/* 分割线 */}
+          <Box
+            sx={{
+              width: "100%",
+              height: "2px",
+              backgroundColor: "rgba(21, 19, 19, 0.3)",
+            }}
+          />
         </Box>
 
         {/* 课程标题卡片 */}
-        <Paper elevation={1} sx={{ p: 2.5, borderRadius: 2, mb: 3, mt: 4, boxShadow: 5 }}>
+        <Paper
+          elevation={1}
+          sx={{ ml: 2, mr: 2, p: 2.5, borderRadius: 2, mb: 3, mt: 1, boxShadow: 5 }}
+        >
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             {courseCode}
             {courseName ? ` · ${courseName}` : ""}
@@ -700,11 +723,19 @@ function CourseDetail() {
         </Paper>
 
         {/* 三栏：Materials / Progress / Assignments */}
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(12, 1fr)" }, gap: 3 }}>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(12, 1fr)" },
+            gap: 3,
+          }}
+        >
           {/* Materials */}
           <Paper
             elevation={1}
             sx={{
+              ml: 2, 
+              mr: 2, 
               gridColumn: { xs: "1 / -1", md: "span 6" },
               p: 2,
               borderRadius: 2,
@@ -716,61 +747,90 @@ function CourseDetail() {
               Materials
             </Typography>
 
-            {matLoading && <Typography variant="body2" color="text.secondary">Loading materials…</Typography>}
-            {matError && <Typography variant="body2" color="error">{matError}</Typography>}
+            {matLoading && (
+              <Typography variant="body2" color="text.secondary">
+                Loading materials…
+              </Typography>
+            )}
+            {matError && (
+              <Typography variant="body2" color="error">
+                {matError}
+              </Typography>
+            )}
             {!matLoading && !matError && materials.length === 0 && (
-              <Typography variant="body2" color="text.secondary">No materials yet.</Typography>
+              <Typography variant="body2" color="text.secondary">
+                No materials yet.
+              </Typography>
             )}
 
-            {!matLoading && !matError && materials.map((m) => {
-              const color = extColor[m.ext] || extColor.default;
-              const sizeKB = m.file_size ? Math.round(m.file_size / 1024) : null;
-              const dateStr = m.uploaded_at ? new Date(m.uploaded_at).toLocaleDateString() : "";
-              const label = labelFromExt(m.ext);
-              const fileName = m.stored_name || m.original_name || "file";
-              return (
-                <Paper
-                  key={m.id}
-                  variant="outlined"
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    mb: 1.2,
-                    p: 1,
-                    gap: 1.2,
-                    borderRadius: 1.5,
-                    borderColor: "divider",
-                  }}
-                >
-                  <Box sx={{ width: 4, height: 28, borderRadius: 2, bgcolor: color }} />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700, lineHeight: 1.1 }} noWrap title={fileName}>
-                      {fileName}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {label}
-                      {sizeKB ? ` · ${sizeKB} KB` : ""}
-                      {dateStr ? ` · ${dateStr}` : ""}
-                    </Typography>
-                  </Box>
-                  <Button
+            {!matLoading &&
+              !matError &&
+              materials.map((m) => {
+                const color = extColor[m.ext] || extColor.default;
+                const sizeKB = m.file_size ? Math.round(m.file_size / 1024) : null;
+                const dateStr = m.uploaded_at
+                  ? new Date(m.uploaded_at).toLocaleDateString()
+                  : "";
+                const label = labelFromExt(m.ext);
+                const fileName = m.stored_name || m.original_name || "file";
+                return (
+                  <Paper
+                    key={m.id}
                     variant="outlined"
-                    size="small"
-                    sx={{ textTransform: "none", borderRadius: 1.2 }}
-                    disabled={!m.download_url}
-                    onClick={() => m.download_url && downloadWithAuth(m.download_url, fileName)}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      mb: 1.2,
+                      p: 1,
+                      gap: 1.2,
+                      borderRadius: 1.5,
+                      borderColor: "divider",
+                    }}
                   >
-                    Download
-                  </Button>
-                </Paper>
-              );
-            })}
+                    <Box
+                      sx={{
+                        width: 4,
+                        height: 28,
+                        borderRadius: 2,
+                        bgcolor: color,
+                      }}
+                    />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography
+                        sx={{ fontWeight: 700, lineHeight: 1.1 }}
+                        noWrap
+                        title={fileName}
+                      >
+                        {fileName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {label}
+                        {sizeKB ? ` · ${sizeKB} KB` : ""}
+                        {dateStr ? ` · ${dateStr}` : ""}
+                      </Typography>
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{ textTransform: "none", borderRadius: 1.2 }}
+                      disabled={!m.download_url}
+                      onClick={() =>
+                        m.download_url && downloadWithAuth(m.download_url, fileName)
+                      }
+                    >
+                      Download
+                    </Button>
+                  </Paper>
+                );
+              })}
           </Paper>
 
           {/* Course Progress */}
           <Paper
             elevation={1}
             sx={{
+              ml: 2, 
+              mr: 2, 
               gridColumn: { xs: "1 / -1", md: "span 6" },
               p: 2,
               borderRadius: 2,
@@ -801,8 +861,11 @@ function CourseDetail() {
             </ButtonBase>
           </Paper>
 
-          {/* Assignments（仅任务型 materials） */}
-          <Paper elevation={1} sx={{ gridColumn: "1 / -1", p: 2, borderRadius: 2, mt: 5 }}>
+          {/* Assignments */}
+          <Paper
+            elevation={1}
+            sx={{ ml: 2, mr: 2, gridColumn: "1 / -1", p: 2, borderRadius: 2, mt: 5 }}
+          >
             <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>
                 Assignments
@@ -829,21 +892,40 @@ function CourseDetail() {
                   key={a.id}
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: { xs: "1fr", md: "auto 2fr auto" }, // 类型 | 标题 | 提交/剩余
+                    gridTemplateColumns: { xs: "1fr", md: "auto 2fr auto" },
                     alignItems: "center",
                     columnGap: 2,
                     rowGap: 2,
                     py: 1.2,
                   }}
                 >
-                  <Chip label={prettyKind(kind)} size="small" variant="outlined" sx={kindChipSX(kind)} />
+                  <Chip
+                    label={prettyKind(kind)}
+                    size="small"
+                    variant="outlined"
+                    sx={kindChipSX(kind)}
+                  />
 
                   <Typography fontWeight={600} noWrap title={a.title}>
                     {a.title}
                   </Typography>
 
-                  <Box sx={{ justifySelf: "end", display: "flex", gap: 1, alignItems: "center" }}>
-                    {timeLeft && <Chip label={timeLeft} size="small" variant="outlined" sx={timeLeftChipSX} />}
+                  <Box
+                    sx={{
+                      justifySelf: "end",
+                      display: "flex",
+                      gap: 1,
+                      alignItems: "center",
+                    }}
+                  >
+                    {timeLeft && (
+                      <Chip
+                        label={timeLeft}
+                        size="small"
+                        variant="outlined"
+                        sx={timeLeftChipSX}
+                      />
+                    )}
                     <Button
                       size="small"
                       variant="contained"
