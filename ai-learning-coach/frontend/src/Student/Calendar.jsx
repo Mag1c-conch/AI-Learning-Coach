@@ -102,7 +102,7 @@ function aiEventsToCalendarDelta(events) {
       title,
       type: "success", // AntD 绿色点
       time,
-      desc: (e.meta && e.meta.source === "ai-plan") ? "AI Plan" : undefined,
+      desc: e.meta && e.meta.source === "ai-plan" ? "AI Plan" : undefined,
     });
   }
   return delta;
@@ -169,7 +169,7 @@ export default function TimeTable() {
     return () => window.removeEventListener("timetable:updated", onUpdated);
   }, [uid]);
 
-  /* ====== 手动导入按钮（可选） ====== */
+  /* ====== 手动导入按钮 ====== */
   const handleManualImport = () => {
     const events = ttGetEvents(uid);
     const delta = aiEventsToCalendarDelta(events);
@@ -290,62 +290,75 @@ export default function TimeTable() {
         sx={{
           flex: 1,
           backgroundColor: "#f5f6fa",
-          p: 3,
           overflowY: "auto",
           position: "relative",
         }}
       >
-        {/* 顶部分割线 */}
+        {/* 顶部固定区域：标题 + Student + 搜索 + 通知 + Import 按钮 + 分割线 */}
         <Box
           sx={{
-            position: "absolute",
-            top: 63,
-            left: 0,
-            width: "100%",
-            height: 2,
-            backgroundColor: "rgba(21,19,19,0.3)",
-          }}
-        />
-
-        {/* 右上角工具区 */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            position: "absolute",
-            top: 10,
-            right: 20,
-            gap: 1,
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            pb: 1,
+            mb: 2,
+            bgcolor: "#f5f6fa",
           }}
         >
-          <Search>
-            <SearchIconWrapper>
-              <SearchIcon />
-            </SearchIconWrapper>
-            <StyledInputBase placeholder="Search" inputProps={{ "aria-label": "Search" }} />
-          </Search>
-          <IconButton>
-            <NotificationsBell />
-          </IconButton>
-          <Button variant="outlined" size="small" onClick={handleManualImport}>
-            Import AI Plan
-          </Button>
-        </Box>
+          {/* 上面这一行：左边标题，右边工具区 */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 1,
+            }}
+          >
+            {/* 左侧：Calendar · Student */}
+            <Box sx={{ ml: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800 }}>
+                Calendar
+              </Typography>
+              <CircleIcon sx={{ fontSize: 10, color: "#B3B3B3" }} />
+              <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
+                Student
+              </Typography>
+            </Box>
 
-        {/* 标题 */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            Calendar
-          </Typography>
-          <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
-          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
-            Student
-          </Typography>
+            {/* 右侧工具区：Search + 通知 + Import AI Plan */}
+            <Box sx={{ mr: 2, display: "flex", alignItems: "center", gap: 1 }}>
+              <Search>
+                <SearchIconWrapper>
+                  <SearchIcon />
+                </SearchIconWrapper>
+                <StyledInputBase
+                  placeholder="Search"
+                  inputProps={{ "aria-label": "Search" }}
+                />
+              </Search>
+              <IconButton>
+                <NotificationsBell />
+              </IconButton>
+              <Button variant="outlined" size="small" onClick={handleManualImport}>
+                Import AI Plan
+              </Button>
+            </Box>
+          </Box>
+
+          {/* 分割线 */}
+          <Box
+            sx={{
+              width: "100%",
+              height: 2,
+              backgroundColor: "rgba(21,19,19,0.3)",
+            }}
+          />
         </Box>
 
         {/* 日历 */}
         <Box
           sx={{
+            ml: 2, 
             width: "100%",
             maxWidth: 1000,
             marginInline: "auto",
@@ -377,8 +390,17 @@ export default function TimeTable() {
           onCancel={() => setModalOpen(false)}
           destroyOnClose
         >
-          <Form form={form} layout="vertical" requiredMark={false} initialValues={{ type: "success" }}>
-            <Form.Item label="Title" name="title" rules={[{ required: true, message: "Please enter a title" }]}>
+          <Form
+            form={form}
+            layout="vertical"
+            requiredMark={false}
+            initialValues={{ type: "success" }}
+          >
+            <Form.Item
+              label="Title"
+              name="title"
+              rules={[{ required: true, message: "Please enter a title" }]}
+            >
               <Input placeholder="e.g., Lab 7, Quiz, Meeting..." />
             </Form.Item>
 
@@ -397,7 +419,10 @@ export default function TimeTable() {
             </Form.Item>
 
             <Form.Item label="Description" name="desc">
-              <Input.TextArea placeholder="Optional notes..." autoSize={{ minRows: 2, maxRows: 4 }} />
+              <Input.TextArea
+                placeholder="Optional notes..."
+                autoSize={{ minRows: 2, maxRows: 4 }}
+              />
             </Form.Item>
           </Form>
         </Modal>
