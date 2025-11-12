@@ -9,16 +9,12 @@ from flask_jwt_extended import create_access_token, get_jwt_identity
 from .models import User, UserRole
 
 
-def _identity_payload(user: User) -> dict:
-    return {
-        "id": user.id,
-        "role": user.role.value if isinstance(user.role, UserRole) else str(user.role),
-    }
-
-
 def create_user_access_token(user: User) -> str:
     """Create a JWT access token for the given user."""
-    return create_access_token(identity=_identity_payload(user))
+    claims = {
+        "role": user.role.value if isinstance(user.role, UserRole) else str(user.role),
+    }
+    return create_access_token(identity=str(user.id), additional_claims=claims)
 
 
 def current_user_from_token(optional: bool = False) -> Optional[User]:
@@ -29,7 +25,13 @@ def current_user_from_token(optional: bool = False) -> Optional[User]:
             return None
         abort(401, description="authentication required")
 
-    user_id = identity.get("id") if isinstance(identity, dict) else None
+    if isinstance(identity, dict):
+        user_id = identity.get("id")
+    else:
+        try:
+            user_id = int(identity)
+        except (TypeError, ValueError):
+            user_id = None
     if not user_id:
         if optional:
             return None

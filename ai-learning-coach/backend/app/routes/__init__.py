@@ -1,4 +1,4 @@
-from . import ai_assistant, assignment, auth, course, feedback, material
+from . import ai_assistant, assignment, auth, course, feedback, material, progress
 
 __all__ = [
     "ai_assistant",
@@ -7,5 +7,6 @@ __all__ = [
     "course",
     "feedback",
     "material",
+    "progress",
 ]
 
