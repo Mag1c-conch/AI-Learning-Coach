@@ -5,6 +5,5 @@ __pycache__/
 .vscode/
 .idea/
 migrations/__pycache__/
-backend/app/routes/README.md
 backend/instance/
 backend/test_scripts/

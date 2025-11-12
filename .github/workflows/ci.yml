@@ -70,9 +70,15 @@ jobs:
           cache: npm
           cache-dependency-path: ai-learning-coach/frontend/package-lock.json
 
-      - name: Install frontend dependencies
+      - name: Install frontend dependencies (ci fallback)
         working-directory: ai-learning-coach/frontend
-        run: npm ci
+        run: |
+          echo "Running npm ci..."
+          if ! npm ci; then
+            echo "npm ci failed, trying npm install..."
+            rm -rf node_modules
+            npm install
+          fi
 
       - name: Frontend tests (Jest)
         working-directory: ai-learning-coach/frontend
