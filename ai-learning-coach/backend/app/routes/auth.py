@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from ..auth_utils import create_user_access_token, current_user_from_token
 from ..models import User, UserRole
@@ -65,11 +66,12 @@ def register():
                 }
             ), 400
 
+        hashed = generate_password_hash(password)
         user = User(
             first_name=first_name,
             last_name=last_name,
             username=username,
-            password=password,
+            password=hashed,
             role=role_enum,
         )
         db.session.add(user)
@@ -100,7 +102,14 @@ def login():
         return jsonify({"error": str(exc)}), 400
 
     user = User.query.filter_by(username=username, role=role_enum).first()
-    if not user or user.password != password:
+    is_valid = False
+    if user:
+        if user.password:
+            if user.password.startswith("pbkdf2:") or user.password.startswith("scrypt:"):
+                is_valid = check_password_hash(user.password, password)
+            else:
+                is_valid = user.password == password
+    if not is_valid:
         return jsonify({"error": "Invalid username or password!"}), 401
 
     serialized = _serialize_user(user)

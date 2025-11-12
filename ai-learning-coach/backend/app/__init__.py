@@ -8,7 +8,7 @@ import os
 from redis import Redis
 
 from .extensions import db, migrate, jwt
-from .routes import ai_assistant, assignment, auth, course, feedback, material
+from .routes import ai_assistant, assignment, auth, course, feedback, material, progress
 
 
 def create_app():
@@ -93,6 +93,8 @@ def create_app():
     app.register_blueprint(ai_assistant.bp)
     # feedback blueprint
     app.register_blueprint(feedback.bp)
+    # progress blueprint
+    app.register_blueprint(progress.bp)
     return app
 
 

@@ -73,6 +73,12 @@ class User(db.Model):
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+    study_progress_items = db.relationship(
+        "StudyProgressItem",
+        back_populates="student",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
 
     #  Unique constraint on (username, role)
     __table_args__ = (
@@ -103,6 +109,12 @@ class Course(db.Model):
         cascade="all, delete-orphan",
         lazy="dynamic",
         single_parent=True,
+    )
+    study_progress_items = db.relationship(
+        "StudyProgressItem",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
     )
 
     def to_dict(self):
@@ -438,3 +450,65 @@ class StudyPlan(db.Model):
             "created_at": _to_sydney_iso(self.created_at),
             "updated_at": _to_sydney_iso(self.updated_at),
         }
+
+
+class StudyProgressItem(db.Model):
+    __tablename__ = "study_progress_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=False, index=True)
+    item_key = db.Column(db.String(128), nullable=False)
+    item_type = db.Column(db.String(32), nullable=True)
+    title = db.Column(db.String(255), nullable=True)
+    percent = db.Column(db.Integer, nullable=False, default=0)
+    metadata_payload = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+
+    student = db.relationship("User", back_populates="study_progress_items", lazy="joined")
+    course = db.relationship("Course", back_populates="study_progress_items", lazy="joined")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "student_id",
+            "course_id",
+            "item_key",
+            name="uq_study_progress_item",
+        ),
+    )
+
+    @property
+    def metadata_dict(self):
+        if not self.metadata_payload:
+            return None
+        try:
+            return json.loads(self.metadata_payload)
+        except json.JSONDecodeError:
+            return None
+
+    @metadata_dict.setter
+    def metadata_dict(self, value):
+        if value is None:
+            self.metadata_payload = None
+            return
+        try:
+            self.metadata_payload = json.dumps(value, ensure_ascii=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("metadata must be JSON-serializable") from exc
+
+    def to_dict(self, include_metadata=True):
+        data = {
+            "id": self.id,
+            "student_id": self.student_id,
+            "course_id": self.course_id,
+            "item_key": self.item_key,
+            "item_type": self.item_type,
+            "title": self.title,
+            "percent": self.percent,
+            "created_at": _to_sydney_iso(self.created_at),
+            "updated_at": _to_sydney_iso(self.updated_at),
+        }
+        if include_metadata:
+            data["metadata"] = self.metadata_dict
+        return data
