@@ -1,4 +1,3 @@
-// src/Admin/Pages/Admin/AiAssistance.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -16,45 +15,40 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import PersonIcon from "@mui/icons-material/Person";
 import Sidebar from "../components/Sidebar.jsx";
 import CircleIcon from "@mui/icons-material/Circle";
-
-// === 新增：Markdown 渲染依赖 ===
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { authFetch, API_BASE } from "../api/http";
+
 const DEFAULT_GREETING = {
   role: "model",
   content:
     "Hello! I'm your AI teaching assistant. I can help you answer course-related questions, assist in creating teaching plans, analyze student progress, and more. How can I help you today?",
 };
 
-// === 新增：对“长串无换行”的文本做兜底自动排版（题号、选项、Answer）===
+// guards non-string input
 function autoFormatQA(raw) {
   if (typeof raw !== "string") return raw;
-
   let t = raw;
-
-  // 题号独立段： 1. 2. 3. …
+  // Puts question numbers like 1. at the start of a new paragraph
   t = t.replace(/\s*(\d+)\.\s+/g, "\n\n$1. ");
-
-  // 选项独立行成列表： A) B) C) D)
+  // Forces choices A)onto their own lines as markdown list items
   t = t.replace(/\s([A-D])\)\s+/g, "\n- $1) ");
-
-  // 答案加粗并换行
+  // Moves Answer: to a new line and bolds the label
   t = t.replace(/\s*Answer:\s*/gi, "\n**Answer:** ");
 
   return t.trim();
 }
 
 export default function AiAssistance() {
-  const [conversationId, setConversationId] = useState(null);
-  const [messages, setMessages] = useState([DEFAULT_GREETING]);
-  const [inputValue, setInputValue] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
+  const [conversationId, setConversationId] = useState(null); // current chat
+  const [messages, setMessages] = useState([DEFAULT_GREETING]); // chat history
+  const [inputValue, setInputValue] = useState(""); // current input
+  const [loading, setLoading] = useState(false); // waiting for response
+  const [initialLoading, setInitialLoading] = useState(true); // loading history
+  const [error, setError] = useState(null); // error message
+  const messagesEndRef = useRef(null); // for scrolling
+  const inputRef = useRef(null); // input field ref
   const [conversationTitle, setConversationTitle] = useState(
     "AI Teaching Assistant"
   );
@@ -94,11 +88,11 @@ export default function AiAssistance() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages]); // auto-scroll to the latest one
 
   useEffect(() => {
     const initializeConversation = async () => {
-      if (!userId) {
+      if (!userId) { 
         setInitialLoading(false);
         return;
       }
@@ -129,23 +123,23 @@ export default function AiAssistance() {
       }
 
       if (!resolvedConversationId) {
-        const params = new URLSearchParams({
+        const params = new URLSearchParams({ // build query params
           user_id: String(userId),
           limit: "1",
           include_messages: "true",
           message_limit: "200",
         });
-        const resp = await authFetch(
+        const resp = await authFetch( // fetch user conversations
           `${API_BASE}/assistant/conversations?${params.toString()}`
         ).catch(() => null);
-        if (resp?.ok) {
+        if (resp?.ok) { // if request ok, parse Json
           const data = await resp.json();
           if (Array.isArray(data) && data.length > 0) {
-            const conversation = data[0];
-            resolvedConversationId = conversation.id;
-            setMessages(mapMessages(conversation.messages));
-            setConversationTitle(conversation.title || "AI Teaching Assistant");
-            if (conversationStorageKey) {
+            const conversation = data[0]; // take the first one
+            resolvedConversationId = conversation.id; // Save its id as the resolvedConversationId
+            setMessages(mapMessages(conversation.messages)); // Put its messages into state (mapping them to your UI schema)
+            setConversationTitle(conversation.title || "AI Teaching Assistant"); // Set the title 
+            if (conversationStorageKey) { // Persist id to localStorage if you have a key defined
               localStorage.setItem(
                 conversationStorageKey,
                 String(conversation.id)
@@ -179,7 +173,6 @@ export default function AiAssistance() {
     setLoading(true);
 
     try {
-      // === 更新：更强的 Markdown 指南 ===
       const systemPrompt = `You are a professional AI teaching assistant.
 
 Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
@@ -195,13 +188,13 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
         conversation_id: conversationId,
         user_id: userId,
         messages: [{ role: "user", content: userMessage }],
-        system_prompt: systemPrompt, // 前端传给后端
+        system_prompt: systemPrompt, // send to backend
       };
 
       if (!conversationId) {
-        const generatedTitle = userMessage.slice(0, 80);
-        payload.conversation_title = generatedTitle;
-        setConversationTitle(generatedTitle || "AI Teaching Assistant");
+        const generatedTitle = userMessage.slice(0, 80); // take first 80 chars
+        payload.conversation_title = generatedTitle; // send to backend to save
+        setConversationTitle(generatedTitle || "AI Teaching Assistant"); // optimistic title
       }
 
       const res = await authFetch(`${API_BASE}/assistant/chat`, {
@@ -217,8 +210,8 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
         );
       }
 
-      const data = await res.json();
-      const returnedId = data?.conversation_id;
+      const data = await res.json(); // parses the server response
+      const returnedId = data?.conversation_id; 
       if (returnedId && returnedId !== conversationId) {
         setConversationId(returnedId);
         if (conversationStorageKey) {
@@ -241,8 +234,8 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+      e.preventDefault(); // stop newline
+      handleSend(); // send message
     }
   };
 
@@ -256,8 +249,8 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
 
     return (
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        remarkPlugins={[remarkGfm]} // support GFM syntax
+        rehypePlugins={[rehypeHighlight]} // syntax highlighting
         components={{
           p: ({ node, ...props }) => (
             <Typography
