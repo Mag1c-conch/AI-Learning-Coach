@@ -1,9 +1,5 @@
-// src/Student/TimeTable.jsx
 import React, { useState, useEffect } from "react";
 import { Box, Typography, IconButton, Button } from "@mui/material";
-import { styled, alpha } from "@mui/material/styles";
-import InputBase from "@mui/material/InputBase";
-import SearchIcon from "@mui/icons-material/Search";
 import NotificationsBell from "../components/Notifications.jsx";
 import CircleIcon from "@mui/icons-material/Circle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -11,77 +7,43 @@ import Sidebar from "../components/Sidebar.jsx";
 import { Badge, Calendar, Modal, Form, Input, Select, TimePicker, message } from "antd";
 import dayjs from "dayjs";
 
-/* ================= Search box ================= */
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: theme.palette.action.hover,
-  "&:hover": { backgroundColor: alpha(theme.palette.common.black, 0.1) },
-  display: "flex",
-  alignItems: "center",
-  marginRight: theme.spacing(2),
-  marginLeft: 0,
-  width: "200px",
-  paddingLeft: theme.spacing(1),
-  [theme.breakpoints.up("sm")]: { width: "250px" },
-}));
+// change to string
+const toKey = (value) => {
+  return value.format("DD/MM/YYYY");
+}
 
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: theme.spacing(0, 1),
-  height: "100%",
-  color: "rgba(0,0,0,0.5)",
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  width: "100%",
-  "& .MuiInputBase-input": {
-    padding: theme.spacing(1, 1, 1, 0),
-    transition: theme.transitions.create("width"),
-    width: "100%",
-  },
-}));
-
-/* ============== Date key（要在前面，后面函数会用到） ============== */
-const toKey = (value) => value.format("DD/MM/YYYY");
-
-/* ============== Shared helpers（与 StudyProgress 对齐） ============== */
 function getCurrentUserId() {
   try {
     const token =
       window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
-    if (!token) return null;
+    if (!token) return null; // null means not logged in or no user
     const user = JSON.parse(token);
     return user?.id || user?.user_id || null;
   } catch {
-    return null;
+    return null; //any error, return null
   }
 }
 
-// StudyProgress 写入 AI 计划事件用的 Key
+// fetch timetable events from lovalStorage
 const TT_KEY = (uid) => `timetableEvents:${uid || "anon"}`;
 
-// 读取 AI 计划事件（StudyProgress 那边写入的）
 function ttGetEvents(uid) {
   try {
     const raw = localStorage.getItem(TT_KEY(uid));
-    const arr = raw ? JSON.parse(raw) : [];
+    const arr = raw ? JSON.parse(raw) : []; // not valid JSONm return []
     return Array.isArray(arr) ? arr : [];
   } catch {
     return [];
   }
 }
 
-/** ISO -> Day.js；容错非法值 */
+// date parsing safe
 function safeParseISO(iso) {
   const d = dayjs(iso);
   return d.isValid() ? d : null;
 }
 
-/** 把 AI 计划事件数组 -> 当前日历本地结构的差量 { "DD/MM/YYYY": [task...] } */
+// converts raw AI plan events to calendar's internal
 function aiEventsToCalendarDelta(events) {
   const delta = {};
   for (const e of Array.isArray(events) ? events : []) {
@@ -100,7 +62,7 @@ function aiEventsToCalendarDelta(events) {
     delta[key].push({
       id,
       title,
-      type: "success", // AntD 绿色点
+      type: "success", 
       time,
       desc: e.meta && e.meta.source === "ai-plan" ? "AI Plan" : undefined,
     });
@@ -108,7 +70,7 @@ function aiEventsToCalendarDelta(events) {
   return delta;
 }
 
-/** 合并差量到现有 tasks（按 id 去重） */
+// merges new calendar tasks into the eisting tasks
 function mergeCalendarTasks(oldTasks, delta) {
   const next = { ...oldTasks };
   for (const [key, arr] of Object.entries(delta)) {
@@ -143,12 +105,12 @@ export default function TimeTable() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
 
-  /* ====== 本地持久化 ====== */
+  // store calendar state to browser(localStorage)
   useEffect(() => {
     localStorage.setItem("calendar_tasks_v1", JSON.stringify(tasks));
   }, [tasks]);
 
-  /* ====== 首次加载：导入已存在的 AI 计划事件 ====== */
+  // inital load AI plan events
   useEffect(() => {
     const events = ttGetEvents(uid);
     if (events.length) {
@@ -157,22 +119,22 @@ export default function TimeTable() {
     }
   }, [uid]);
 
-  /* ====== 监听 StudyProgress 的广播：有新“同步到 Timetable”时导入 ====== */
+  // listen to timetable update events
   useEffect(() => {
     const onUpdated = () => {
-      const events = ttGetEvents(uid);
-      const delta = aiEventsToCalendarDelta(events);
-      setTasks((prev) => mergeCalendarTasks(prev, delta));
+      const events = ttGetEvents(uid); // read raw events for this user from localstorage
+      const delta = aiEventsToCalendarDelta(events); // normalize & group by day
+      setTasks((prev) => mergeCalendarTasks(prev, delta)); // merge into state (dedupe by id)
       message.success("Imported study plan to calendar");
     };
-    window.addEventListener("timetable:updated", onUpdated);
-    return () => window.removeEventListener("timetable:updated", onUpdated);
+    window.addEventListener("timetable:updated", onUpdated); // subscribe
+    return () => window.removeEventListener("timetable:updated", onUpdated); // unsubscribe
   }, [uid]);
 
-  /* ====== 手动导入按钮 ====== */
+  // manual impot Ai plan
   const handleManualImport = () => {
-    const events = ttGetEvents(uid);
-    const delta = aiEventsToCalendarDelta(events);
+    const events = ttGetEvents(uid); // read raw events for this user
+    const delta = aiEventsToCalendarDelta(events); // normalize & group by day
     if (!Object.keys(delta).length) {
       message.info("No AI plan events to import");
       return;
@@ -181,23 +143,28 @@ export default function TimeTable() {
     message.success("Imported study plan to calendar");
   };
 
-  /* ====== 选择日期 → 打开新增任务弹窗 ====== */
+  // when click date in calendar
   const handleSelectDate = (value) => {
-    setSelectedDate(value);
-    setModalOpen(true);
-    form.resetFields();
-    form.setFieldsValue({ type: "success", time: dayjs("09:00", "HH:mm") });
+    setSelectedDate(value); // remember which day user clicked
+    setModalOpen(true); // open modal
+    form.resetFields(); // clear old inputs
+    form.setFieldsValue({ 
+      type: "success", 
+      // use hour/minute to avoid needing customParseFormat plugin
+      time: dayjs().hour(9).minute(0).second(0).millisecond(0) 
+    });
   };
 
-  /* ====== 新增任务（手动添加） ====== */
+  // creates a new task for the selected date
   const handleAddTask = async () => {
     try {
       const values = await form.validateFields();
-      const key = toKey(selectedDate);
-      const newTask = {
+      const key = toKey(selectedDate); // compute day bucket key
+      const newTask = { // build new task object
         id: `${key}:${Date.now()}`,
         title: values.title.trim(),
-        type: values.type, // "success" | "warning" | "error"
+        type: values.type // "success" | "warning" | "error"
+        ,
         time: values.time ? values.time.format("HH:mm") : undefined,
         desc: values.desc?.trim() || undefined,
       };
@@ -205,14 +172,14 @@ export default function TimeTable() {
         const prevList = prev[key] || [];
         return { ...prev, [key]: [...prevList, newTask] };
       });
-      setModalOpen(false);
+      setModalOpen(false); // close modal + toast
       message.success("Task added");
     } catch {
       /* ignore */
     }
   };
 
-  /* ====== 删除任务 ====== */
+  // deletes task by id from a date bucket
   const handleDeleteTask = (key, id) => {
     setTasks((prev) => {
       const next = { ...prev };
@@ -223,7 +190,7 @@ export default function TimeTable() {
     message.success("Task deleted");
   };
 
-  /* ====== 月单元格（可自定义展示统计） ====== */
+  // month cells are drawn here
   const monthCellRender = (value) => {
     if (value.month() === 8) {
       return (
@@ -236,11 +203,11 @@ export default function TimeTable() {
     return null;
   };
 
-  /* ====== 日期单元格：渲染任务列表 ====== */
+  // single day cell
   const dateCellRender = (value) => {
-    const key = toKey(value);
-    const list = tasks[key] || [];
-    if (!list.length) return null;
+    const key = toKey(value); // compute the day key
+    const list = tasks[key] || []; // tasks for that day
+    if (!list.length) return null; // no tasks, keep default cell
 
     return (
       <ul className="events" style={{ textAlign: "left", paddingLeft: 0, margin: 0 }}>
@@ -285,6 +252,7 @@ export default function TimeTable() {
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <Sidebar />
+      {/* Scrollable main area */}
       <Box
         component="main"
         sx={{
@@ -294,7 +262,7 @@ export default function TimeTable() {
           position: "relative",
         }}
       >
-        {/* 顶部固定区域：标题 + Student + 搜索 + 通知 + Import 按钮 + 分割线 */}
+        {/* header is in fixed position */}
         <Box
           sx={{
             position: "sticky",
@@ -305,7 +273,6 @@ export default function TimeTable() {
             bgcolor: "#f5f6fa",
           }}
         >
-          {/* 上面这一行：左边标题，右边工具区 */}
           <Box
             sx={{
               display: "flex",
@@ -314,7 +281,7 @@ export default function TimeTable() {
               mb: 1,
             }}
           >
-            {/* 左侧：Calendar · Student */}
+            {/* left side: title cluster */}
             <Box sx={{ ml: 2, display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="h4" sx={{ fontWeight: 800 }}>
                 Calendar
@@ -324,18 +291,8 @@ export default function TimeTable() {
                 Student
               </Typography>
             </Box>
-
-            {/* 右侧工具区：Search + 通知 + Import AI Plan */}
+            {/* right side: actions */}
             <Box sx={{ mr: 2, display: "flex", alignItems: "center", gap: 1 }}>
-              <Search>
-                <SearchIconWrapper>
-                  <SearchIcon />
-                </SearchIconWrapper>
-                <StyledInputBase
-                  placeholder="Search"
-                  inputProps={{ "aria-label": "Search" }}
-                />
-              </Search>
               <IconButton>
                 <NotificationsBell />
               </IconButton>
@@ -345,7 +302,6 @@ export default function TimeTable() {
             </Box>
           </Box>
 
-          {/* 分割线 */}
           <Box
             sx={{
               width: "100%",
@@ -355,7 +311,7 @@ export default function TimeTable() {
           />
         </Box>
 
-        {/* 日历 */}
+        {/* calendar */}
         <Box
           sx={{
             ml: 2, 
@@ -380,22 +336,22 @@ export default function TimeTable() {
             }}
           />
         </Box>
-
-        {/* 新增任务弹窗 */}
+        {/* add task model */}
         <Modal
-          title={`Add Task · ${toKey(selectedDate)}`}
-          open={modalOpen}
-          okText="Add"
-          onOk={handleAddTask}
-          onCancel={() => setModalOpen(false)}
+          title={`Add Task · ${toKey(selectedDate)}`} // shows the selected day as text
+          open={modalOpen} // controls visibility
+          okText="Add" // ok button text
+          onOk={handleAddTask} // click ok to add task
+          onCancel={() => setModalOpen(false)} // close without saving
           destroyOnClose
         >
           <Form
             form={form}
-            layout="vertical"
-            requiredMark={false}
-            initialValues={{ type: "success" }}
+            layout="vertical" // labels om top of fields
+            requiredMark={false} // don't show red star
+            initialValues={{ type: "success" }} // default value
           >
+            {/* title */}
             <Form.Item
               label="Title"
               name="title"
@@ -403,7 +359,7 @@ export default function TimeTable() {
             >
               <Input placeholder="e.g., Lab 7, Quiz, Meeting..." />
             </Form.Item>
-
+            {/* type */}
             <Form.Item label="Type" name="type">
               <Select
                 options={[
@@ -413,11 +369,11 @@ export default function TimeTable() {
                 ]}
               />
             </Form.Item>
-
+            {/* time */}
             <Form.Item label="Time" name="time">
               <TimePicker format="HH:mm" minuteStep={5} />
             </Form.Item>
-
+            {/* description */}
             <Form.Item label="Description" name="desc">
               <Input.TextArea
                 placeholder="Optional notes..."
