@@ -1,5 +1,5 @@
 // src/Student/StudyProgress.jsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   Box,
   Paper,
@@ -14,54 +14,17 @@ import {
   DialogActions,
   CircularProgress,
   circularProgressClasses,
-  InputBase,
   IconButton,
   Checkbox,
   Tooltip,
   Snackbar,
   Alert,
 } from "@mui/material";
-import { styled, alpha } from "@mui/material/styles";
-import SearchIcon from "@mui/icons-material/Search";
 import NotificationsBell from "../components/Notifications.jsx";
 import CircleIcon from "@mui/icons-material/Circle";
 import Sidebar from "../components/Sidebar.jsx";
 import { useParams, useNavigate } from "react-router-dom";
 import http from "../api/http";
-
-/* ===================== Search box ===================== */
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: theme.palette.action.hover,
-  "&:hover": { backgroundColor: alpha(theme.palette.common.black, 0.1) },
-  display: "flex",
-  alignItems: "center",
-  marginRight: theme.spacing(2),
-  marginLeft: 0,
-  width: "200px",
-  paddingLeft: theme.spacing(1),
-  [theme.breakpoints.up("sm")]: { width: "250px" },
-}));
-
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: theme.spacing(0, 1),
-  height: "100%",
-  color: "rgba(0,0,0,0.5)",
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  width: "100%",
-  "& .MuiInputBase-input": {
-    padding: theme.spacing(1, 1, 1, 0),
-    transition: theme.transitions.create("width"),
-    width: "100%",
-  },
-}));
 
 /* ===================== Helpers (auth & enrollments) ===================== */
 function getCurrentUserId() {
@@ -99,6 +62,20 @@ async function apiCreatePlan(studentId) {
 async function apiGetPlan(studentId, weekStart) {
   const qs = weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : "";
   const res = await http.get(`/assistant/study_plan/${studentId}${qs}`);
+  return res.data;
+}
+
+async function apiGetStudyProgress(studentId, courseId) {
+  if (!studentId || !courseId) return null;
+  const res = await http.get(`/progress/study/${studentId}/${courseId}`);
+  return res.data;
+}
+
+async function apiUpsertStudyProgress(studentId, courseId, items = [], replace = false) {
+  if (!studentId || !courseId || !Array.isArray(items) || items.length === 0) return null;
+  const payload = { items };
+  if (replace) payload.replace = true;
+  const res = await http.put(`/progress/study/${studentId}/${courseId}`, payload);
   return res.data;
 }
 
@@ -423,14 +400,31 @@ function StudyProgress() {
       setLoading(true);
       setErr(null);
       try {
-        const [assRes, matRes] = await Promise.all([
+        const progressPromise =
+          uid && cid
+            ? apiGetStudyProgress(uid, cid).catch((error) => {
+                const status = error?.response?.status;
+                if (status === 403 || status === 404) return null;
+                throw error;
+              })
+            : Promise.resolve(null);
+
+        const [assRes, matRes, progressData] = await Promise.all([
           http.get("/assignments", { params: { course_id: cid } }).catch(() => ({ data: [] })),
           http
             .get("/materials", { params: { course_id: cid, include_submissions: false } })
             .catch(() => ({ data: [] })),
+          progressPromise,
         ]);
 
-        const saved = loadProgress(uid, courseKey);
+        const localSaved = loadProgress(uid, courseKey);
+        const mergedSaved = { ...localSaved };
+        if (progressData && Array.isArray(progressData.items)) {
+          for (const item of progressData.items) {
+            mergedSaved[item.item_key] = Number(item.percent) || 0;
+          }
+          saveProgress(uid, courseKey, mergedSaved);
+        }
 
         // materials
         const matsRaw = Array.isArray(matRes.data) ? matRes.data : [];
@@ -444,7 +438,7 @@ function StudyProgress() {
               type: typeFromMaterial(m),
               dueAt: m.assignment?.due_date || m.due_date || m.deadline || null,
               assignmentId: m.assignment_id ?? m.assignment?.id ?? null,
-              percent: Number(saved?.[id]) || 0,
+              percent: Number(mergedSaved?.[id]) || 0,
             };
           });
 
@@ -465,7 +459,7 @@ function StudyProgress() {
               type: "Assignments",
               dueAt: a.due_date || null,
               assignmentId: a.id,
-              percent: Number(saved?.[id]) || 0,
+              percent: Number(mergedSaved?.[id]) || 0,
             };
           });
 
@@ -496,22 +490,31 @@ function StudyProgress() {
     );
 
   // update progress
-  const setTaskPercent = (id, percent) => {
-    setTasks((prev) => {
-      const next = prev.map((t) => (t.id === id ? { ...t, percent } : t));
-      const saved = loadProgress(uid, courseKey);
-      saved[id] = percent;
-      saveProgress(uid, courseKey, saved);
-      return next;
-    });
-  };
-
   // overall
   const overall = useMemo(() => {
     if (!tasks.length) return 0;
     const sum = tasks.reduce((s, t) => s + (Number(t.percent) || 0), 0);
     return Math.round(sum / tasks.length);
   }, [tasks]);
+
+  const applyProgressResponse = useCallback(
+    (data) => {
+      if (!data || !Array.isArray(data.items)) return;
+      const cached = loadProgress(uid, courseKey);
+      const updated = { ...cached };
+      for (const item of data.items) {
+        updated[item.item_key] = Number(item.percent) || 0;
+      }
+      saveProgress(uid, courseKey, updated);
+      setTasks((prev) =>
+        prev.map((t) => ({
+          ...t,
+          percent: Number(updated?.[t.id]) || 0,
+        }))
+      );
+    },
+    [courseKey, uid]
+  );
 
   useEffect(() => {
     localStorage.setItem(courseProgressKey(uid, courseKey), String(overall));
@@ -553,6 +556,52 @@ function StudyProgress() {
   const [snackOpen, setSnackOpen] = useState(false);
   const [snackMsg, setSnackMsg] = useState("");
   const [snackSev, setSnackSev] = useState("success"); // success | info | warning | error
+
+  const setTaskPercent = (id, percent) => {
+    let payloadItem = null;
+    setTasks((prev) => {
+      const next = prev.map((t) => {
+        if (t.id === id) {
+          payloadItem = { ...t, percent };
+          return { ...t, percent };
+        }
+        return t;
+      });
+      const saved = loadProgress(uid, courseKey);
+      saved[id] = percent;
+      saveProgress(uid, courseKey, saved);
+      return next;
+    });
+
+    if (uid && currentCourse?.id && payloadItem) {
+      const metadata = {};
+      if (payloadItem.assignmentId != null) {
+        metadata.assignment_id = payloadItem.assignmentId;
+      }
+      if (payloadItem.dueAt) {
+        metadata.due_at = payloadItem.dueAt;
+      }
+      const itemPayload = {
+        item_key: id,
+        percent,
+        item_type: prettyType(payloadItem.type),
+        title: payloadItem.title,
+      };
+      if (Object.keys(metadata).length) {
+        itemPayload.metadata = metadata;
+      }
+      apiUpsertStudyProgress(uid, currentCourse.id, [itemPayload])
+        .then((res) => {
+          if (res) applyProgressResponse(res);
+        })
+        .catch((error) => {
+          console.error("Failed to sync progress", error);
+          setSnackMsg("Failed to sync progress to server");
+          setSnackSev("error");
+          setSnackOpen(true);
+        });
+    }
+  };
 
   // Quick Plan (local)
   const generatePlan = () => {
@@ -672,66 +721,46 @@ function StudyProgress() {
         sx={{
           flex: 1,
           backgroundColor: "#f5f6fa",
+          p: 3,
           overflowY: "auto",
           position: "relative",
         }}
       >
-        {/* 顶部固定区域：标题 + Student + 搜索 + 通知 + 分割线 */}
         <Box
           sx={{
-            position: "sticky",
-            top: 0,
-            zIndex: 10,
-            pb: 1,
-            mb: 2,
-            bgcolor: "#f5f6fa",
+            position: "absolute",
+            top: "63px",
+            left: 0,
+            width: "100%",
+            height: "2px",
+            backgroundColor: "rgba(21, 19, 19, 0.3)",
+          }}
+        />
+
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            gap: 1,
+            position: "absolute",
+            top: 10,
+            right: 20,
           }}
         >
-          {/* 上面这一行：左边标题，右边搜索 + 通知 */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 1,
-            }}
-          >
-            {/* 左侧：Study Progress · Student */}
-            <Box sx={{ ml: 2, display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                Study Progress
-              </Typography>
-              <CircleIcon sx={{ fontSize: 10, color: "#B3B3B3" }} />
-              <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
-                Student
-              </Typography>
-            </Box>
+          <IconButton>
+            <NotificationsBell />
+          </IconButton>
+        </Box>
 
-            {/* 右侧：搜索框 + 通知铃铛 */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Search>
-                <SearchIconWrapper>
-                  <SearchIcon />
-                </SearchIconWrapper>
-                <StyledInputBase
-                  placeholder="Search"
-                  inputProps={{ "aria-label": "Search" }}
-                />
-              </Search>
-              <IconButton>
-                <NotificationsBell />
-              </IconButton>
-            </Box>
-          </Box>
-
-          {/* 分割线 */}
-          <Box
-            sx={{
-              width: "100%",
-              height: "2px",
-              backgroundColor: "rgba(21, 19, 19, 0.3)",
-            }}
-          />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>
+            Study Progress
+          </Typography>
+          <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3", marginLeft: "80px" }} />
+          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
+            Student
+          </Typography>
         </Box>
 
         {/* course title card */}

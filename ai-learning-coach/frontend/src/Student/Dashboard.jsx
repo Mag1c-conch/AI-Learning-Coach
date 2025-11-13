@@ -6,7 +6,6 @@ import {
   Box,
   Typography,
   IconButton,
-  InputBase,
   Grid,
   Paper,
   Card,
@@ -14,14 +13,11 @@ import {
   Divider,
   CircularProgress,
 } from "@mui/material";
-import { styled, alpha } from "@mui/material/styles";
 import { circularProgressClasses } from "@mui/material/CircularProgress";
 import Sidebar from "../components/Sidebar.jsx";
-import SearchIcon from "@mui/icons-material/Search";
 import CircleIcon from "@mui/icons-material/Circle";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import SmartToyIcon from "@mui/icons-material/SmartToy";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
@@ -29,40 +25,6 @@ import { PickersDay } from "@mui/x-date-pickers/PickersDay";
 import dayjs from "dayjs";
 import http from "../api/http";
 import NotificationsBell from "../components/Notifications.jsx";
-
-// ===== Search box =====
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: theme.palette.action.hover,
-  "&:hover": { backgroundColor: alpha(theme.palette.common.black, 0.1) },
-  display: "flex",
-  alignItems: "center",
-  mr: theme.spacing(2),
-  ml: 0,
-  width: "200px",
-  pl: theme.spacing(1),
-  [theme.breakpoints.up("sm")]: { width: "250px" },
-}));
-
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: theme.spacing(0, 1),
-  height: "100%",
-  color: "rgba(0,0,0,0.5)",
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  width: "100%",
-  "& .MuiInputBase-input": {
-    padding: theme.spacing(1, 1, 1, 0),
-    transition: theme.transitions.create("width"),
-    width: "100%",
-  },
-}));
 
 // ===== Course slider =====
 function CoursesSlider({ courses = [], progressMap = {} }) {
@@ -736,62 +698,46 @@ const Dashboard = () => {
         sx={{
           flex: 1,
           backgroundColor: "#f5f6fa",
-
+          p: 3,
           overflowY: "auto",
           position: "relative",
         }}
       >
         <Box
           sx={{
-            position: "sticky",
-            top: 0,
-            zIndex: 10,
-            mb: 2,
-            bgcolor: "#f5f6fa",
+            position: "absolute",
+            top: "63px",
+            left: 0,
+            width: "100%",
+            height: "2px",
+            backgroundColor: "rgba(21, 19, 19, 0.3)",
+          }}
+        />
+
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            gap: 1,
+            position: "absolute",
+            top: 10,
+            right: 20,
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 1,
-            }}
-          >
-            {/* Dashboard · Student */}
-            <Box sx={{ mt: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography variant="h4" sx={{ mr: 2, ml: 2, fontWeight: 800 }}>
-                Dashboard
-              </Typography>
-              <CircleIcon sx={{ fontSize: 10, color: "#B3B3B3" }} />
-              <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
-                Student
-              </Typography>
-            </Box>
+          <IconButton>
+            <NotificationsBell />
+          </IconButton>
+        </Box>
 
-            {/* search bar + notification */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Search>
-                <SearchIconWrapper>
-                  <SearchIcon />
-                </SearchIconWrapper>
-                <StyledInputBase
-                  placeholder="Search"
-                  inputProps={{ "aria-label": "Search" }}
-                />
-              </Search>
-              <NotificationsBell />
-            </Box>
-          </Box>
-
-          {/* 分割线 */}
-          <Box
-            sx={{
-              width: "100%",
-              height: "2px",
-              backgroundColor: "rgba(21, 19, 19, 0.3)",
-            }}
-          />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>
+            Dashboard
+          </Typography>
+          <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3", marginLeft: "80px" }} />
+          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
+            Student
+          </Typography>
         </Box>
 
         {/* scrollable area */}
