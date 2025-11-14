@@ -88,7 +88,7 @@ def seeded_course(app):
 
 
 def _make_ai_payload(student_id, course_id, material_id):
-    week_start = datetime.now(SYDNEY_TZ).date() + timedelta(days=1)
+    week_start = datetime.now(SYDNEY_TZ).date()
     days = []
     for offset in range(7):
         day = week_start + timedelta(days=offset)

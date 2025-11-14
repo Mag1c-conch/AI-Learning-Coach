@@ -96,7 +96,7 @@ def test_registration_and_login_flow(client):
         password="password123",
         role="student",
     )
-    assert login.status_code == 201
+    assert login.status_code == 200
     login_data = login.get_json()
     assert login_data["username"] == "student_tester@example.com"
     assert login_data["role"] == "student"
@@ -107,7 +107,7 @@ def test_registration_and_login_flow(client):
         password="wrong",
         role="student",
     )
-    assert bad_login.status_code == 201
+    assert bad_login.status_code == 401
     assert bad_login.get_json()["error"] == "Invalid username or password!"
 
 
