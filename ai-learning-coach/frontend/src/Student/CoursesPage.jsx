@@ -7,7 +7,6 @@ import {
   Typography,
   Paper,
   IconButton,
-  Link,
 } from "@mui/material";
 import CircleIcon from "@mui/icons-material/Circle";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -43,6 +42,7 @@ function mapEnrollmentToCard(e) {
 }
 
 function readLocalEnrollments(uid) {
+  // Pull the courses that students have registered for from the local cache.
   if (!uid) return [];
   try {
     const perUserKey = `enrolledCourses:${uid}`;
@@ -84,7 +84,6 @@ const Courses = () => {
     };
   }, []);
 
-  // load enrolled courses
   useEffect(() => {
     const load = async () => {
       if (!uid) {
@@ -92,15 +91,16 @@ const Courses = () => {
         return;
       }
       try {
+        // First, pull the course data from the back end and refresh the course and reward data.
         const { data } = await http.get(`/courses/users/${uid}/enrollments`);
         const enrolledCards = Array.isArray(data)
           ? data.map(mapEnrollmentToCard)
           : [];
         const fallback = enrolledCards.length ? [] : readLocalEnrollments(uid);
         setCourses(enrolledCards.length ? enrolledCards : fallback);
-        setPage(1); // Reset to first page on data reload
+        setPage(1);
       } catch (e) {
-        console.error("course load unsuccessfulo", e?.response?.data || e.message);
+        console.error("course load unsuccessful", e?.response?.data || e.message);
         const fallback = readLocalEnrollments(uid);
         setCourses(fallback);
         setPage(1);
@@ -126,7 +126,6 @@ const Courses = () => {
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
-
       <Box
         className="main-content"
         sx={{
@@ -137,7 +136,6 @@ const Courses = () => {
           position: "relative",
         }}
       >
-        {/* line */}
         <Box
           sx={{
             position: "absolute",
@@ -149,7 +147,6 @@ const Courses = () => {
           }}
         />
 
-        {/* notification */}
         <Box
           sx={{
             display: "flex",
@@ -166,23 +163,38 @@ const Courses = () => {
           </IconButton>
         </Box>
 
-        {/* title */}
         <Box
-          sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}
+          sx={{ 
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            mt: -1,
+            mb: 2,
+          }}
         >
           <Typography variant="h4" sx={{ fontWeight: 800 }}>
             Courses
           </Typography>
-          <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" , marginLeft: "80px"}} />
+          <CircleIcon 
+            sx={{
+              fontSize: 10,
+              color: "#B3B3B3" ,
+              marginLeft: "80px",
+              }} 
+          />
           <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
             Student
           </Typography>
         </Box>
 
-        {/* My Courses + Register button */}
-
         <Box sx={{ px: 1, mt: 3 }}>
-          <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
+          <Box 
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              mb: 3,
+            }}
+          >
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
               My Courses
             </Typography>
@@ -200,16 +212,15 @@ const Courses = () => {
                   "&:hover": { background: "#1a2438" },
                   textTransform: "none",
                 }}
-                href="/registercourse" // 或 component={Link} to="/registercourse"
+                href="/registercourse"
               >
                 Register Courses
               </Button>
             )}
           </Box>
 
-          {/* empty state */}
-          {/* if Empty State */}
           {!hasCourses ? (
+            // When students have no courses, prompt them and register.
             <Paper
               elevation={0}
               sx={{
@@ -261,11 +272,12 @@ const Courses = () => {
                     }}
                     role="button"
                     tabIndex={0}
+                    // Make each course card into a button that can open the detailed information of the course.
                     sx={{
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
-                      bgcolor: "#eef0fa",
+                      bgcolor: "#E5E7EB",
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 2,
@@ -282,7 +294,7 @@ const Courses = () => {
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
                       {course.code}
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5 }}>
                       {course.name}
                     </Typography>
 
@@ -295,7 +307,7 @@ const Courses = () => {
                         gap: 1.5,
                       }}
                     >
-                      <EmojiEventsOutlinedIcon sx={{ fontSize: 36 }} />
+                      <EmojiEventsOutlinedIcon sx={{ fontSize: 36, color:"#EFB74D" }} />
                       <Typography variant="h5" sx={{ fontWeight: 700 }}>
                         {course.badges}
                       </Typography>
@@ -304,7 +316,6 @@ const Courses = () => {
                 ))}
               </Box>
 
-              {/* pagination */}
               <Box
                 sx={{
                   display: "flex",
@@ -322,6 +333,7 @@ const Courses = () => {
                   <ChevronLeftIcon fontSize="small" />
                 </IconButton>
 
+                {/* It is not fixed that students can only click the "Previous page" and "Next Page" buttons */}
                 {Array.from({ length: totalPages }).map((_, i) => {
                   const pageNumber = i + 1;
                   return (
