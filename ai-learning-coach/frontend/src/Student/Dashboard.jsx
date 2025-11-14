@@ -757,6 +757,27 @@ const Dashboard = () => {
           </Typography>
         </Box>
 
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 2,
+            mb: 3,
+          }}
+        >
+          <Typography
+            variant="h4"
+            sx={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 1 }}
+          >
+            {greeting}, {firstName}!{" "}
+            <span role="img" aria-label="wave" >
+              👋
+            </span>
+          </Typography>
+        </Box>
+
         {/* scrollable area */}
         <Box sx={{ ml: 2, mt: 2, pb: 2, width: "100%", height: "100%" }}>
           <Grid
