@@ -342,20 +342,21 @@ export default function Dashboard() {
       const coursesData = await coursesResponse.json();
       console.log('Fetching students for courses:', coursesData);
       
-      // 获取每个课程的学生
+      // 获取每个课程的学生进度
       const studentPromises = coursesData.map(async (course) => {
         try {
-          const response = await authFetch(`${API_BASE}/courses/${course.id}/students`);
+          const response = await authFetch(`${API_BASE}/progress/course/${course.id}/students`);
           if (response.ok) {
             const students = await response.json();
-            // 为每个学生添加课程信息
             return students.map(student => ({
-              name: `${student.first_name} ${student.last_name}`,
-              studentId: student.username,
+              id: student.student_id,
+              name: student.student_full_name || `${student.student_first_name ?? ""} ${student.student_last_name ?? ""}`.trim(),
+              studentId: student.student_username || String(student.student_id),
               course: course.code,
-              percent: 0, // Progress暂时设为0
-              id: student.id,
-              course_id: course.id
+              percent: Number.isFinite(Number(student.overall_percent))
+                ? Math.max(0, Math.min(100, Math.round(Number(student.overall_percent))))
+                : 0,
+              course_id: course.id,
             }));
           }
           return [];

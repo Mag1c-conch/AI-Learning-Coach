@@ -1,5 +1,5 @@
 // src/Admin/Pages/Admin/CourseStudentProgress.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, IconButton, Typography, Button, TextField } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -10,10 +10,11 @@ export default function CourseStudentProgress({
   pageSize = 8,          // 每页条数
   height = 420,          // 组件固定高度
   maxWidth = 800,       // 最大宽度
+  onGiveReward,
 }) {
   const [page, setPage] = useState(1);
   const [inputRewards, setInputRewards] = useState({}); // 待发放的奖励分数（输入框中的临时值）
-  const [totalRewards, setTotalRewards] = useState({}); // 累计已发放的总奖励分数
+  const [submitting, setSubmitting] = useState({});
 
   const { total, totalPages, pageRows } = useMemo(() => {
     const total = rows.length;
@@ -28,6 +29,10 @@ export default function CourseStudentProgress({
     setTimeout(() => setPage(1), 0);
   }
 
+  useEffect(() => {
+    setInputRewards({});
+  }, [rows]);
+
   // 处理输入框的奖励分数变化（临时值）
   const handleRewardChange = (studentId, value) => {
     setInputRewards(prev => ({
@@ -36,27 +41,31 @@ export default function CourseStudentProgress({
     }));
   };
 
-  // 点击Give按钮，将本次奖励加到累计总分
-  const handleGiveReward = (studentId) => {
+  const handleGiveReward = async (studentId) => {
     const pointsToAdd = inputRewards[studentId] || 0;
-    
-    if (pointsToAdd <= 0) {
-      return; // 如果没有要发放的分数，不执行
+
+    if (pointsToAdd <= 0 || !onGiveReward) {
+      return; // 如果没有要发放的分数或未提供回调，不执行
     }
-    
-    // 将本次奖励加到累计总分
-    setTotalRewards(prev => ({
-      ...prev,
-      [studentId]: (prev[studentId] || 0) + pointsToAdd
-    }));
-    
-    // 清空输入框
-    setInputRewards(prev => ({
-      ...prev,
-      [studentId]: 0
-    }));
-    
-    console.log(`✅ Gave ${pointsToAdd} points to ${studentId}. Total: ${(totalRewards[studentId] || 0) + pointsToAdd}`);
+
+    try {
+      setSubmitting(prev => ({ ...prev, [studentId]: true }));
+      await onGiveReward(studentId, pointsToAdd);
+      setInputRewards(prev => ({ ...prev, [studentId]: 0 }));
+      console.log(`✅ Gave ${pointsToAdd} points to student ${studentId}.`);
+    } catch (error) {
+      console.error("Failed to give reward", error);
+      const message = error?.message || "Failed to give reward";
+      if (typeof window !== "undefined") {
+        window.alert(message);
+      }
+    } finally {
+      setSubmitting(prev => {
+        const next = { ...prev };
+        delete next[studentId];
+        return next;
+      });
+    }
   };
 
   return (
@@ -87,12 +96,13 @@ export default function CourseStudentProgress({
           <tbody>
             {pageRows.map((r, i) => {
               // 使用name作为唯一标识符
-              const studentId = r.name;
-              const inputValue = inputRewards[studentId] || 0; // 临时输入值
-              const totalPoints = totalRewards[studentId] || 0; // 累计总分
+              const studentKey = r.id ?? r.studentId ?? r.name;
+              const inputValue = inputRewards[studentKey] || 0; // 临时输入值
+              const totalPoints = Number(r.reward) || 0; // 后端返回的累计奖励分数
+              const isSubmitting = !!submitting[studentKey];
               
               return (
-                <tr key={`${studentId}-${i}`} style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                <tr key={`${studentKey}-${i}`} style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                   <td style={td}>{r.name}</td>
                   <td style={{ ...td, color: '#6b7280' }}>{r.studentId}</td>
                   <td style={td}>{r.course}</td>
@@ -106,8 +116,9 @@ export default function CourseStudentProgress({
                       <Button
                         size="small"
                         variant="outlined"
-                        onClick={() => handleRewardChange(studentId, Math.max(0, inputValue - 1))}
+                        onClick={() => handleRewardChange(studentKey, Math.max(0, inputValue - 1))}
                         sx={{ minWidth: 30, height: 30, p: 0 }}
+                        disabled={isSubmitting}
                       >
                         -
                       </Button>
@@ -115,8 +126,8 @@ export default function CourseStudentProgress({
                         size="small"
                         value={inputValue}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value) || 0;
-                          handleRewardChange(studentId, Math.max(0, value));
+                          const value = parseInt(e.target.value, 10);
+                          handleRewardChange(studentKey, Math.max(0, Number.isFinite(value) ? value : 0));
                         }}
                         inputProps={{
                           style: { 
@@ -136,16 +147,17 @@ export default function CourseStudentProgress({
                       <Button
                         size="small"
                         variant="outlined"
-                        onClick={() => handleRewardChange(studentId, inputValue + 1)}
+                        onClick={() => handleRewardChange(studentKey, inputValue + 1)}
                         sx={{ minWidth: 30, height: 30, p: 0 }}
+                        disabled={isSubmitting}
                       >
                         +
                       </Button>
                       <Button
                         size="small"
                         variant="contained"
-                        onClick={() => handleGiveReward(studentId)}
-                        disabled={inputValue === 0}
+                        onClick={() => handleGiveReward(studentKey)}
+                        disabled={inputValue === 0 || isSubmitting}
                         sx={{ 
                           height: 30,
                           px: 1,

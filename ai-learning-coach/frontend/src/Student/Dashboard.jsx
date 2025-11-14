@@ -339,12 +339,15 @@ function loadTodayTodosForUser(uid, courseList = []) {
 function mapEnrollmentToCard(e) {
   const id = Number(e?.id);
   const description = e?.description || "";
+  const reward = Number(e?.reward) || 0;
   return {
     id: Number.isInteger(id) ? id : undefined,
     code: e?.code || "",
     name: e.name || e.title || e.code,
     dueText: "Enrolled",
     meta: description ? `· ${description}` : "",
+    badges: reward,
+    reward,
   };
 }
 
@@ -388,6 +391,8 @@ function readLocalEnrollments(userId) {
         name: c.name || c.code,
         dueText: "Enrolled",
         meta: c.description ? `· ${c.description}` : "",
+        badges: Number(c.reward ?? c.badges ?? 0) || 0,
+        reward: Number(c.reward ?? c.badges ?? 0) || 0,
       }));
   } catch {
     return [];
@@ -571,8 +576,14 @@ const Dashboard = () => {
         const fallback = enrolledCards.length ? [] : readLocalEnrollments(uid);
         const merged = mergeCourses(defaultCoursesData, enrolledCards.length ? enrolledCards : fallback);
         setSliderCourses(merged);
-        const base = (enrolledCards.length ? enrolledCards : fallback)
-          .map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 }));
+        const source = enrolledCards.length ? enrolledCards : fallback;
+        const base = source.map((c) => ({
+          id: c.id,
+          code: c.code,
+          name: c.name,
+          badges: Number(c.badges ?? c.reward ?? 0),
+          reward: Number(c.badges ?? c.reward ?? 0),
+        }));
         setCourses(base);
         rebuildProgress(base, uid);
 
@@ -583,7 +594,13 @@ const Dashboard = () => {
         const fallback = readLocalEnrollments(uid);
         const merged = mergeCourses(defaultCoursesData, fallback);
         setSliderCourses(merged);
-        const base = fallback.map((c) => ({ id: c.id, code: c.code, name: c.name, badges: 0 }));
+        const base = fallback.map((c) => ({
+          id: c.id,
+          code: c.code,
+          name: c.name,
+          badges: Number(c.badges ?? c.reward ?? 0),
+          reward: Number(c.badges ?? c.reward ?? 0),
+        }));
         setCourses(base);
         rebuildProgress(base, uid);
 

@@ -215,7 +215,8 @@ export default function Course() {
           name: `${student.first_name} ${student.last_name}`,
           studentId: student.username,
           course: course.code,
-          enrolled_at: student.enrolled_at
+          enrolled_at: student.enrolled_at,
+          reward: Number(student.reward) || 0,
         }));
         
         setStudents(formattedStudents);
@@ -237,6 +238,51 @@ export default function Course() {
       fetchStudents();
     }
   }, [course?.id]);
+
+  const handleGiveReward = async (studentUserId, pointsToAdd) => {
+    if (!course || !course.id) {
+      throw new Error("Course information is not ready yet.");
+    }
+
+    const user = getCurrentUser();
+    if (!user || user.role !== 'admin') {
+      throw new Error("Only administrators can give rewards.");
+    }
+
+    const response = await authFetch(`${API_BASE}/courses/${course.id}/extra`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        student_id: studentUserId,
+        points_to_add: pointsToAdd,
+      }),
+    });
+
+    if (!response.ok) {
+      let message = response.statusText;
+      try {
+        const data = await response.json();
+        message = data?.description || data?.error || message;
+      } catch {
+        try {
+          const text = await response.text();
+          if (text) {
+            message = text;
+          }
+        } catch {
+          // ignore text errors
+        }
+      }
+      throw new Error(message || "Failed to give reward.");
+    }
+
+    await fetchStudents();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("enrollment:updated", { detail: { user_id: studentUserId } }));
+    }
+  };
 
   // 格式化文件大小为可读格式
   const formatFileSize = (bytes) => {
@@ -580,7 +626,7 @@ export default function Course() {
                       </Typography>
                     </Box>
                   ) : (
-                    <CourseStudentProgress rows={students} />
+                    <CourseStudentProgress rows={students} onGiveReward={handleGiveReward} />
                   )}
                 </Box>
               </Box>

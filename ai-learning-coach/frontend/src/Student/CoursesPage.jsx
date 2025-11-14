@@ -32,10 +32,14 @@ function getCurrentUserId() {
 }
 
 function mapEnrollmentToCard(e) {
+  const reward = Number(e?.reward) || 0;
+  const id = Number(e?.id);
   return {
-    code: e.code,
-    name: e.name || e.title || e.code,
-    badges: 0,
+    id: Number.isInteger(id) ? id : undefined,
+    code: e?.code || "",
+    name: e?.name || e?.title || e?.code,
+    badges: reward,
+    reward,
   };
 }
 
@@ -48,11 +52,17 @@ function readLocalEnrollments(uid) {
       JSON.parse(localStorage.getItem(perUserKey) || "null") ??
       JSON.parse(localStorage.getItem(commonKey) || "[]");
     if (!Array.isArray(list)) return [];
-    return list.map((c) => ({
-      code: c.code,
-      name: c.name || c.code,
-      badges: 0,
-    }));
+    return list.map((c) => {
+      const id = Number(c?.id);
+      const reward = Number(c?.reward ?? c?.badges) || 0;
+      return {
+        id: Number.isInteger(id) ? id : undefined,
+        code: c.code,
+        name: c.name || c.code,
+        badges: reward,
+        reward,
+      };
+    });
   } catch {
     return [];
   }

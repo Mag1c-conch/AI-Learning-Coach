@@ -143,6 +143,36 @@ def enroll_student(course_id):
     except Exception as e:
         db.session.rollback()
         abort(500, description=str(e))
+        
+# Give extra points
+@bp.route("/<int:course_id>/extra",methods=['POST'])
+def give_extra_points(course_id):
+    data=request.json
+    student_id=data.get('student_id')
+    points_to_add=data.get('points_to_add')
+    # validate input
+    if not student_id or not points_to_add:
+        abort(400, description="missing required fields")
+    # check if the course exists
+    course = Course.query.get_or_404(course_id)
+    # check if the user exists and is a student
+    student = User.query.get_or_404(student_id)
+    if student.role != UserRole.STUDENT:
+        abort(403, description="only students may enroll in courses")
+    # check if the student is already enrolled in the course
+    enrollment = Enrollment.query.filter_by(course_id=course_id, user_id=student_id).first_or_404()
+    enrollment.extra_score += points_to_add
+    try:
+        db.session.commit()
+        return jsonify({
+            "message": f"Student {student_id} add rewards successfully."
+        }), 201
+    except IntegrityError:
+        db.session.rollback()
+        abort(409, description="student already enrolled in this course")
+    except Exception as e:
+        db.session.rollback()
+        abort(500, description=str(e))
 
 # Get course details
 @bp.route("/<int:course_id>", methods=["GET"])
@@ -169,26 +199,41 @@ def list_user_enrollments(user_id):
     # ensure user esists
     user = User.query.get_or_404(user_id)
 
-    # select courses user is enrolled in 
-    courses = (
-        db.session.query(Course)
-        .join(Enrollment, Enrollment.course_id == Course.id)
+    query = (
+        db.session.query(Enrollment)
+        .join(Course, Enrollment.course_id == Course.id)
         .filter(Enrollment.user_id == user_id)
         .order_by(Course.created_at.desc())
-        .all()
     )
 
-    # return courses as list of dicts
-    def to_dict(c: Course):
-        return {
-            "id": c.id,
-            "code": c.code,
-            "name": getattr(c, "name", "") or "",
-            "title": getattr(c, "name", "") or "",  
-            "description": getattr(c, "description", "") or "",
-        }
+    # Optional filter by course_id
+    course_id_param = request.args.get("course_id", type=int)
+    if course_id_param:
+        query = query.filter(Enrollment.course_id == course_id_param)
 
-    return jsonify([to_dict(c) for c in courses]), 200
+    # Optional reward threshold (>=)
+    min_reward = request.args.get("min_reward", type=int)
+    if min_reward is not None:
+        query = query.filter(Enrollment.extra_score >= min_reward)
+
+    enrollments = query.all()
+
+    results = []
+    for enrollment in enrollments:
+        course = enrollment.course
+        results.append(
+            {
+                "id": course.id,
+                "code": course.code,
+                "name": getattr(course, "name", "") or "",
+                "title": getattr(course, "name", "") or "",
+                "description": getattr(course, "description", "") or "",
+                "reward": enrollment.extra_score,
+                "enrolled_at": enrollment.enrolled_at.isoformat() if enrollment.enrolled_at else None,
+            }
+        )
+
+    return jsonify(results), 200
 
 # Get all students enrolled in a course
 @bp.route("/<int:course_id>/students", methods=["GET"])
@@ -222,7 +267,8 @@ def list_course_students(course_id):
             "first_name": student.first_name,
             "last_name": student.last_name,
             "username": student.username,
-            "enrolled_at": enrollment.enrolled_at.isoformat() if enrollment else None
+            "enrolled_at": enrollment.enrolled_at.isoformat() if enrollment else None,
+            "reward": enrollment.extra_score
         })
     
     return jsonify(result), 200

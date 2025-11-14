@@ -74,10 +74,17 @@ function saveEnrolledCourse(course) {
       ...course,
       id: Number.isInteger(normalizedId) ? normalizedId : course?.id,
     };
+    const normalizedReward = Number(
+      normalizedCourse?.reward ?? normalizedCourse?.badges ?? 0
+    );
+    normalizedCourse.reward = Number.isFinite(normalizedReward) ? normalizedReward : 0;
+    normalizedCourse.badges = normalizedCourse.reward;
     const existing = Array.isArray(list)
       ? list.map((item) => ({
           ...item,
           id: Number.isInteger(Number(item?.id)) ? Number(item.id) : item?.id,
+          reward: Number(item?.reward ?? item?.badges ?? 0) || 0,
+          badges: Number(item?.reward ?? item?.badges ?? 0) || 0,
         }))
       : [];
     const next = [
@@ -155,6 +162,8 @@ const Registercourse = () => {
         name: selected.name || "",
         dueText: "Enrolled",
         meta: selected.description ? `· ${selected.description}` : "",
+        reward: 0,
+        badges: 0,
       });
 
       setOpen(false);

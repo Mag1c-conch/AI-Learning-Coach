@@ -8,7 +8,6 @@ import os
 from redis import Redis
 
 from .extensions import db, migrate, jwt
-from .routes import ai_assistant, assignment, auth, course, feedback, material, progress
 
 
 def create_app():
@@ -74,15 +73,20 @@ def create_app():
             redis_client = None
     app.extensions["redis"] = redis_client
 
-    # Create all database tables if they don't exist
-    with app.app_context():
-        db.create_all()
+    skip_create_all = os.getenv("SKIP_DB_CREATE_ALL", "0").strip().lower() in {"1", "true", "yes"}
+    if not skip_create_all:
+        # Create all database tables if they don't exist.
+        # This can be disabled (e.g., during Alembic migrations) by setting SKIP_DB_CREATE_ALL=1.
+        with app.app_context():
+            db.create_all()
 
     @app.route("/test")
     def test():
         return "Hello, World!"
 
     # Register blueprints
+    from .routes import ai_assistant, assignment, auth, course, feedback, material, progress
+
     app.register_blueprint(auth.bp)
     app.register_blueprint(course.bp)
     # assignment blueprint
