@@ -70,7 +70,7 @@ def _finish_info(resp) -> Dict[str, Any]:
 def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **generation_kwargs) -> str:
     client = _get_client()
     # Use a real default model but allow overriding GEMINI_MODEL via .env
-    model_name = current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash")
+    model_name = current_app.config.get("GEMINI_MODEL", "gemini-2.5-flash")
 
     contents = _format_messages(messages)
     gen_config = _pick_generation_config(generation_kwargs)
@@ -107,7 +107,7 @@ def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **
 
     try:
         resp2 = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.5-flash",
             contents=[{"role": "user", "parts": [{"text": last_user}]}],
             config={
                 "system_instruction": (system_prompt or "")[:2000],
