@@ -4,30 +4,26 @@ import {
   Paper,
   Typography,
   Button,
-  IconButton,
   Chip,
   Divider,
-  Checkbox,
   CircularProgress,
   circularProgressClasses,
   ButtonBase,
+  IconButton,
 } from "@mui/material";
-import { styled, alpha } from "@mui/material/styles";
-import InputBase from "@mui/material/InputBase";
-import SearchIcon from "@mui/icons-material/Search";
 import CircleIcon from "@mui/icons-material/Circle";
 import Sidebar from "../components/Sidebar.jsx";
 import { useParams, useNavigate } from "react-router-dom";
 import http from "../api/http";
 import NotificationsBell from "../components/Notifications.jsx";
 
-/** ========= 常量 & 工具 ========= */
 const ENROLL_EVENT = "enrollment:updated";
 const TASK_TYPES = new Set(["assignment", "quiz", "lab"]);
 const fallbackCourse = { code: "COMP9814", name: "Artificial Intelligence" };
 
 const isNumericId = (v) => /^\d+$/.test(String(v));
 
+// Get current login user id from localStorage.
 function getCurrentUserId() {
   try {
     const token =
@@ -42,12 +38,12 @@ function getCurrentUserId() {
 function getEnrollmentKey(uid) {
   return `enrolledCourses:${uid}`;
 }
+// Load the student's course selection information from the localStorage cache
 function loadEnrollments(uid = getCurrentUserId()) {
   if (!uid) return [];
   try {
     const stored = JSON.parse(localStorage.getItem(getEnrollmentKey(uid)) || "[]");
     if (!Array.isArray(stored)) return [];
-    // 规范化 + 去重
     const mapped = stored
       .map((item) => {
         const id = Number(item?.id);
@@ -61,7 +57,7 @@ function loadEnrollments(uid = getCurrentUserId()) {
   }
 }
 
-/** 进度环 */
+// Display the percentage of students' course completion.
 function ProgressCircular({ value = 0, size = 160, thickness = 7 }) {
   const safe = Math.max(0, Math.min(100, Math.round(value)));
   return (
@@ -106,39 +102,6 @@ function ProgressCircular({ value = 0, size = 160, thickness = 7 }) {
   );
 }
 
-/** 顶部搜索框样式 */
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: theme.palette.action.hover,
-  "&:hover": { backgroundColor: alpha(theme.palette.common.black, 0.1) },
-  display: "flex",
-  alignItems: "center",
-  marginRight: theme.spacing(2),
-  marginLeft: 0,
-  width: "200px",
-  paddingLeft: theme.spacing(1),
-  [theme.breakpoints.up("sm")]: { width: "250px" },
-}));
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: theme.spacing(0, 1),
-  height: "100%",
-  color: "rgba(0,0,0,0.5)",
-}));
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  width: "100%",
-  "& .MuiInputBase-input": {
-    padding: theme.spacing(1, 1, 1, 0),
-    transition: theme.transitions.create("width"),
-    width: "100%",
-  },
-}));
-
-/** 文件扩展名→颜色/标签 */
 const extColor = {
   pdf: "#d32f2f",
   ppt: "#d24625",
@@ -184,10 +147,9 @@ function loadAssignmentStatus(uid, courseCode) {
 function saveAssignmentStatus(uid, courseCode, statusObj) {
   try {
     localStorage.setItem(assignmentStatusKey(uid, courseCode), JSON.stringify(statusObj));
-  } catch {}
+  } catch {  }
 }
 
-/** kind 显示/样式 */
 const prettyKind = (k) => {
   const t = String(k || "").toLowerCase();
   if (t === "quiz") return "Quiz";
@@ -210,7 +172,7 @@ const inferKindFromTitle = (title) => {
   return "";
 };
 
-/** 规范化 materials（加 ext / file_type / download_url / uploaded_at） */
+// Standardize the back-end material data so that the front-end can use it directly.
 function normalizeMaterials(arr = []) {
   const getExt = (name) => {
     if (!name) return "";
@@ -218,6 +180,7 @@ function normalizeMaterials(arr = []) {
     return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
   };
   return (Array.isArray(arr) ? arr : []).map((m) => {
+    // Normalize each material object
     const ext = m.ext || getExt(m.original_name || m.stored_name);
     return {
       ...m,
@@ -229,7 +192,7 @@ function normalizeMaterials(arr = []) {
   });
 }
 
-/** 剩余时间 */
+// Convert the assignment deadline to how much time is left until the deadline from the current time.
 function formatTimeLeft(isoLike) {
   if (!isoLike) return "";
   const now = Date.now();
@@ -238,6 +201,7 @@ function formatTimeLeft(isoLike) {
   const diff = due - now;
   const past = diff < 0;
   const abs = Math.abs(diff);
+  // Calculate days, hours, minutes from milliseconds
   const SEC = 1000,
     MIN = 60 * SEC,
     HOUR = 60 * MIN,
@@ -245,11 +209,12 @@ function formatTimeLeft(isoLike) {
   const days = Math.floor(abs / DAY);
   const hours = Math.floor((abs % DAY) / HOUR);
   const mins = Math.floor((abs % HOUR) / MIN);
+  // Show days+hours if >24h, else hours+minutes
   const part = days > 0 ? `${days}d ${hours}h` : hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   return past ? `Overdue ${part}` : `Due in ${part}`;
 }
 
-/** 鉴权下载（axios blob） */
+// Get the file name from Content-Disposition.
 const filenameFromDisposition = (disposition) => {
   if (!disposition) return null;
   const m1 = /filename\*\=UTF-8''([^;]+)/i.exec(disposition);
@@ -257,6 +222,7 @@ const filenameFromDisposition = (disposition) => {
   const m2 = /filename="?([^"]+)"?/i.exec(disposition);
   return m2 ? m2[1] : null;
 };
+// Course files can be downloaded when logged in.
 async function downloadWithAuth(urlOrPath, fallbackName = "file") {
   try {
     const res = await http.get(urlOrPath, { responseType: "blob" });
@@ -273,22 +239,22 @@ async function downloadWithAuth(urlOrPath, fallbackName = "file") {
     a.remove();
     URL.revokeObjectURL(blobUrl);
   } catch (err) {
-    console.error("Download failed:", err);
-    const status = err?.response?.status;
-    alert(`下载失败${status ? `（HTTP ${status}）` : ""}，请稍后再试`);
+        console.error("Download failed:", err);
+        const status = err?.response?.status;
+        alert(`Download failed${status ? ` (HTTP ${status})` : ""}, please try again`);
   }
 }
 
-/** ========= 组件 ========= */
+// The course information detail page displays course materials, progress and assignments.
 function CourseDetail() {
-  // 兼容两种路由参数：/course/:id 或 /course/:courseId 或直接用课程 code
+  // Support multiple route param formats: /course/:id, /course/:courseId, or course code
   const { id: idParam, courseId: courseIdParam } = useParams();
   const rawParam = idParam ?? courseIdParam ?? null;
   const navigate = useNavigate();
 
   const [enrolled, setEnrolled] = useState([]);
   const [materials, setMaterials] = useState([]);
-  const [taskMaterials, setTaskMaterials] = useState([]); // 仅 assignment/quiz/lab
+  const [taskMaterials, setTaskMaterials] = useState([]);
   const [matLoading, setMatLoading] = useState(false);
   const [matError, setMatError] = useState(null);
 
@@ -302,9 +268,11 @@ function CourseDetail() {
     return Number.isFinite(n) ? n : null;
   }
 
-  /** 加载选课信息 */
+  // Load the student's registered courses from the local storage cache.
+  // Update the registered courses for monitoring if there are any changes.
   useEffect(() => {
     if (!uid) return;
+    // Load cached data immediately.
     setEnrolled(loadEnrollments(uid));
 
     let cancelled = false;
@@ -331,7 +299,7 @@ function CourseDetail() {
           localStorage.setItem(getEnrollmentKey(uid), JSON.stringify(normalized));
         }
       } catch (err) {
-        console.error("加载选课信息失败：", err);
+        console.error("Failed to load enrollments:", err);
         if (!cancelled) setEnrolled(loadEnrollments(uid));
       }
     };
@@ -360,7 +328,7 @@ function CourseDetail() {
     };
   }, [uid]);
 
-  /** 当前课程 */
+  // Find the current course through the route (id or code).
   const currentCourse = useMemo(() => {
     const list = Array.isArray(enrolled) ? enrolled : [];
     if (!list.length) {
@@ -384,7 +352,7 @@ function CourseDetail() {
     navigate(path);
   };
 
-  /** 监听 courseProgress:updated + localStorage 变化，触发重新渲染 */
+  // Synchronize the learning progress of updates for other components or functions
   useEffect(() => {
     const onCourseProgressUpdated = (e) => {
       const { user_id, course_key, value } = e.detail || {};
@@ -412,7 +380,7 @@ function CourseDetail() {
     };
   }, [uid, currentCourse?.id, currentCourse?.code]);
 
-  /** 规范路由 */
+  // When a course is determined, standardize the URL routing, fix the id or course code.
   useEffect(() => {
     if (!enrolled.length || !currentCourse) return;
     const desired = currentCourse.id != null ? String(currentCourse.id) : currentCourse.code;
@@ -421,7 +389,7 @@ function CourseDetail() {
     }
   }, [enrolled, currentCourse, rawParam, navigate]);
 
-  /** 加载 materials */
+  // Pull the materials of the current course and categorize the materials of task types (assignments/quizzes/experiments).
   useEffect(() => {
     let alive = true;
 
@@ -450,6 +418,8 @@ function CourseDetail() {
 
         const norm = normalizeMaterials(data);
 
+        // Check the writing of different material names and match the materials with the current course.
+        // (course_id/courseId vs id, course_code/courseCode/course.code vs code)
         const courseMatch = (m) => {
           const idOk =
             currentCourse?.id != null &&
@@ -483,7 +453,7 @@ function CourseDetail() {
     };
   }, [currentCourse?.id, currentCourse?.code]);
 
-  /** 老师端上传后刷新 materials */
+  // Refresh materials when teacher uploads new documents.
   useEffect(() => {
     const onUpdated = (e) => {
       const { course_id, course_code } = e?.detail ?? {};
@@ -498,6 +468,7 @@ function CourseDetail() {
         .get("/materials", { params })
         .then(({ data }) => {
           const norm = normalizeMaterials(data);
+          // Match materials to current course.
           const courseMatch = (m) => {
             const idOk =
               currentCourse?.id != null &&
@@ -520,7 +491,8 @@ function CourseDetail() {
     return () => window.removeEventListener("materials:updated", onUpdated);
   }, [currentCourse?.id, currentCourse?.code]);
 
-  /** Assignments：从任务型 materials 构建 */
+  // Use taskMaterials to generate the list of assignments to be used.
+  // Loads completion status from localStorage and maps materials to assignment objects
   const [assignments, setAssignments] = useState([]);
   useEffect(() => {
     const status = loadAssignmentStatus(uid, currentCourse?.code);
@@ -529,6 +501,7 @@ function CourseDetail() {
       return;
     }
     const mapped = taskMaterials.map((m) => {
+      // Try multiple possible fields for due date (assignment.due_date, deadline, due_date, uploaded_at)
       const when = m.assignment?.due_date || m.deadline || m.due_date || m.uploaded_at || "";
       const assignmentRecordId = m.assignment_id ?? m.assignment?.id ?? null;
       const parsedAssignmentId =
@@ -552,7 +525,7 @@ function CourseDetail() {
     setAssignments(mapped);
   }, [taskMaterials, uid, currentCourse?.code]);
 
-  /** 计算课程进度 */
+  // Calculate course progress: simple completion ratio
   const computedProgress = useMemo(() => {
     const totalWeight = assignments.reduce((s, a) => s + (a.weight || 0), 0);
     if (totalWeight > 0) {
@@ -578,10 +551,11 @@ function CourseDetail() {
       ? currentCourse.progress
       : computedProgress;
 
-  /** 勾选完成并持久化 */
+  // Toggle assignment completion status and save to localStorage
   const toggleAssignment = (id) => {
     setAssignments((prev) => {
       const next = prev.map((a) => (a.id === id ? { ...a, completed: !a.completed } : a));
+      // Build status map from all assignments and save to localStorage
       const status = next.reduce((obj, a) => {
         obj[a.id] = a.completed;
         return obj;
@@ -591,15 +565,17 @@ function CourseDetail() {
     });
   };
 
-  /** 提交作业（文件上传） */
+  // Upload the assignment files to the back end and display the status.
   const handleSubmitAssignment = (a) => {
     const studentId = getCurrentUserId();
+    // Try multiple possible assignment ID fields
     const assignmentIdCandidate = a.assignmentId ?? a.assignment?.id ?? a.assignment_id ?? null;
     const assignmentId = assignmentIdCandidate != null ? Number(assignmentIdCandidate) : NaN;
     if (!studentId || Number.isNaN(assignmentId)) {
-      alert("提交失败：学生标识或作业标识不完整");
+      alert("Submission failed: missing student or assignment ID");
       return;
     }
+    // Programmatically trigger file input dialog
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "*/*";
@@ -613,20 +589,19 @@ function CourseDetail() {
         const url = `/materials/assignments/${assignmentId}/submissions`;
         const res = await http.post(url, fd, { headers: { "Content-Type": "multipart/form-data" } });
         if (res.status >= 200 && res.status < 300) {
-          alert("提交成功！");
+          alert("Submission successful!");
         } else {
-          alert("提交失败，请稍后再试");
+          alert("Submission failed, please try again");
         }
       } catch (err) {
         console.error("submit failed:", err);
         const status = err?.response?.status;
-        alert(`提交失败${status ? `（HTTP ${status}）` : ""}`);
+        alert(`Submission failed${status ? ` (HTTP ${status})` : ""}`);
       }
     };
     input.click();
   };
 
-  /** ========= UI ========= */
   const courseCode = currentCourse?.code || "No course selected";
   const courseName = currentCourse?.name || "";
   const courseMeta = currentCourse?.meta || "";
@@ -636,75 +611,78 @@ function CourseDetail() {
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
 
-      {/* 右侧主区域 */}
       <Box
+        className="main-content"
         sx={{
           flex: 1,
           backgroundColor: "#f5f6fa",
+          p: 3,
           overflowY: "auto",
           position: "relative",
         }}
       >
-        {/* 顶部固定区域：标题 + Student + 搜索 + 通知 + 分割线 */}
         <Box
           sx={{
-            position: "sticky",
-            top: 0,
-            zIndex: 10,
-            pb: 1,
-            mb: 2,
-            bgcolor: "#f5f6fa",
+            position: "absolute",
+            top: "63px",
+            left: 0,
+            width: "100%",
+            height: "2px",
+            backgroundColor: "rgba(21, 19, 19, 0.3)",
+          }}
+        />
+
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            gap: 1,
+            position: "absolute",
+            top: 10,
+            right: 20,
           }}
         >
-          {/* 标题 + 右上角 Search + 通知 */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 1,
-            }}
-          >
-            {/* 左侧：Course · Student */}
-            <Box sx={{ ml: 2, mt: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography variant="h4" sx={{ mr: 2, fontWeight: 800 }}>
-                Course
-              </Typography>
-              <CircleIcon sx={{ fontSize: 10, color: "#B3B3B3" }} />
-              <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
-                Student
-              </Typography>
-            </Box>
-
-            {/* 右侧 Search + 通知 */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Search>
-                <SearchIconWrapper>
-                  <SearchIcon aria-hidden />
-                </SearchIconWrapper>
-                <StyledInputBase
-                  placeholder="Search"
-                  inputProps={{ "aria-label": "Search" }}
-                />
-              </Search>
-              <NotificationsBell />
-            </Box>
-          </Box>
-
-          {/* 分割线 */}
-          <Box
-            sx={{
-              width: "100%",
-              height: "2px",
-              backgroundColor: "rgba(21, 19, 19, 0.3)",
-            }}
-          />
+          <IconButton>
+            <NotificationsBell />
+          </IconButton>
         </Box>
 
-        {/* 课程标题卡片 */}
+        <Box
+          sx={{ 
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            mt: -1,
+            mb: 2,
+          }}
+        >
+          <Typography variant="h4" sx={{ fontWeight: 800 }}>
+            Course
+          </Typography>
+          <CircleIcon 
+            sx={{
+              fontSize: 10,
+              color: "#B3B3B3",
+              marginLeft: "80px",
+            }} 
+          />
+          <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
+            Student
+          </Typography>
+        </Box>
+
         <Paper
           elevation={1}
-          sx={{ ml: 2, mr: 2, p: 2.5, borderRadius: 2, mb: 3, mt: 1, boxShadow: 5 }}
+          sx={{
+            ml: 2,
+            mr: 2,
+            p: 2.5,
+            borderRadius: 2,
+            mb: 3,
+            mt: 1,
+            boxShadow: 5,
+          }}
         >
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             {courseCode}
@@ -722,7 +700,6 @@ function CourseDetail() {
           )}
         </Paper>
 
-        {/* 三栏：Materials / Progress / Assignments */}
         <Box
           sx={{
             display: "grid",
@@ -730,12 +707,11 @@ function CourseDetail() {
             gap: 3,
           }}
         >
-          {/* Materials */}
           <Paper
             elevation={1}
             sx={{
-              ml: 2, 
-              mr: 2, 
+              ml: 2,
+              mr: 2,
               gridColumn: { xs: "1 / -1", md: "span 6" },
               p: 2,
               borderRadius: 2,
@@ -825,12 +801,11 @@ function CourseDetail() {
               })}
           </Paper>
 
-          {/* Course Progress */}
           <Paper
             elevation={1}
             sx={{
-              ml: 2, 
-              mr: 2, 
+              ml: 2,
+              mr: 2,
               gridColumn: { xs: "1 / -1", md: "span 6" },
               p: 2,
               borderRadius: 2,
@@ -861,10 +836,16 @@ function CourseDetail() {
             </ButtonBase>
           </Paper>
 
-          {/* Assignments */}
           <Paper
             elevation={1}
-            sx={{ ml: 2, mr: 2, gridColumn: "1 / -1", p: 2, borderRadius: 2, mt: 5 }}
+            sx={{
+              ml: 2,
+              mr: 2,
+              gridColumn: "1 / -1",
+              p: 2,
+              borderRadius: 2,
+              mt: 5,
+            }}
           >
             <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>
