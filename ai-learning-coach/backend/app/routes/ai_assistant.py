@@ -18,13 +18,19 @@ bp = Blueprint("ai_assistant", __name__)
 _PLAN_WINDOW_START = time(8, 0)
 _PLAN_WINDOW_END = time(18, 0)
 _DEFAULT_SESSION_MINUTES = 90
+_MAX_TASKS_PER_DAY = 3
+_COURSE_ASSIGNMENT_LIMIT = 6
+_COURSE_MATERIAL_LIMIT = 5
+_MATERIAL_PREVIEW_CHARS = 240
+_STUDY_PLAN_MAX_OUTPUT_TOKENS = 3072
 _STUDY_PLAN_PROMPT_TEMPLATE = (
     "You are an expert study coach. Using the JSON input, craft a personalised study plan.\n"
     "Create a schedule covering each day from {week_start} to {week_end} inclusive (local time).\n"
     "Requirements:\n"
     "- Schedule study blocks only between 08:00 and 18:00.\n"
     "- Every task must focus on a single material or assignment and include `course_id`; include `material_id` when one is provided, otherwise use null.\n"
-    "- Provide concise titles and actionable descriptions.\n"
+    "- Provide concise titles (<= 8 words) and actionable descriptions (<= 20 words).\n"
+    "- Limit each day to at most 3 study blocks and keep each block <= 120 minutes.\n"
     "- Respect upcoming due dates and distribute the workload evenly.\n"
     "- Return strict JSON (no markdown) following this schema:\n"
     "{{\n"
@@ -40,7 +46,7 @@ _STUDY_PLAN_PROMPT_TEMPLATE = (
     "If information is missing, make reasonable assumptions and still produce a full seven-day plan."
 )
 
-
+# use gemini api to generate chat reply
 @bp.route("/assistant/chat", methods=["POST", "OPTIONS"])
 @jwt_required(optional=True)
 def chat():
@@ -101,7 +107,7 @@ def chat():
         current_app.logger.exception("ERROR in /assistant/chat: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
-
+# list conversations for a user
 @bp.route("/assistant/conversations", methods=["GET"])
 @jwt_required(optional=True)
 def list_conversations():
@@ -120,7 +126,7 @@ def list_conversations():
     )
     return jsonify(conversations), 200
 
-
+# get a specific conversation by ID
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["GET"])
 @jwt_required(optional=True)
 def get_conversation(conversation_id: int):
@@ -139,7 +145,7 @@ def get_conversation(conversation_id: int):
 
     return jsonify(data), 200
 
-
+# delete a conversation by ID
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["DELETE"])
 @jwt_required(optional=True)
 def delete_conversation_route(conversation_id: int):
@@ -173,7 +179,7 @@ def _parse_json_reply(text: str):
     except json.JSONDecodeError:
         return None
 
-
+# grade student's assignment submission
 @bp.route("/assistant/grade_submission", methods=["POST"])
 @jwt_required(optional=True)
 def grade_submission():
@@ -350,7 +356,7 @@ def get_plan():
             messages,
             system_prompt=system_prompt,
             temperature=0.2,
-            max_output_tokens=2048,
+            max_output_tokens=_STUDY_PLAN_MAX_OUTPUT_TOKENS,
         )
         plan_payload = _parse_json_reply(reply)
     except ValueError as err:
@@ -446,7 +452,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
             "id": course.id,
             "code": course.code,
             "name": course.name,
-            "description": course.description,
+            "description": _trim_text(course.description, 400),
             "assignments": [],
             "materials": [],
         }
@@ -455,7 +461,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
         entry = course_context.get(assignment.course_id)
         if not entry:
             continue
-        if len(entry["assignments"]) >= 10:
+        if len(entry["assignments"]) >= _COURSE_ASSIGNMENT_LIMIT:
             continue
         entry["assignments"].append(_summarize_assignment(assignment))
 
@@ -465,7 +471,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
         if not entry:
             continue
         count = materials_per_course.get(material.course_id, 0)
-        if count >= 8:
+        if count >= _COURSE_MATERIAL_LIMIT:
             continue
         entry["materials"].append(_summarize_material(material))
         materials_per_course[material.course_id] = count + 1
@@ -487,18 +493,29 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
     }
 
 
+def _trim_text(value, limit):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
+
+
 def _summarize_assignment(assignment):
     return {
         "id": assignment.id,
         "course_id": assignment.course_id,
         "title": assignment.title,
-        "description": assignment.description,
+        "description": _trim_text(assignment.description, 320),
         "due_date": assignment.due_date.isoformat() if assignment.due_date else None,
         "optional": assignment.optional,
     }
 
 
-def _summarize_material(material, preview_limit: int = 600):
+def _summarize_material(material, preview_limit: int = _MATERIAL_PREVIEW_CHARS):
     summary = {
         "id": material.id,
         "course_id": material.course_id,
@@ -549,6 +566,8 @@ def _normalize_plan_payload(payload, student_id, week_start, week_end, course_id
             normalized_task = _normalize_task(task, course_ids, course_set, material_set)
             if normalized_task:
                 normalized_tasks.append(normalized_task)
+        if len(normalized_tasks) > _MAX_TASKS_PER_DAY:
+            normalized_tasks = normalized_tasks[:_MAX_TASKS_PER_DAY]
         day_map[date_value] = {"date": date_value, "tasks": normalized_tasks}
 
     for date_str in allowed_dates:
