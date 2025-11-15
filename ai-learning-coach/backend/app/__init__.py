@@ -44,7 +44,10 @@ def create_app():
     app.config["CHAT_HISTORY_TTL"] = int(os.getenv("CHAT_HISTORY_TTL", 60 * 60 * 24 * 7))
 
     # JWT / auth configuration
-    app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
+    jwt_secret = os.getenv("JWT_SECRET_KEY")
+    if not jwt_secret or jwt_secret == "dev-secret-change-me":
+        raise RuntimeError("JWT_SECRET_KEY environment variable must be set to a secure value")
+    app.config["JWT_SECRET_KEY"] = jwt_secret
     jwt_minutes = int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", "120"))
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=jwt_minutes)
     app.config["JWT_TOKEN_LOCATION"] = ["headers"]

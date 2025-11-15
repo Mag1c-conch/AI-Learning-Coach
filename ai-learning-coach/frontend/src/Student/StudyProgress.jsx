@@ -369,14 +369,13 @@ function StudyProgress() {
           progressPromise,
         ]);
 
-        const localSaved = loadProgress(uid, courseKey);
-        const mergedSaved = { ...localSaved };
+        const serverProgress = {};
         if (progressData && Array.isArray(progressData.items)) {
           for (const item of progressData.items) {
-            mergedSaved[item.item_key] = Number(item.percent) || 0;
+            serverProgress[item.item_key] = Number(item.percent) || 0;
           }
-          saveProgress(uid, courseKey, mergedSaved);
         }
+        saveProgress(uid, courseKey, serverProgress);
 
         // materials
         const matsRaw = Array.isArray(matRes.data) ? matRes.data : [];
@@ -391,7 +390,7 @@ function StudyProgress() {
               type: typeFromMaterial(m),
               dueAt: m.assignment?.due_date || m.due_date || m.deadline || null,
               assignmentId: m.assignment_id ?? m.assignment?.id ?? null,
-              percent: Number(mergedSaved?.[id]) || 0,
+              percent: Number(serverProgress?.[id]) || 0,
             };
           });
 
@@ -412,7 +411,7 @@ function StudyProgress() {
               type: "Assignments",
               dueAt: a.due_date || null,
               assignmentId: a.id,
-              percent: Number(mergedSaved?.[id]) || 0,
+              percent: Number(serverProgress?.[id]) || 0,
             };
           });
 

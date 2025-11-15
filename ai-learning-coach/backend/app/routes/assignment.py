@@ -34,7 +34,7 @@ def list_assignments():
 
 
 @bp.route("", methods=["POST"])
-@jwt_required(optional=True)
+@jwt_required()
 def create_assignment():
     data = request.get_json(silent=True) or {}
 
@@ -42,16 +42,24 @@ def create_assignment():
     title = data.get("title")
     description = data.get("description")
     due_date_raw = data.get("due_date")
-    teacher_id = data.get("teacher_id")
     optional = data.get("optional", False)
 
-    if not all([course_id, title, description, due_date_raw, teacher_id]):
+    if not all([course_id, title, description, due_date_raw]):
         abort(400, description="missing required fields")
 
     course = Course.query.get_or_404(course_id)
 
-    teacher = resolve_user(teacher_id, required_role=UserRole.ADMIN, allow_token=True, require=True)
+    teacher = resolve_user(None, required_role=UserRole.ADMIN, allow_token=True, require=True)
     teacher_id = teacher.id
+
+    provided_teacher = data.get("teacher_id")
+    if provided_teacher is not None:
+        try:
+            provided_teacher = int(provided_teacher)
+        except (TypeError, ValueError):
+            abort(400, description="teacher_id must be an integer when provided")
+        if provided_teacher != teacher_id:
+            abort(403, description="teacher_id does not match the authenticated user")
 
     try:
         due_date = datetime.fromisoformat(due_date_raw)
@@ -76,12 +84,12 @@ def create_assignment():
 
 
 @bp.route("/<int:assignment_id>/grades", methods=["POST"])
-@jwt_required(optional=True)
+@jwt_required()
 def upsert_assignment_grade(assignment_id: int):
     """
     Creates or updates a grade for a student's assignment submission.
     Expects JSON body with fields:
-    - teacher_id: int, id of the teacher grading (must own the assignment)
+    - teacher_id: optional int, id of the teacher grading (must match the authenticated user)
     - student_id: int, id of the student being graded
     - score: float, numeric grade value
     - comment: optional text feedback
@@ -92,14 +100,6 @@ def upsert_assignment_grade(assignment_id: int):
     payload = request.get_json(silent=True)
     if payload is None:
         abort(400, description="request payload must be valid JSON")
-
-    teacher_raw = payload.get("teacher_id")
-    if teacher_raw is None:
-        abort(400, description="teacher_id is required")
-    try:
-        teacher_id = int(teacher_raw)
-    except (TypeError, ValueError):
-        abort(400, description="teacher_id must be an integer")
 
     student_raw = payload.get("student_id")
     if student_raw is None:
@@ -121,8 +121,18 @@ def upsert_assignment_grade(assignment_id: int):
     if comment == "":
         comment = None
 
-    teacher = resolve_user(teacher_id, required_role=UserRole.ADMIN, allow_token=True, require=True)
+    teacher = resolve_user(None, required_role=UserRole.ADMIN, allow_token=True, require=True)
     teacher_id = teacher.id
+
+    teacher_raw = payload.get("teacher_id")
+    if teacher_raw is not None:
+        try:
+            provided_teacher_id = int(teacher_raw)
+        except (TypeError, ValueError):
+            abort(400, description="teacher_id must be an integer when provided")
+        if provided_teacher_id != teacher_id:
+            abort(403, description="teacher_id does not match the authenticated user")
+
     if teacher.id != assignment.teacher_id:
         abort(403, description="teacher does not own this assignment")
 
@@ -161,12 +171,12 @@ def upsert_assignment_grade(assignment_id: int):
 
 
 @bp.route("/<int:assignment_id>/grades", methods=["GET"])
-@jwt_required(optional=True)
+@jwt_required()
 def list_assignment_grades(assignment_id: int):
     """
     Lists grades for an assignment.
     Query parameters:
-    - viewer_id: required int, id of the user requesting the grades.
+    - viewer_id: optional int, must match the authenticated user's id when provided.
         * If teacher (admin) who owns the assignment, all grades are returned.
         * If student, only their grade is returned.
     - student_id: optional int, further filters grades (teachers only).
@@ -174,9 +184,9 @@ def list_assignment_grades(assignment_id: int):
     """
     assignment = Assignment.query.get_or_404(assignment_id)
 
+    viewer = resolve_user(None, allow_token=True, require=True)
     viewer_id = request.args.get("viewer_id", type=int)
-    viewer = resolve_user(viewer_id, allow_token=True, require=True)
-    if viewer_id and viewer_id != viewer.id:
+    if viewer_id is not None and viewer_id != viewer.id:
         abort(403, description="viewer_id does not match authenticated user")
     include_related_raw = request.args.get("include_related")
     if include_related_raw is None:
