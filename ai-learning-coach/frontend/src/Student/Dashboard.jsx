@@ -258,7 +258,7 @@ function ProgressCircular({ value = 80, size = 150, thickness = 7 }) {
         size={size}
         thickness={thickness}
         sx={{
-          color: "#ea9cb0", // inner ring color
+          color: "#f6c6d1", // inner ring color
           [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" }, //makes arc ends rounded
           transform: "rotate(-110deg)",
         }}
