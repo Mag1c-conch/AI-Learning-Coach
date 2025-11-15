@@ -69,6 +69,7 @@ function saveEnrolledCourse(course) {
     if (!uid) return;
     const key = `enrolledCourses:${uid}`; 
     const list = JSON.parse(localStorage.getItem(key) || "[]");
+    // normalize id
     const normalizedId = Number(course?.id);
     const normalizedCourse = {
       ...course,
@@ -77,8 +78,10 @@ function saveEnrolledCourse(course) {
     const normalizedReward = Number(
       normalizedCourse?.reward ?? normalizedCourse?.badges ?? 0
     );
+    // normalize reward/badges
     normalizedCourse.reward = Number.isFinite(normalizedReward) ? normalizedReward : 0;
     normalizedCourse.badges = normalizedCourse.reward;
+    // normalize existing list, then dedupe by numeric id (or by code if id not numeric)
     const existing = Array.isArray(list)
       ? list.map((item) => ({
           ...item,
@@ -98,7 +101,7 @@ function saveEnrolledCourse(course) {
     localStorage.setItem(key, JSON.stringify(next));
     window.dispatchEvent(new CustomEvent("enrollment:updated", { detail: { course, user_id: uid } }));
   } catch (e) {
-    console.error("保存选课失败", e);
+    console.error("store enrol failure", e);
   }
 }
 const Registercourse = () => {
@@ -136,6 +139,7 @@ const Registercourse = () => {
     fetchCourses();
   }, []);
 
+  // search filter (memoized)
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
@@ -146,6 +150,7 @@ const Registercourse = () => {
     );
   }, [rows, query]);
 
+  // submit enrollment
   const handleSubmit = async () => {
     if (!selected) return;
     const uid = getCurrentUserId();
@@ -173,6 +178,7 @@ const Registercourse = () => {
     }
   };
 
+  // dataGrid column definitions
   const columns = [
     { field: "code", headerName: "Code", width: 110 },
     { field: "name", headerName: "Course Name", flex: 1, minWidth: 180 },
@@ -204,6 +210,7 @@ const Registercourse = () => {
     },
   ];
 
+  // page layout
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
