@@ -1,5 +1,4 @@
-﻿// src/Student/Dashboard.jsx
-import React, { useRef, useState, useMemo, useEffect, useCallback } from "react";
+﻿import React, { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../App.css";
 import {
@@ -26,7 +25,7 @@ import dayjs from "dayjs";
 import http from "../api/http";
 import NotificationsBell from "../components/Notifications.jsx";
 
-// ===== Course slider =====
+// horizontal cards slider
 function CoursesSlider({ courses = [], progressMap = {} }) {
   const slidingRef = useRef(null);
   const scrollingCards = (dir = 1) => {
@@ -36,31 +35,31 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
   };
 
   return (
-    <Box sx={{ position: "relative" }}>
+    <Box sx={{ position: "relative" }}> 
       <Box
         ref={slidingRef}
         sx={{
           display: "flex",
-          gap: 2,
-          overflowX: "auto",
+          gap: 2, // space between cards
+          overflowX: "auto", // horizontal scroll when content overflows
           scrollSnapType: "x mandatory",
           px: { xs: 1, md: 2 },
           py: 1,
           scrollbarWidth: "none",
-          "&::-webkit-scrollbar": { display: "none" },
+          "&::-webkit-scrollbar": { display: "none" }, //hides the scrollbar in Chrome/Safari
         }}
       >
-        {courses.map((course) => (
+        {courses.map((course) => ( // each course will get one card
           <Box
             key={course.id ?? course.code}
             sx={{ flex: "0 0 auto", width: { xs: 260, sm: 300, md: 340 }, scrollSnapAlign: "start" }}
           >
-            <Box
-              component={Link}
+            <Box 
+              component={Link} // whole card clickable and be a link to course page
               to={
                 Number.isInteger(course.id)
                   ? `/course/${course.id}`
-                  : `/course/${encodeURIComponent(course.code || "")}`
+                  : `/course/${encodeURIComponent(course.code || "")}` // protects codes with spaces/special characters
               }
               sx={{ textDecoration: "none", color: "inherit" }}
             >
@@ -84,6 +83,7 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
                     py: 4,
                   }}
                 >
+                  {/* title: course code and name */}
                   <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.3 }}>
                     {course.code}
                     <br />
@@ -91,11 +91,11 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
                   </Typography>
 
                   <Divider flexItem sx={{ my: 0.5, opacity: 0.2 }} />
-
+                  {/* emphasized line for key info */}
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
                     {course.dueText}
                   </Typography>
-
+                  {/* detail text */}
                   <Typography variant="body2" color="text.secondary">
                     {course.meta}
                   </Typography>
@@ -125,14 +125,14 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
       </Box>
 
       <IconButton
-        onClick={() => scrollingCards(-1)}
+        onClick={() => scrollingCards(-1)} // when clicking left button, scroll left
         size="small"
         sx={{
-          display: { xs: "none", sm: "flex" },
+          display: { xs: "none", sm: "flex" }, // hidden on extra-small screens (phones)
           position: "absolute",
           left: 4,
           top: "50%",
-          transform: "translateY(-50%)",
+          transform: "translateY(-50%)", // center vertically
           bgcolor: "background.paper",
           boxShadow: 2,
           "&:hover": { bgcolor: "background.paper" },
@@ -161,7 +161,7 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
   );
 }
 
-// ===== Progress slider =====
+// progress slider for study progress page
 function ProgressSlider({ items = [], onOpen }) {
   const slidingRef = useRef(null);
   const scrollingCards = (dir = 1) => {
@@ -185,7 +185,7 @@ function ProgressSlider({ items = [], onOpen }) {
           "&::-webkit-scrollbar": { display: "none" },
         }}
       >
-        {items.map((item) => (
+        {items.map((item) => ( // one card per course progress item
           <Card
             key={item.courseKey}
             elevation={3}
@@ -193,16 +193,17 @@ function ProgressSlider({ items = [], onOpen }) {
             role="button"
             tabIndex={0}
             sx={{
-              flex: "0 0 auto",
+              flex: "0 0 auto", // fixed-width flex item
               width: { xs: 240, sm: 280, md: 300 },
-              scrollSnapAlign: "start",
+              scrollSnapAlign: "start", // stop scrolling, left edge aligns
               borderRadius: 2,
               cursor: "pointer",
             }}
           >
             <CardContent sx={{ textAlign: "center" }}>
+              {/* bold course title */}
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                {item.course}
+                {item.course} 
               </Typography>
               <ProgressCircular value={item.percent} size={140} />
             </CardContent>
@@ -221,7 +222,7 @@ function ProgressSlider({ items = [], onOpen }) {
           transform: "translateY(-50%)",
           bgcolor: "background.paper",
           boxShadow: 2,
-          "&:hover": { bgcolor: "background.paper" },
+          "&:hover": { bgcolor: "background.paper" }, // keep the same background on hover
         }}
       >
         <ChevronLeftIcon />
@@ -247,18 +248,18 @@ function ProgressSlider({ items = [], onOpen }) {
   );
 }
 
-// ===== ProgressCircular =====
-function ProgressCircular({ value = 80, size = 150, thickness = 5 }) {
+// cicular progress ring component
+function ProgressCircular({ value = 80, size = 150, thickness = 7 }) {
   return (
     <Box sx={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
       <CircularProgress
-        variant="determinate"
+        variant="determinate" 
         value={100}
         size={size}
         thickness={thickness}
         sx={{
-          color: "#f6c6d1",
-          [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" },
+          color: "#ea9cb0", // inner ring color
+          [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" }, //makes arc ends rounded
           transform: "rotate(-110deg)",
         }}
       />
@@ -268,7 +269,7 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5 }) {
         size={size}
         thickness={thickness}
         sx={{
-          color: "#ea9cb0",
+          color: "#ea9cb0", // outer ring color
           position: "absolute",
           left: 0,
           [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" },
@@ -293,7 +294,7 @@ function ProgressCircular({ value = 80, size = 150, thickness = 5 }) {
   );
 }
 
-// ===== helpers =====
+// bsde local storage keys and helper functions
 const defaultCoursesData = [];
 const exerciseData = [];
 const progressData = [];
@@ -310,22 +311,27 @@ function getCurrentUserId() {
   }
 }
 
+// retrieve today’s study-plan (to-do) items for each course from localStorage
 const courseKeyFromCourse = (c) => c?.code ?? (c?.id != null ? String(c.id) : "course");
+// Build storage keys
+// Creates a unique key for storing course-progress data per user
 const courseProgressKey = (uid, courseKey) =>
   `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
 
+// Creates a unique key for study-plan data, namespaced by user, course, and date
 const planStorageKey = (uid, courseKey, dateStr) =>
   `studyPlan:${uid || "anon"}:${courseKey || "course"}:${dateStr}`;
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => new Date().toISOString().slice(0, 10); // get today date y-m-d
 
+// load today's todo for all courses
 function loadTodayTodosForUser(uid, courseList = []) {
-  const t = todayStr();
-  const out = [];
-  for (const c of courseList) {
-    const key = courseKeyFromCourse(c);
-    const raw = localStorage.getItem(planStorageKey(uid, key, t));
-    const items = raw ? JSON.parse(raw) : [];
-    if (Array.isArray(items) && items.length) {
+  const t = todayStr(); // today's date
+  const out = []; // results array
+  for (const c of courseList) { // loop each couese
+    const key = courseKeyFromCourse(c); // build course key
+    const raw = localStorage.getItem(planStorageKey(uid, key, t)); // read from localstorage
+    const items = raw ? JSON.parse(raw) : []; // parse JSON or empty array
+    if (Array.isArray(items) && items.length) { // if there are items
       out.push({
         courseKey: key,
         courseLabel: c.code || c.name || key,
@@ -333,47 +339,51 @@ function loadTodayTodosForUser(uid, courseList = []) {
       });
     }
   }
-  return out;
+  return out; // list of all courses that have to-dos today
 }
 
+// converts an enrollment object e into a card-friendly data shape
 function mapEnrollmentToCard(e) {
   const id = Number(e?.id);
   const description = e?.description || "";
   const reward = Number(e?.reward) || 0;
   return {
-    id: Number.isInteger(id) ? id : undefined,
+    id: Number.isInteger(id) ? id : undefined, // Only keep id if it’s a valid integer; otherwise omit it (undefined)
     code: e?.code || "",
     name: e.name || e.title || e.code,
     dueText: "Enrolled",
-    meta: description ? `· ${description}` : "",
+    meta: description ? `· ${description}` : "", // ptional “meta” text: a middle dot + description if provided, otherwise empty
     badges: reward,
     reward,
   };
 }
 
+// merges two course lists so that all enrolled cards come first, and any remaining base courses
 function mergeCourses(base, enrolledCards) {
-  const identifiers = new Set(
+  const identifiers = new Set( // Set of unique keys for quick lookup of what’s already included
     enrolledCards.map((c) =>
       Number.isInteger(Number(c.id)) ? `id:${Number(c.id)}` : `code:${c.code}`
     )
   );
-  const rest = base.filter((b) => {
+  // filters the base list to those not in enrolledCards
+  const rest = base.filter((b) => { 
     const key = Number.isInteger(Number(b.id)) ? `id:${Number(b.id)}` : `code:${b.code}`;
     return !identifiers.has(key);
   });
   return [...enrolledCards, ...rest];
 }
 
+// reads the user’s saved enrollments from localStorage, cleans them up, removes duplicates, and returns a card-friendly list
 function readLocalEnrollments(userId) {
   if (!userId) return [];
   try {
-    const key = `enrolledCourses:${userId}`;
-    const list = JSON.parse(localStorage.getItem(key) || "[]");
-    if (!Array.isArray(list)) return [];
+    const key = `enrolledCourses:${userId}`; // builds a per-user storage key like enrolledCourses:42
+    const list = JSON.parse(localStorage.getItem(key) || "[]"); // reads JSON from localStorage; if missing, uses "[]"
+    if (!Array.isArray(list)) return []; // If the parsed value isn’t an array, bail out with []
     const normalized = list
       .map((c) => {
-        const id = Number(c?.id);
-        if (!Number.isInteger(id)) return null;
+        const id = Number(c?.id); // coerces c.id to a numbe
+        if (!Number.isInteger(id)) return null; // Drops entries with non-integer IDs
         return { ...c, id };
       })
       .filter(Boolean);
@@ -399,6 +409,7 @@ function readLocalEnrollments(userId) {
   }
 }
 
+// simple localStorage helpers for a user’s timetable + a local-date helper
 const TT_KEY = (uid) => `timetableEvents:${uid || "anon"}`;
 function ttGetEvents(uid) {
   try {
@@ -409,6 +420,7 @@ function ttGetEvents(uid) {
     return [];
   }
 }
+// Uses local time
 function todayISO() {
   const d = new Date();
   const y = d.getFullYear();
@@ -417,14 +429,14 @@ function todayISO() {
   return `${y}-${m}-${day}`;
 }
 
-// 从 timetableEvents 取今天事件，按课程聚合
+// today’s to-do lists from AI-generated timetable events
 function todayTodosFromAIEvents(uid, courses = []) {
   const events = ttGetEvents(uid);
   if (!events.length || !Array.isArray(courses) || !courses.length) return [];
 
-  const today = todayISO();
+  const today = todayISO(); // today’s local date
 
-  const courseMap = new Map();
+  const courseMap = new Map(); // lookup for courses by both ID and code
   for (const c of courses) {
     const key = c.code ?? (c.id != null ? String(c.id) : "course");
     const label = c.code || c.name || key;
@@ -443,7 +455,7 @@ function todayTodosFromAIEvents(uid, courses = []) {
 
     const title = e.title || "Study Session";
     const time = d.format("HH:mm");
-
+    // determines which course bucket this event belongs to
     let ck = "course";
     let clabel = "Others";
     if (e.courseId != null && courseMap.has(String(e.courseId))) {
@@ -451,7 +463,7 @@ function todayTodosFromAIEvents(uid, courses = []) {
       ck = meta.key;
       clabel = meta.label;
     }
-
+    // accumulates events into a per-course structure
     const list = byCourse.get(ck) || { courseKey: ck, courseLabel: clabel, items: [] };
     list.items.push({ title: time ? `${time} · ${title}` : title });
     byCourse.set(ck, list);
@@ -460,17 +472,18 @@ function todayTodosFromAIEvents(uid, courses = []) {
   return Array.from(byCourse.values());
 }
 
-// 合并本地 studyPlan:today + timetableEvents:today
-function mergeTodayTodos(uid, courses = []) {
-  const localTodos = loadTodayTodosForUser(uid, courses);
-  const aiTodos = todayTodosFromAIEvents(uid, courses);
+// 1. merges “today’s to-dos” from two sources
+// 2. grouped by course and de-duplicated by item title
+function mergeTodayTodos(uid, courses = []) { // takes a user id and a course list (default empty)
+  const localTodos = loadTodayTodosForUser(uid, courses); // from localStorage (manual plans)
+  const aiTodos = todayTodosFromAIEvents(uid, courses); // from AI events (timetable)
 
   const map = new Map();
   for (const g of [...localTodos, ...aiTodos]) {
     const existed =
       map.get(g.courseKey) || { courseKey: g.courseKey, courseLabel: g.courseLabel, items: [] };
     const seen = new Set(existed.items.map((x) => x.title));
-    for (const it of g.items) {
+    for (const it of g.items) { // quick lookup of already-added titles for this course to avoid duplicates
       if (!seen.has(it.title)) {
         existed.items.push(it);
         seen.add(it.title);
@@ -483,7 +496,8 @@ function mergeTodayTodos(uid, courses = []) {
   return out;
 }
 
-function computeMarkedDates(uid) {
+// computes a sorted list of unique dates
+function computeMarkedDates(uid) { // load this user’s saved events from localStorage
   const events = ttGetEvents(uid);
   const validDays = new Set();
   for (const e of events) {
@@ -492,15 +506,15 @@ function computeMarkedDates(uid) {
     if (!d.isValid()) continue;
     validDays.add(d.format("YYYY-MM-DD"));
   }
-  return Array.from(validDays).sort((a, b) => a.localeCompare(b));
+  return Array.from(validDays).sort((a, b) => a.localeCompare(b)); // convert the set to an array and sort lexicographically.
 }
 
 // ===== Dashboard =====
 const Dashboard = () => {
   const [sliderCourses, setSliderCourses] = useState(defaultCoursesData);
-  const [uid, setUid] = useState(getCurrentUserId());
-  const [todosByCourse, setTodosByCourse] = useState([]);
-  const [exercises] = useState(exerciseData);
+  const [uid, setUid] = useState(getCurrentUserId()); // current user ID, read from storage via getCurrentUserId()
+  const [todosByCourse, setTodosByCourse] = useState([]); // today’s to-dos grouped by course
+  const [exercises] = useState(exerciseData); // exercise list; read-only here
   const [courses, setCourses] = useState([]);
   const [progressMap, setProgressMap] = useState({});
   const [progressItems, setProgressItems] = useState([]);
@@ -508,8 +522,9 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
   const openStudyProgress = (courseKey) =>
-    navigate(`/progress/${encodeURIComponent(courseKey)}`);
+    navigate(`/progress/${encodeURIComponent(courseKey)}`); // routes to a progress page for a given course key
 
+  // Auth / storage listeners
   useEffect(() => {
     const onStorage = () => setUid(getCurrentUserId());
     const onLogin = () => setUid(getCurrentUserId());
@@ -521,8 +536,10 @@ const Dashboard = () => {
     };
   }, []);
 
+  // sum of badges across all courses
   const totalRewards = courses.reduce((s, c) => s + (c.badges || 0), 0);
 
+  // Computes a greeting once on mount based on current hour
   const greeting = useMemo(() => {
     const h = new Date().getHours();
     return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
@@ -537,6 +554,7 @@ const Dashboard = () => {
     }
   }, []);
 
+  // recompute progress map + progress slider items
   const rebuildProgress = useCallback(
     (list = courses, userId = uid) => {
       const map = {};
@@ -561,6 +579,7 @@ const Dashboard = () => {
     [uid, courses]
   );
 
+  // load enrollments, compute derived state, and listen for updates
   useEffect(() => {
     const load = async () => {
       if (!uid) {
@@ -573,9 +592,12 @@ const Dashboard = () => {
       try {
         const { data } = await http.get(`/courses/users/${uid}/enrollments`);
         const enrolledCards = Array.isArray(data) ? data.map(mapEnrollmentToCard) : [];
+        // Fallback to local enrollments if API returns empty
         const fallback = enrolledCards.length ? [] : readLocalEnrollments(uid);
+        // Slider: enrolled first, then defaults (no duplicates)
         const merged = mergeCourses(defaultCoursesData, enrolledCards.length ? enrolledCards : fallback);
         setSliderCourses(merged);
+        // Canonical base courses for the rest of the dashboard state
         const source = enrolledCards.length ? enrolledCards : fallback;
         const base = source.map((c) => ({
           id: c.id,
@@ -586,7 +608,7 @@ const Dashboard = () => {
         }));
         setCourses(base);
         rebuildProgress(base, uid);
-
+        // today’s todos (local + AI merged) and marked dates
         setTodosByCourse(mergeTodayTodos(uid, base));
         setMarkedDates(computeMarkedDates(uid));
       } catch (e) {
@@ -609,6 +631,7 @@ const Dashboard = () => {
       }
     };
 
+    // when enrollments change elsewhere in the app, reload (same user, or no user_id guard)
     load();
     const onUpdated = (ev) => {
       if (!ev?.detail?.user_id || ev.detail.user_id === uid) load();
@@ -617,6 +640,7 @@ const Dashboard = () => {
     return () => window.removeEventListener("enrollment:updated", onUpdated);
   }, [uid, rebuildProgress]);
 
+  // recompute derived state whenever courses or uid changes
   useEffect(() => {
     if (courses?.length) {
       rebuildProgress(courses, uid);
@@ -625,6 +649,7 @@ const Dashboard = () => {
     }
   }, [courses, uid, rebuildProgress]);
 
+  // listen for in-app custom events and patch state accordingly
   useEffect(() => {
     const onProgressUpdated = (e) => {
       const { course_key, value } = e?.detail || {};
@@ -647,6 +672,7 @@ const Dashboard = () => {
     };
   }, [uid, courses]);
 
+  // react to timetable changes
   useEffect(() => {
     const onTimetableUpdated = () => {
       setTodosByCourse(mergeTodayTodos(uid, courses));
@@ -656,6 +682,7 @@ const Dashboard = () => {
     return () => window.removeEventListener("timetable:updated", onTimetableUpdated);
   }, [uid, courses]);
 
+  // sync changes coming from other tabs/windows (storage event)
   useEffect(() => {
     const onStorage = (e) => {
       if (!e.key) return;
@@ -678,9 +705,10 @@ const Dashboard = () => {
     return () => window.removeEventListener("storage", onStorage);
   }, [uid, courses]);
 
-  // ========= 小日历自定义日期单元（带小圆点） =========
+  // marked dates → fast lookup
   const markedSet = useMemo(() => new Set(markedDates), [markedDates]);
 
+  // custom day renderer
   const DotDay = (props) => {
     const { day, outsideCurrentMonth, ...other } = props;
     const hasEvent = markedSet.has(day.format("YYYY-MM-DD"));
@@ -705,7 +733,6 @@ const Dashboard = () => {
     );
   };
 
-  // ===================== render =====================
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar />
