@@ -29,7 +29,8 @@ import http from "../api/http";
 function getCurrentUserId() {
   try {
     const token =
-      window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
+      window.sessionStorage.getItem("token") ||
+      window.localStorage.getItem("token");
     if (!token) return null;
     const user = JSON.parse(token);
     return user?.id || user?.user_id || null;
@@ -52,8 +53,12 @@ const loadEnrollments = (uid) => {
 };
 
 // Call the backend API to generate and save the study plan.
-async function apiCreatePlan(studentId) {
-  const res = await http.post("/get_plan", { student_id: studentId });
+async function apiCreatePlan(studentId, selectedIds = []) {
+  const payload = { student_id: studentId };
+  if (Array.isArray(selectedIds) && selectedIds.length) {
+    payload.selected_item_ids = selectedIds;
+  }
+  const res = await http.post("/get_plan", payload);
   return res.data; // StudyPlan like { ..., plan: {...} }
 }
 
@@ -65,18 +70,28 @@ async function apiGetStudyProgress(studentId, courseId) {
 }
 
 // Update the learning progress returned by the back end to the database.
-async function apiUpsertStudyProgress(studentId, courseId, items = [], replace = false) {
-  if (!studentId || !courseId || !Array.isArray(items) || items.length === 0) return null;
+async function apiUpsertStudyProgress(
+  studentId,
+  courseId,
+  items = [],
+  replace = false
+) {
+  if (!studentId || !courseId || !Array.isArray(items) || items.length === 0)
+    return null;
   const payload = { items };
   if (replace) payload.replace = true;
-  const res = await http.put(`/progress/study/${studentId}/${courseId}`, payload);
+  const res = await http.put(
+    `/progress/study/${studentId}/${courseId}`,
+    payload
+  );
   return res.data;
 }
 
 // Convert the task type string to a uniform display name.
 const prettyType = (t) => {
   const s = String(t || "").toLowerCase();
-  if (s === "assignment" || s === "assignments" || s === "ass") return "Assignments";
+  if (s === "assignment" || s === "assignments" || s === "ass")
+    return "Assignments";
   if (s === "lab" || s === "labs") return "Labs";
   if (s === "quiz" || s === "quizzes") return "Quizzes";
   if (s === "materials" || s === "material") return "Materials";
@@ -88,7 +103,11 @@ function typeFromMaterial(m) {
   const t = String(m.file_type || "").toLowerCase();
   const name = String(m.stored_name || m.original_name || "").toLowerCase();
 
-  if (t.includes("assignment") || name.includes("assignment") || /\b(a|assn|hw)\d+\b/.test(name)) {
+  if (
+    t.includes("assignment") ||
+    name.includes("assignment") ||
+    /\b(a|assn|hw)\d+\b/.test(name)
+  ) {
     return "Assignments";
   }
   if (t.includes("quiz") || name.includes("quiz")) return "Quizzes";
@@ -97,14 +116,17 @@ function typeFromMaterial(m) {
 }
 
 // Used for storing learning progress.
-const progressKey = (uid, courseKey) => `sp:progress:${uid || "anon"}:${courseKey || "course"}`;
+const progressKey = (uid, courseKey) =>
+  `sp:progress:${uid || "anon"}:${courseKey || "course"}`;
 const courseProgressKey = (uid, courseKey) =>
   `courseProgress:${uid || "anon"}:${courseKey || "course"}`;
 
 // Load the learning progress data of the student's specified course from localStorage.
 function loadProgress(uid, courseKey) {
   try {
-    return JSON.parse(localStorage.getItem(progressKey(uid, courseKey)) || "{}");
+    return JSON.parse(
+      localStorage.getItem(progressKey(uid, courseKey)) || "{}"
+    );
   } catch {
     return {};
   }
@@ -209,7 +231,7 @@ function StudyPlanDialog({ open, onClose, plan, startLabel = "Today" }) {
   );
 }
 
-// Map server plan -> dialog data 
+// Map server plan -> dialog data
 function mapServerPlanToDialog(planObj, courses = []) {
   if (!planObj || !Array.isArray(planObj.days)) return [];
   const { days } = planObj;
@@ -219,7 +241,9 @@ function mapServerPlanToDialog(planObj, courses = []) {
     courseMap.set(c.id, c.code || c.name || String(c.id));
   }
 
-  const sorted = [...days].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const sorted = [...days].sort((a, b) =>
+    String(a.date).localeCompare(String(b.date))
+  );
 
   return sorted.map((d, idx) => {
     const items = (Array.isArray(d.tasks) ? d.tasks : []).map((t) => {
@@ -248,8 +272,8 @@ function serverPlanToEvents(planObj) {
     const dateStr = d.date; // YYYY-MM-DD
     for (const t of d.tasks || []) {
       if (!t.start_time || !t.end_time) continue;
-      const startISO = new Date(`${dateStr}T${t.start_time}:00`).toISOString();
-      const endISO = new Date(`${dateStr}T${t.end_time}:00`).toISOString();
+      const startISO = `${dateStr}T${t.start_time}:00`;
+      const endISO = `${dateStr}T${t.end_time}:00`;
       out.push({
         title: t.title || "Study Session",
         start: startISO,
@@ -269,7 +293,9 @@ function ttUpsertEvents(uid, newEvents = []) {
     const raw = localStorage.getItem(TT_KEY(uid));
     const old = raw ? JSON.parse(raw) : [];
     const keyOf = (e) =>
-      `${e.start}|${e.end}|${e.title}|${e.courseId ?? ""}|${e.materialId ?? ""}`;
+      `${e.start}|${e.end}|${e.title}|${e.courseId ?? ""}|${
+        e.materialId ?? ""
+      }`;
     const seen = new Set(old.map(keyOf));
     const merged = [...old];
     for (const ev of newEvents) {
@@ -322,7 +348,8 @@ function StudyProgress() {
   // Find the current course from the course list (match the id or code based on the routing parameter).
   const currentCourse = useMemo(() => {
     const list = Array.isArray(enrolled) ? enrolled : [];
-    if (!list.length) return { id: undefined, code: String(rawParam || ""), name: "" };
+    if (!list.length)
+      return { id: undefined, code: String(rawParam || ""), name: "" };
     if (rawParam) {
       const byId = list.find((c) => String(c.id) === String(rawParam));
       const byCode = list.find((c) => String(c.code) === String(rawParam));
@@ -362,9 +389,13 @@ function StudyProgress() {
             : Promise.resolve(null);
 
         const [assRes, matRes, progressData] = await Promise.all([
-          http.get("/assignments", { params: { course_id: cid } }).catch(() => ({ data: [] })),
           http
-            .get("/materials", { params: { course_id: cid, include_submissions: false } })
+            .get("/assignments", { params: { course_id: cid } })
+            .catch(() => ({ data: [] })),
+          http
+            .get("/materials", {
+              params: { course_id: cid, include_submissions: false },
+            })
             .catch(() => ({ data: [] })),
           progressPromise,
         ]);
@@ -434,7 +465,9 @@ function StudyProgress() {
 
   // selected
   const [selected, setSelected] = useState([]);
-  useEffect(() => setSelected(tasks.map((t) => t.id)), [tasks]);
+  useEffect(() => {
+    setSelected((prev) => prev.filter((id) => tasks.some((t) => t.id === id)));
+  }, [tasks]);
 
   const toggleSelect = (id) =>
     setSelected((prev) =>
@@ -562,7 +595,7 @@ function StudyProgress() {
   const generatePlanFromServer = async () => {
     const studentId = uid;
     if (!studentId) {
-      const msg = "未登录或无法识别学生ID";
+      const msg = "not logged in";
       alert(msg);
       setSnackMsg(msg);
       setSnackSev("error");
@@ -572,7 +605,7 @@ function StudyProgress() {
     setServerPlanLoading(true);
     setServerPlanErr(null);
     try {
-      const created = await apiCreatePlan(studentId); // Generate and save
+      const created = await apiCreatePlan(studentId, selected); // Generate and save with selected items
       // Compatible with two types of returns: {plan: {... }} or {... }
       const planDict = created?.plan ?? created;
       // Save to a global variable.
@@ -585,7 +618,11 @@ function StudyProgress() {
       setPlanOpen(true);
 
       const source = planDict?.metadata?.source;
-      setSnackMsg(source === "fallback" ? "Plan generated (fallback)" : "AI plan generated");
+      setSnackMsg(
+        source === "fallback"
+          ? "Plan generated (fallback)"
+          : "AI plan generated"
+      );
       setSnackSev("success");
       setSnackOpen(true);
     } catch (e) {
@@ -661,18 +698,29 @@ function StudyProgress() {
           </IconButton>
         </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}>
+        <Box
+          sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1, mb: 2 }}
+        >
           <Typography variant="h4" sx={{ fontWeight: 800 }}>
             Study Progress
           </Typography>
-          <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3", marginLeft: "80px" }} />
+          <CircleIcon
+            sx={{
+              ml: "15%",
+              fontSize: 10,
+              color: "#B3B3B3",
+              marginLeft: "80px",
+            }}
+          />
           <Typography variant="h6" sx={{ color: "#7a7a7a" }}>
             Student
           </Typography>
         </Box>
 
         {/* course title card */}
-        <Paper sx={{ ml: 2, mr: 2, p: 2, borderRadius: 2, mb: 3, boxShadow: 5 }}>
+        <Paper
+          sx={{ ml: 2, mr: 2, p: 2, borderRadius: 2, mb: 3, boxShadow: 5 }}
+        >
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             {courseLabel} · Progress
           </Typography>
@@ -681,15 +729,17 @@ function StudyProgress() {
         {/* Study Plan + Donut */}
         <Box
           sx={{
-            ml: 2, 
-            mr: 2, 
+            ml: 2,
+            mr: 2,
             display: "grid",
             gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
             gap: 3,
           }}
         >
           {/* Study Plan */}
-          <Paper sx={{ p: 2, borderRadius: 2, boxShadow: 2, height: { md: 350 } }}>
+          <Paper
+            sx={{ p: 2, borderRadius: 2, boxShadow: 2, height: { md: 350 } }}
+          >
             <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, flex: 1 }}>
                 Study Plan
@@ -733,11 +783,7 @@ function StudyProgress() {
             </Box>
 
             {serverPlanErr && (
-              <Typography
-                color="error"
-                variant="caption"
-                sx={{ ml: 0.5 }}
-              >
+              <Typography color="error" variant="caption" sx={{ ml: 0.5 }}>
                 {serverPlanErr}
               </Typography>
             )}
@@ -819,7 +865,9 @@ function StudyProgress() {
           </Paper>
 
           {/* Donut */}
-          <Paper sx={{ p: 2, borderRadius: 2, boxShadow: 2, height: { md: 350 } }}>
+          <Paper
+            sx={{ p: 2, borderRadius: 2, boxShadow: 2, height: { md: 350 } }}
+          >
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               Overall Progress
             </Typography>
@@ -830,7 +878,9 @@ function StudyProgress() {
         </Box>
 
         {/* Assignments/Labs/Quizzes */}
-        <Paper sx={{ ml: 2, mr: 2,  mt: 3, p: 2.5, borderRadius: 2, boxShadow: 2 }}>
+        <Paper
+          sx={{ ml: 2, mr: 2, mt: 3, p: 2.5, borderRadius: 2, boxShadow: 2 }}
+        >
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>
             Assignments by Type
           </Typography>
@@ -874,8 +924,8 @@ function StudyProgress() {
 
           <Divider sx={{ mt: 1.5 }} />
           <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
-            <Button 
-              variant="outlined" 
+            <Button
+              variant="outlined"
               onClick={() => navigate("/courses")}
               sx={{ color: "#142E4F", borderColor: "#142E4F" }}
             >
@@ -883,7 +933,10 @@ function StudyProgress() {
             </Button>
             <Button
               variant="contained"
-              sx={{ background: "#1f2a44", "&:hover": { background: "#1a2438" } }}
+              sx={{
+                background: "#1f2a44",
+                "&:hover": { background: "#1a2438" },
+              }}
               onClick={() =>
                 navigate(`/course/${encodeURIComponent(courseKey)}`)
               }

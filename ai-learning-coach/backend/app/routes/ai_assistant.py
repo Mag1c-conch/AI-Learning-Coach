@@ -317,6 +317,12 @@ def get_plan():
     student = User.query.get_or_404(student_id)
     if student.role != UserRole.STUDENT:
         abort(403, description="only students may enroll in courses")
+
+    raw_selected_ids = payload.get("selected_item_ids") or []
+    if not isinstance(raw_selected_ids, list):
+        raw_selected_ids = []
+    selected_ids = [str(x) for x in raw_selected_ids]
+
     courses = (
         db.session.query(Course)
         .join(Enrollment, Enrollment.course_id == Course.id)
@@ -343,6 +349,33 @@ def get_plan():
             .order_by(Assignment.due_date.asc())
             .all()
         )
+
+    if selected_ids:
+        allowed_material_ids = set()
+        allowed_assignment_ids = set()
+        for sid in selected_ids:
+            sid = str(sid)
+            try:
+                if sid.startswith("mat-"):
+                    allowed_material_ids.add(int(sid[4:]))
+                elif sid.startswith("ass-"):
+                    allowed_assignment_ids.add(int(sid[4:]))
+            except ValueError:
+                continue
+
+        if allowed_material_ids:
+            materials = [m for m in materials if m.id in allowed_material_ids]
+        if allowed_assignment_ids:
+            assignments = [a for a in assignments if a.id in allowed_assignment_ids]
+
+        if allowed_material_ids or allowed_assignment_ids:
+            used_course_ids = set()
+            for m in materials:
+                used_course_ids.add(m.course_id)
+            for a in assignments:
+                used_course_ids.add(a.course_id)
+            courses = [c for c in courses if c.id in used_course_ids]
+            course_ids = [c.id for c in courses]
 
     week_start, week_end = _determine_week_window()
     plan_context = _build_plan_context(student, courses, assignments, materials, week_start, week_end)
@@ -391,6 +424,32 @@ def get_plan():
             material_ids=[material.id for material in materials],
         )
 
+    # --- PATCH BEGIN: 任务数不足 7 时，自动为“空白天”补齐复习任务，保证 7 天每天都有任务 ---
+    def _pad_plan_to_seven_days(plan: dict, default_course_id=None):
+        """
+        为没有任务的天追加一个短复习块（不改变已有任务；保持你的窗口/结构）
+        """
+        slots = [("09:00", "10:30"), ("14:00", "15:30")]
+        i = 0
+        for day in plan.get("days", []):
+            if not day.get("tasks"):
+                start, end = slots[i % len(slots)]
+                day.setdefault("tasks", []).append({
+                    "title": "Independent Review",
+                    "description": "Revise notes and summarise key takeaways.",
+                    "course_id": default_course_id,
+                    "material_id": None,
+                    "start_time": start,
+                    "end_time": end,
+                })
+                i += 1
+
+    total_blocks = sum(len(d.get("tasks", [])) for d in normalized_plan.get("days", []))
+    if total_blocks < 7:
+        default_course_id = (course_ids[0] if course_ids else None)
+        _pad_plan_to_seven_days(normalized_plan, default_course_id=default_course_id)
+    # --- PATCH END ---
+
     metadata = normalized_plan.setdefault("metadata", {})
     metadata["source"] = plan_source
     metadata["generated_at"] = datetime.now(SYDNEY_TZ).isoformat()
@@ -412,6 +471,7 @@ def get_plan():
 
     db.session.commit()
     return jsonify(plan_record.to_dict()), 200
+
 
 # get study plan for a student
 @bp.route("/assistant/study_plan/<int:student_id>", methods=["GET"])
@@ -480,8 +540,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
         "student": {
             "id": student.id,
             "first_name": student.first_name,
-            "last_name": student.last_name,
-        },
+            "last_name": student.last_name},
         "week_start": week_start.isoformat(),
         "week_end": week_end.isoformat(),
         "courses": list(course_context.values()),
