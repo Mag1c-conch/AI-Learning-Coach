@@ -293,7 +293,7 @@ def grade_submission():
     response_payload = {
         "grading": parsed,
         "raw_reply": reply,
-        "model": current_app.config.get("GEMINI_MODEL", "gemini-1.5-flash"),
+        "model": current_app.config.get("GEMINI_MODEL", "gemini-2.5-flash"),
         "metadata": {
             "material_id": material.id,
             "assignment_id": assignment.id,
