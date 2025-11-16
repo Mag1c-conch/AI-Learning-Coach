@@ -14,7 +14,6 @@ import {
   CircularProgress,
   circularProgressClasses,
   IconButton,
-  Checkbox,
   Tooltip,
   Snackbar,
   Alert,
@@ -805,12 +804,6 @@ function StudyProgress() {
                         <PercentChip
                           value={Number(it.percent) || 0}
                           onChange={(v) => setTaskPercent(it.id, v)}
-                        />
-
-                        <Checkbox
-                          checked={checked}
-                          onChange={() => toggleSelect(it.id)}
-                          sx={{ ml: 1 }}
                         />
                       </Box>
                     </Box>

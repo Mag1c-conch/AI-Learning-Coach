@@ -648,41 +648,44 @@ def _build_fallback_plan(student, courses, materials, week_start, week_end):
         "days": [{"date": day.isoformat(), "tasks": []} for day in day_dates],
     }
 
-    course_lookup = {course.id: course for course in courses}
-    slots = [("09:00", "10:30"), ("10:45", "12:15"), ("13:30", "15:00"), ("15:15", "16:45")]
-    max_tasks = len(plan["days"]) * len(slots)
+    slots = [("09:00", "10:30"), ("11:00", "12:30"), ("14:00", "16:00")]
 
-    if materials:
-        for index, material in enumerate(materials[:max_tasks]):
-            day_entry = plan["days"][index % len(plan["days"])]
-            slot = slots[index % len(slots)]
-            course = course_lookup.get(material.course_id)
-            course_name = f"{course.name} - " if course else ""
-            task_title = f"{course_name}{material.original_name}"
-            day_entry["tasks"].append(
-                {
-                    "title": task_title,
-                    "description": "Review the material and capture key takeaways.",
-                    "course_id": material.course_id,
-                    "material_id": material.id,
-                    "start_time": slot[0],
-                    "end_time": slot[1],
-                }
-            )
-    else:
-        default_course_id = courses[0].id if courses else None
-        generic_slots = [("09:00", "11:00"), ("14:00", "16:00")]
-        for idx, day_entry in enumerate(plan["days"]):
-            slot = generic_slots[idx % len(generic_slots)]
-            day_entry["tasks"].append(
-                {
-                    "title": "Independent Study",
-                    "description": "Use this block to revise course content or explore supplementary materials.",
-                    "course_id": default_course_id,
-                    "material_id": None,
-                    "start_time": slot[0],
-                    "end_time": slot[1],
-                }
-            )
+    course_lookup = {course.id: course for course in courses}
+    mats = list(materials) if materials else []
+    total_days = len(plan["days"])
+    total_slots = len(slots)
+
+    for i, m in enumerate(mats):
+        day_idx = i % total_days       
+        slot_idx = (i // total_days) % total_slots  
+        day_entry = plan["days"][day_idx]
+        start, end = slots[slot_idx]
+
+        course = course_lookup.get(m.course_id)
+        course_name = f"{course.name} - " if course else ""
+        task_title = f"{course_name}{m.original_name}"
+        day_entry["tasks"].append({
+            "title": task_title,
+            "description": "Review and take notes; short break between sessions.",
+            "course_id": m.course_id,
+            "material_id": m.id,
+            "start_time": start,
+            "end_time": end,
+        })
+
+    default_course_id = courses[0].id if courses else None
+    for day_entry in plan["days"]:
+        if len(day_entry["tasks"]) < total_slots:
+            used_slots = {(t["start_time"], t["end_time"]) for t in day_entry["tasks"]}
+            for start, end in slots:
+                if (start, end) not in used_slots:
+                    day_entry["tasks"].append({
+                        "title": "Independent Review",
+                        "description": "Consolidate notes, summarize key points, and rest between blocks.",
+                        "course_id": default_course_id,
+                        "material_id": None,
+                        "start_time": start,
+                        "end_time": end,
+                    })
 
     return plan
