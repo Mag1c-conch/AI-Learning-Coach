@@ -66,7 +66,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
-/* ---------- 名字从 localStorage 读取 ---------- */
+/* read the name from localStorage */
 function useDisplayName() {
   return useMemo(() => {
     try {
@@ -118,7 +118,7 @@ export default function Grading() {
   const [gradingResult, setGradingResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // 获取当前用户信息
+  // get the current user information
   const getCurrentUser = () => {
     try {
       const token =
@@ -132,7 +132,7 @@ export default function Grading() {
     return null;
   };
 
-  // 获取教师创建的课程列表
+  // get the courses created by the teacher
   useEffect(() => {
     const fetchCourses = async () => {
       setCoursesLoading(true);
@@ -154,7 +154,7 @@ export default function Grading() {
     fetchCourses();
   }, []);
 
-  // 当选择课程时，获取该课程的作业列表
+  // when the course is selected, get the assignments of the course
   useEffect(() => {
     const fetchAssignments = async () => {
       if (!selectedCourse) {
@@ -175,7 +175,7 @@ export default function Grading() {
     fetchAssignments();
   }, [selectedCourse]);
 
-  // 当选择作业时，获取学生提交列表
+  // when the assignment is selected, get the submissions of the assignment
   useEffect(() => {
     const fetchSubmissions = async () => {
       if (!selectedAssignment) {
@@ -312,10 +312,10 @@ export default function Grading() {
     setError(null);
 
     try {
-      // 构建基于批改结果的反馈内容
+      // build the feedback content based on the grading result
       let feedbackParts = [];
 
-      // 添加总体评价
+      // add the overall evaluation
       if (gradingResult.score) {
         feedbackParts.push(`📊 Grade: ${gradingResult.score.value}/${gradingResult.score.max}`);
         if (gradingResult.score.explanation) {
@@ -323,7 +323,7 @@ export default function Grading() {
         }
       }
 
-      // 添加优点
+      // add the strengths
       if (gradingResult.strengths && gradingResult.strengths.length > 0) {
         feedbackParts.push(`\n✅ Strengths:`);
         gradingResult.strengths.forEach((strength, idx) => {
@@ -331,7 +331,7 @@ export default function Grading() {
         });
       }
 
-      // 添加错误提示和相似例题
+      // add the error hints and similar examples
       if (gradingResult.mistakes && gradingResult.mistakes.length > 0) {
         feedbackParts.push(`\n\n⚠️ Areas for Improvement:\n`);
         
@@ -352,7 +352,7 @@ export default function Grading() {
         });
       }
 
-      // 添加下一步建议
+      // add the next steps
       if (gradingResult.next_steps) {
         feedbackParts.push(`\n\n📚 Next Steps:\n${gradingResult.next_steps}`);
       }
@@ -381,7 +381,7 @@ export default function Grading() {
       return;
     }
     
-    // 获取当前选中的提交，从中获取学生ID
+    // get the current selected submission, get the student ID from it
     const submission = submissions.find(s => s.id === parseInt(selectedSubmission));
     if (!submission || !submission.uploaded_by) {
       alert("Cannot identify student for this submission");
@@ -404,7 +404,7 @@ export default function Grading() {
       });
       
       alert("✅ Feedback sent to student successfully!");
-      setFeedbackContent(""); // 清空反馈框
+      setFeedbackContent(""); // clear the feedback box
     } catch (error) {
       console.error("Failed to send feedback:", error);
       const errorMsg = error?.response?.data?.error || error?.response?.data?.description || error.message;
@@ -424,7 +424,7 @@ export default function Grading() {
       return;
     }
 
-    // 获取当前选中的提交
+    // get the current selected submission
     const submission = submissions.find(s => s.id === parseInt(selectedSubmission));
     if (!submission) {
       alert("Submission not found");
@@ -441,7 +441,7 @@ export default function Grading() {
         student_id: submission.uploaded_by
       });
 
-      // 如果有评语，也作为反馈发送给学生
+      // if there is a comment, also send it as feedback to the student
       if (comments.trim()) {
         const feedbackContent = `📊 Grade: ${score}/100\n\n${comments}`;
         
@@ -455,9 +455,8 @@ export default function Grading() {
       
       alert("✅ Grade recorded and feedback sent to student!");
       
-      // 可选：清空表单
-      // setScore("");
-      // setComments("");
+      // optional: clear the form
+
     } catch (error) {
       console.error("Failed to submit grade:", error);
       const errorMsg = error?.response?.data?.error || error?.response?.data?.description || error.message;
@@ -467,7 +466,7 @@ export default function Grading() {
 
   return (
     <Box sx={{ p: 3, position: "relative" }}>
-      {/* ======= 页头 ======= */}
+      {/* header */}
       <Box
         sx={{
           height: 32,
@@ -477,7 +476,7 @@ export default function Grading() {
           mb: 1,
         }}
       >
-        {/* 左：标题组 */}
+        {/* left: title group */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1 }}>
           <Typography variant="h6">Grading</Typography>
           <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
@@ -486,7 +485,7 @@ export default function Grading() {
           </Typography>
         </Box>
 
-        {/* 右：搜索 + 铃铛 */}
+        {/* right: search + bell */}
         <Box
           sx={{
             display: "flex",
@@ -510,7 +509,7 @@ export default function Grading() {
         </Box>
       </Box>
 
-      {/* ======= 分割线 ======= */}
+      {/* separator line */}
       <Box
         sx={{
           height: 2,
@@ -521,7 +520,7 @@ export default function Grading() {
         }}
       />
 
-      {/* ======= 主内容区域：左右布局 ======= */}
+      {/* main content area: left and right layout */}
       <Box
         sx={{
           display: "flex",
@@ -529,7 +528,7 @@ export default function Grading() {
           height: "calc(100vh - 155px)",
         }}
       >
-        {/* ======= 左侧：批改作业 ======= */}
+        {/* left: grading assignments */}
         <Paper
           elevation={2}
           sx={{
@@ -717,7 +716,7 @@ export default function Grading() {
             );
           })()}
 
-          {/* 评分输入 */}
+          {/* score input */}
           <TextField
             fullWidth
             label="Score (0-100)"
@@ -728,7 +727,7 @@ export default function Grading() {
             InputProps={{ inputProps: { min: 0, max: 100 } }}
           />
 
-          {/* 评语输入 */}
+          {/* comments input */}
           <TextField
             fullWidth
             label="Comments"
@@ -777,7 +776,7 @@ export default function Grading() {
           </Button>
         </Paper>
 
-        {/* ======= Right Panel: Student Feedback & Guidance ======= */}
+        {/*  Right Panel: Student Feedback and Guidance */}
         <Paper
           elevation={2}
           sx={{

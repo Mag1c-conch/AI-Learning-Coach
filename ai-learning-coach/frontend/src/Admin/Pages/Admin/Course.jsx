@@ -42,7 +42,6 @@ import { authFetch, API_BASE } from "../../../api/http";
 import CourseStudentProgress from "./CourseStudentProgress";
 
 
-// 课程数据（与Dashboard保持一致）
 const courses = [
   {
     id: "5259_01567",
@@ -89,7 +88,7 @@ const courses = [
 // Student data will be fetched from API
 
 
-// 默认学习相关图片（与Dashboard保持一致）
+// image for course
 const defaultCourseImages = [
   "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", // 书本和笔记本
   "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=800&auto=format&fit=crop", // 课堂学习
@@ -112,17 +111,17 @@ function useDisplayName() {
 export default function Course() {
   const name = useDisplayName();
   
-  // 从URL参数获取课程ID
+  // get course id from URL
   const { courseId } = useParams();
   
-  // 状态管理
+  // state management
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [students, setStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
   
-  // 从后端获取课程信息
+  // fetch course information from backend
   useEffect(() => {
     const fetchCourse = async () => {
       try {
@@ -130,18 +129,18 @@ export default function Course() {
         const response = await authFetch(`${API_BASE}/courses`);
         if (response.ok) {
           const data = await response.json();
-          // 根据courseId（course.code）找到对应的课程
+          // find the corresponding course based on courseId (course.code)
           const foundCourse = data.find(c => c.code === courseId);
           if (foundCourse) {
-            // 转换为前端格式，保留后端的id字段用于API调用
+            // convert to frontend format, keep the id field from backend for API call
             setCourse({
-              id: foundCourse.id, // 使用后端的数据库ID，用于API调用
-              code: foundCourse.code, // 保留课程代码用于显示
+              id: foundCourse.id, // use the database ID from backend for API call
+              code: foundCourse.code, // keep the course code for display
               title: `${foundCourse.code} - ${foundCourse.name}`,
               org: foundCourse.description || "COMPSC - School of CSE",
               image: foundCourse.image_url || defaultCourseImages[0],
               studentCount: foundCourse.student_count || 0,
-              ...foundCourse // 保留后端原始数据
+              ...foundCourse // keep the original data from backend
             });
           } else {
             setError(`Course with code "${courseId}" not found`);
@@ -184,7 +183,7 @@ export default function Course() {
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [expandedWeeks, setExpandedWeeks] = useState(new Set(["Week 1", "Week 2"]));
   
-  // 从localStorage获取当前用户信息
+  // get current user information from localStorage
   const getCurrentUser = () => {
     try {
       const token =
@@ -198,7 +197,7 @@ export default function Course() {
     return null;
   };
 
-  // 从后端获取课程的注册学生列表
+  // fetch the registered students list from backend
   const fetchStudents = async () => {
     if (!course || !course.id) return;
     
@@ -209,7 +208,7 @@ export default function Course() {
         const data = await response.json();
         console.log('Fetched students:', data);
         
-        // 转换为表格需要的格式
+        // convert to the format needed for the table
         const formattedStudents = data.map(student => ({
           id: student.id,
           name: `${student.first_name} ${student.last_name}`,
@@ -232,7 +231,7 @@ export default function Course() {
     }
   };
 
-  // 当课程加载完成后，获取学生列表
+  // when the course is loaded, fetch the students list
   useEffect(() => {
     if (course && course.id) {
       fetchStudents();
@@ -284,7 +283,7 @@ export default function Course() {
     }
   };
 
-  // 格式化文件大小为可读格式
+  // format file size to readable format
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
     if (bytes < 1024) return bytes + ' B';
@@ -303,7 +302,7 @@ export default function Course() {
     });
   };
 
-  // 从后端获取文件列表
+  // fetch the file list from backend
   const fetchMaterials = async () => {
     if (!course || !course.id) return;
     
@@ -314,9 +313,8 @@ export default function Course() {
         const data = await response.json();
         setMaterials(data);
         
-        // 将材料按周分组：优先使用用户选择的周次（localStorage 持久化），没有则回退到按上传日期估算
+        // group the materials by week: use the user-selected week (localStorage persistence) if available, otherwise fallback to estimate by upload date
         const grouped = {};
-        // 读取本地的 materialId -> weekNumber 映射
         let weekMap = {};
         try {
           const raw = localStorage.getItem('materialWeekMap');
@@ -324,7 +322,7 @@ export default function Course() {
         } catch (e) {
           console.warn('Failed to parse materialWeekMap:', e);
         }
-        // 读取本地的 materialId -> type 映射
+        // read the local materialId -> type mapping
         let typeMap = {};
         try {
           const raw = localStorage.getItem('materialTypeMap');
@@ -334,7 +332,7 @@ export default function Course() {
         }
         
         if (data.length > 0) {
-          // 找到最早的上传日期作为基准
+          // find the earliest upload date as the baseline
           const dates = data
             .map(m => m.uploaded_at ? new Date(m.uploaded_at) : null)
             .filter(d => d !== null)
@@ -343,7 +341,7 @@ export default function Course() {
           const earliestDate = dates[0];
           
           data.forEach((material) => {
-            // 优先使用后端 week_number，其次使用本地选择
+            // use the backend week_number first, then use the local selection
             const chosenWeek = (material.week_number && Number(material.week_number) > 0)
               ? Number(material.week_number)
               : weekMap[String(material.id)];
@@ -351,14 +349,14 @@ export default function Course() {
             if (chosenWeek && Number(chosenWeek) > 0) {
               weekKey = `Week ${chosenWeek}`;
             } else if (material.uploaded_at) {
-              // 回退：按上传日期估算周次（保持原有兼容逻辑）
+              // fallback: estimate the week number by upload date
               const uploadDate = new Date(material.uploaded_at);
               const diffTime = earliestDate ? (uploadDate - earliestDate) : 0;
               const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
               const weekIndex = Math.max(1, Math.floor(diffDays / 7) + 1);
               weekKey = `Week ${weekIndex}`;
             } else {
-              // 最后回退：没有上传日期
+              // last fallback: no upload date
               weekKey = "其他";
             }
             
@@ -368,7 +366,6 @@ export default function Course() {
             grouped[weekKey].push({
               id: material.id,
               name: material.stored_name || material.original_name,
-              // 类型优先使用后端 file_type，其次本地映射，最后默认
               type: material.file_type || typeMap[String(material.id)] || 'learning_material',
               uploadDate: material.uploaded_at ? formatDate(material.uploaded_at) : '',
               size: formatFileSize(material.file_size),
@@ -376,7 +373,7 @@ export default function Course() {
             });
           });
           
-          // 按周数排序（Week 1, Week 2, ... 其他）
+          // sort by week number Week 1, Week 2, ... 
           const sortedGrouped = {};
           const weekKeys = Object.keys(grouped).sort((a, b) => {
             if (a === "其他") return 1;
@@ -392,12 +389,12 @@ export default function Course() {
           Object.assign(grouped, sortedGrouped);
         }
         
-        // 如果没有文件，保持默认结构
+        // if there are no files, keep the default structure
         if (Object.keys(grouped).length === 0) {
           setFiles({});
         } else {
           setFiles(grouped);
-          // 默认展开第一个周
+          // default expand the first week
           if (Object.keys(grouped).length > 0) {
             setExpandedWeeks(new Set([Object.keys(grouped)[0]]));
           }
@@ -412,7 +409,7 @@ export default function Course() {
     }
   };
 
-  // 当课程信息加载完成后，获取文件列表
+  // when the course information is loaded, fetch the file list
   useEffect(() => {
     if (course && course.id) {
       fetchMaterials();
@@ -446,11 +443,11 @@ export default function Course() {
     
     const user = getCurrentUser();
     if (!user || user.role !== 'admin') {
-      alert('只有管理员可以删除文件');
+      alert('Only administrators can delete files');
       return;
     }
 
-    const confirmDelete = window.confirm(`确定要删除选中的 ${selectedFiles.size} 个文件吗？`);
+    const confirmDelete = window.confirm(`Are you sure you want to delete the selected ${selectedFiles.size} files?`);
     if (!confirmDelete) return;
 
     try {
@@ -461,24 +458,24 @@ export default function Course() {
         });
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.description || '删除失败');
+          throw new Error(error.description || 'Failed to delete');
         }
         return response.json();
       });
 
       await Promise.all(deletePromises);
       
-      // 刷新文件列表      
+      // refresh the file list      
       await fetchMaterials();
       setSelectedFiles(new Set());
-      alert('文件删除成功');
+      alert('Files deleted successfully');
     } catch (err) {
       console.error('Error deleting materials:', err);
-      alert('删除文件时出错: ' + err.message);
+      alert('Error deleting files: ' + err.message);
     }
   };
 
-  // 处理文件下载
+  // handle file download
   const handleDownload = (materialId, fileName) => {
     window.open(`${API_BASE}/materials/${materialId}/download`, '_blank');
   };
@@ -497,7 +494,6 @@ export default function Course() {
 
   return (
     <Box sx={{ p: 3, position: "relative" }}>
-      {/* ======= 标题栏 ======= */}
       <Box
         sx={{
           height: 32,
@@ -507,7 +503,6 @@ export default function Course() {
           mb: 1,
         }}
       >
-        {/* 标题组 */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1 }}>
           <Typography variant="h4">Course</Typography>
           <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
@@ -516,7 +511,7 @@ export default function Course() {
           </Typography>
         </Box>
 
-        {/* 通知图标 */}
+        {/* notification icon */}
         <Box
           sx={{
             display: "flex",
@@ -533,7 +528,7 @@ export default function Course() {
         </Box>
       </Box>
 
-      {/* ======= 分割线（与Dashboard保持一致） ======= */}
+      {/* separator line (same as Dashboard) */}
       <Box
         sx={{
           height: 2,
@@ -544,7 +539,7 @@ export default function Course() {
         }}
       />
 
-      {/* ======= 课程内容区域 ======= */}
+      {/* course content area */}
       <Box sx={{ height: "100%", overflowY: "hidden" }}>
         {loading ? (
           <Box
@@ -685,7 +680,7 @@ export default function Course() {
                     </Box>
                   ) : Object.keys(files).length === 0 ? (
                     <Box sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
-                      <Typography variant="body2">暂无文件</Typography>
+                      <Typography variant="body2">No files yet</Typography>
                     </Box>
                   ) : (
                     Object.keys(files).map((week) => (
@@ -736,7 +731,7 @@ export default function Course() {
                                       </Typography>
                                       <Box sx={{ display: "flex", gap: 1, mt: 0.5 }}>
                                         <Chip
-                                          label={file.type ? file.type.replace('_', ' ') : '文件'}
+                                          label={file.type ? file.type.replace('_', ' ') : 'File'}
                                           size="small"
                                           variant="outlined"
                                           sx={{ fontSize: "0.7rem", height: 20 }}
@@ -961,25 +956,25 @@ export default function Course() {
           <Button
             variant="contained"
             onClick={async () => {
-              // 验证表单
+              // validate the form
               if (!selectedFile) {
-                alert('请选择要上传的文件');
+                alert('Please select the file to upload');
                 return;
               }
 
               if (!course || !course.id) {
-                alert('课程信息不完整');
+                alert('Course information is incomplete');
                 return;
               }
 
               const user = getCurrentUser();
               if (!user || user.role !== 'admin') {
-                alert('只有管理员可以上传文件');
+                alert('Only administrators can upload files');
                 return;
               }
 
                           try {
-                // 创建FormData对象
+                // create FormData object
                 const formData = new FormData();
                 const trimmedName = fileName?.trim();
                 const isTaskType = fileType === 'assignment' || fileType === 'quiz' || fileType === 'lab';
@@ -1035,11 +1030,11 @@ await fetchMaterials();
                   setAdditionalNotes("");
                 } else {
                   const error = await response.json();
-                  alert('上传失败: ' + (error.description || '未知错误'));
+                  alert('Upload failed: ' + (error.description || 'Unknown error'));
                 }
               } catch (err) {
                 console.error('Error uploading file:', err);
-                alert('上传文件时出错: ' + err.message);
+                alert('Error uploading file: ' + err.message);
               }
             }}
             sx={{

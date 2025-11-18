@@ -32,7 +32,7 @@ import CalendarPanel from './CalendarPanel';
 import { authFetch, API_BASE } from "../../../api/http";
 
 
-/* ---------- 你的搜索栏样式 ---------- */
+/* your search bar style */
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
   borderRadius: theme.shape.borderRadius,
@@ -66,7 +66,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
-/* ---------- 名字从 localStorage 读取 ---------- */
+/* read the name from localStorage */
 function useDisplayName() {
   return useMemo(() => {
     try {
@@ -98,7 +98,7 @@ function useDisplayName() {
   }, []);
 }
 
-/* ---------- 根据时间获取问候语 ---------- */
+/* get the greeting based on the time */
 function useGreeting() {
   return useMemo(() => {
     const hour = new Date().getHours();
@@ -112,7 +112,7 @@ function useGreeting() {
   }, []);
 }
 
-/* ---------- 课程数据（示例） ---------- */
+/* course data (example) */
 const recentCourses = [
   {
     id: "5259_01567",
@@ -156,7 +156,7 @@ const recentCourses = [
   },
 ];
 
-/* ---------- 230×210 课程卡片 ---------- */
+/* 230×210 course card */
 const CourseCard = ({ course, navigate }) => (
   <Box
     sx={{
@@ -169,7 +169,7 @@ const CourseCard = ({ course, navigate }) => (
       overflow: "hidden",
     }}
   >
-    {/* 上半：封面 */}
+    {/* top: cover */}
     <Box
       sx={{
         height: 130,
@@ -182,11 +182,11 @@ const CourseCard = ({ course, navigate }) => (
         },
       }}
       onClick={() => {
-        // 跳转到课程页面
+        // navigate to the course page
         navigate(`/admin/course/${course.code ?? course.id}`);
       }}
     />
-    {/* 下半：信息 */}
+    {/* bottom: information */}
     <Box sx={{ p: 1.2, textAlign: "center" }}>
       <Typography
         variant="subtitle2"
@@ -211,26 +211,26 @@ export default function Dashboard() {
   const greeting = useGreeting();
   const navigate = useNavigate();
 
-  // —— 课程列表状态
-  const [courses, setCourses] = useState([]);  // 初始化为空数组，等待从后端加载
-  const [coursesLoading, setCoursesLoading] = useState(true);  // 初始为true，显示加载状态
+  // —— course list state
+  const [courses, setCourses] = useState([]);  // initialize as an empty array, wait for loading from backend
+  const [coursesLoading, setCoursesLoading] = useState(true);  // initialize as true, show loading state
 
-  // —— 学生列表状态
+  // —— student list state
   const [allStudents, setAllStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
 
-  // —— 翻页（固定显示 3 张）
+  // —— pagination (fixed display 3 cards)
   const CARDS_PER_PAGE = 3;
   const [page, setPage] = useState(0);
   const totalPages = Math.max(1, Math.ceil(courses.length / CARDS_PER_PAGE));
   const start = page * CARDS_PER_PAGE;
   const visible = courses.slice(start, start + CARDS_PER_PAGE);
 
-  // —— 弹窗
+  // —— popup
   const [openAdd, setOpenAdd] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   
-  // —— 创建课程表单数据
+  // —— create course form data
   const [courseForm, setCourseForm] = useState({
     course_name: "",
     course_code: "",
@@ -240,7 +240,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
-  // —— 删除课程相关状态
+  // —— delete course related state
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -260,7 +260,7 @@ export default function Dashboard() {
     }
   };
 
-  // —— 默认学习相关图片
+  // —— default learning related images
   const defaultCourseImages = [
     "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", // 书本和笔记本
     "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=800&auto=format&fit=crop", // 课堂学习
@@ -269,7 +269,7 @@ export default function Dashboard() {
     "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=800&auto=format&fit=crop", // 笔记本电脑学习
   ];
 
-  // —— 从后端获取课程列表
+  // —— fetch the course list from backend
   const fetchCourses = async () => {
     setCoursesLoading(true);
     const adminId = getCurrentUserId();
@@ -295,7 +295,7 @@ export default function Dashboard() {
         const data = await response.json();
         console.log("Fetched courses data:", data);
         
-        // 将后端数据转换为前端格式
+        // convert the backend data to the frontend format
         const formattedCourses = data.map((course, index) => ({
           id: course.id,
           code: course.code,
@@ -321,7 +321,7 @@ export default function Dashboard() {
     }
   };
 
-  // —— 从后端获取所有学生列表
+  // —— fetch all students from backend
   const fetchAllStudents = async () => {
     const adminId = getCurrentUserId();
     if (!adminId) {
@@ -331,7 +331,7 @@ export default function Dashboard() {
     
     setStudentsLoading(true);
     try {
-      // 先获取教师的所有课程
+      // first get all courses of the teacher
       const coursesResponse = await authFetch(`${API_BASE}/courses?created_by=${adminId}`);
       if (!coursesResponse.ok) {
         setAllStudents([]);
@@ -342,7 +342,7 @@ export default function Dashboard() {
       const coursesData = await coursesResponse.json();
       console.log('Fetching students for courses:', coursesData);
       
-      // 获取每个课程的学生进度
+      // get the student progress of each course
       const studentPromises = coursesData.map(async (course) => {
         try {
           const response = await authFetch(`${API_BASE}/progress/course/${course.id}/students`);
@@ -379,21 +379,21 @@ export default function Dashboard() {
     }
   };
 
-  // —— 组件挂载时获取课程列表和学生列表
+  // —— when the component is mounted, fetch the course list and student list
   useEffect(() => {
     fetchCourses();
     fetchAllStudents();
   }, []);
 
-  // —— 处理表单输入
+  // —— handle the form input
   const handleFormChange = (field, value) => {
     setCourseForm(prev => ({ ...prev, [field]: value }));
     setError(""); // Clear error when user types
   };
 
-  // —— 创建课程
+    // —— create course
   const handleAddCourse = async () => {
-    // 验证必填字段
+    // validate the required fields
     if (!courseForm.course_name || !courseForm.course_code) {
       setError("Course name and code are required");
       return;
@@ -426,11 +426,11 @@ export default function Dashboard() {
       });
 
       if (response.ok) {
-        // 成功创建
+        // successfully created
         setOpenAdd(false);
         setCourseForm({ course_name: "", course_code: "", description: "", image_url: "" });
         alert("Course created successfully!");
-        // 刷新课程列表
+        // refresh the course list
         fetchCourses();
       } else {
         const data = await response.json();
@@ -443,14 +443,14 @@ export default function Dashboard() {
     }
   };
 
-  // —— 关闭弹窗时重置表单
+  // —— when the popup is closed, reset the form
   const handleCloseAdd = () => {
     setOpenAdd(false);
     setCourseForm({ course_name: "", course_code: "", description: "", image_url: "" });
     setError("");
   };
 
-  // —— 删除课程
+  // —— delete course
   const handleDeleteCourse = async () => {
     if (!selectedCourseId) {
       setDeleteError("Please select a course to delete");
@@ -469,7 +469,7 @@ export default function Dashboard() {
         return;
       }
 
-      // 找到选中课程
+      // find the selected course
       const selectedCourse = courses.find(c => c.id === selectedCourseId);
       if (!selectedCourse) {
         setDeleteError("Course not found");
@@ -488,11 +488,11 @@ export default function Dashboard() {
       });
 
       if (response.ok) {
-        // 成功删除
+        // successfully deleted
         setOpenDel(false);
         setSelectedCourseId(null);
         alert("Course deleted successfully!");
-        // 刷新课程列表
+        // refresh the course list
         fetchCourses();
       } else {
         const data = await response.json();
@@ -505,7 +505,7 @@ export default function Dashboard() {
     }
   };
 
-  // —— 关闭删除弹窗时重置状态
+  // —— when the delete popup is closed, reset the state
   const handleCloseDel = () => {
     setOpenDel(false);
     setSelectedCourseId(null);
@@ -514,7 +514,7 @@ export default function Dashboard() {
 
   return (
     <Box sx={{ p: 3, position: "relative" }}>
-      {/* ======= 你的页头（不改布局） ======= */}
+      {/*  header (no change layout)  */}
       <Box
         sx={{
           height: 32,
@@ -524,7 +524,7 @@ export default function Dashboard() {
           mb: 1,
         }}
       >
-        {/* 左：标题组 */}
+        {/* left: title group */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: -1 }}>
           <Typography variant="h4">Dashboard</Typography>
           <CircleIcon sx={{ ml: "15%", fontSize: 10, color: "#B3B3B3" }} />
@@ -533,7 +533,7 @@ export default function Dashboard() {
           </Typography>
         </Box>
 
-        {/* 右：搜索 + 铃铛（保留你的绝对定位样式） */}
+        {/* right: search + bell */}
         <Box
           sx={{
             display: "flex",
@@ -557,7 +557,7 @@ export default function Dashboard() {
         </Box>
       </Box>
 
-      {/* ======= 分割线（保持原样） ======= */}
+      {/* separator line */}
       <Box
         sx={{
           height: 2,
@@ -568,7 +568,7 @@ export default function Dashboard() {
         }}
       />
 
-      {/* ======= 问候 + 右侧操作按钮 ======= */}
+      {/* greeting + right operation buttons */}
       <Box
         sx={{
           display: "flex",
@@ -634,7 +634,7 @@ export default function Dashboard() {
              <Typography variant="h6" sx={{ m: 0 }}>All Courses</Typography>
            </Box>
 
-          {/* Carousel row (left arrow + window + right arrow) */}
+          {/* Carousel row  */}
           <Box
             sx={{
               display: "flex",
@@ -832,7 +832,7 @@ export default function Dashboard() {
         </DialogActions>
       </Dialog>
 
-      {/* ======= 弹窗：Delete ======= */}
+      {/* popup: Delete */}
       <Dialog open={openDel} onClose={handleCloseDel} fullWidth maxWidth="sm">
         <DialogTitle>Delete Course</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -870,7 +870,7 @@ export default function Dashboard() {
           {selectedCourseId && (
             <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 1 }}>
               <Typography variant="body2" color="warning.main">
-                ⚠️ Warning: This action cannot be undone. All related enrollments will also be deleted.
+                 Warning: This action cannot be undone. All related enrollments will also be deleted.
               </Typography>
             </Box>
           )}

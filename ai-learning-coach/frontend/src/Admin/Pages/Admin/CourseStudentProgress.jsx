@@ -7,13 +7,13 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 export default function CourseStudentProgress({
   rows = [],
-  pageSize = 8,          // 每页条数
-  height = 420,          // 组件固定高度
-  maxWidth = 800,       // 最大宽度
+  pageSize = 8,          // number of rows per page
+  height = 420,          // component fixed height
+  maxWidth = 800,       // maximum width
   onGiveReward,
 }) {
   const [page, setPage] = useState(1);
-  const [inputRewards, setInputRewards] = useState({}); // 待发放的奖励分数（输入框中的临时值）
+  const [inputRewards, setInputRewards] = useState({}); // temporary value in the input box
   const [submitting, setSubmitting] = useState({});
 
   const { total, totalPages, pageRows } = useMemo(() => {
@@ -24,7 +24,7 @@ export default function CourseStudentProgress({
     return { total, totalPages, pageRows };
   }, [rows, page, pageSize]);
 
-  // 保证当前页在数据变更后也有效
+  // ensure the current page is valid after data changes
   if (page > Math.max(1, Math.ceil(rows.length / pageSize))) {
     setTimeout(() => setPage(1), 0);
   }
@@ -33,7 +33,7 @@ export default function CourseStudentProgress({
     setInputRewards({});
   }, [rows]);
 
-  // 处理输入框的奖励分数变化（临时值）
+  // handle the reward score change in the input box (temporary value)
   const handleRewardChange = (studentId, value) => {
     setInputRewards(prev => ({
       ...prev,
@@ -45,7 +45,7 @@ export default function CourseStudentProgress({
     const pointsToAdd = inputRewards[studentId] || 0;
 
     if (pointsToAdd <= 0 || !onGiveReward) {
-      return; // 如果没有要发放的分数或未提供回调，不执行
+      return; // if there is no reward to give or the callback is not provided, do not execute
     }
 
     try {
@@ -73,7 +73,7 @@ export default function CourseStudentProgress({
       style={{
         width: '100%',
         maxWidth,
-        height,                  // 固定整体高度
+        height,                  // fixed overall height
         border: '1px solid rgba(0,0,0,0.2)',
         borderRadius: 8,
         background: '#fff',
@@ -81,7 +81,7 @@ export default function CourseStudentProgress({
         flexDirection: 'column',
       }}
     >
-      {/* 表格区域：占满剩余空间，固定 6 行时不会溢出 */}
+      {/* table area: fill the remaining space, do not overflow when fixed 6 rows */}
       <div style={{ flex: 1, overflow: 'hidden', padding: 16 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -95,10 +95,10 @@ export default function CourseStudentProgress({
           </thead>
           <tbody>
             {pageRows.map((r, i) => {
-              // 使用name作为唯一标识符
+              // use name as the unique identifier
               const studentKey = r.id ?? r.studentId ?? r.name;
-              const inputValue = inputRewards[studentKey] || 0; // 临时输入值
-              const totalPoints = Number(r.reward) || 0; // 后端返回的累计奖励分数
+              const inputValue = inputRewards[studentKey] || 0; // temporary input value
+              const totalPoints = Number(r.reward) || 0; // cumulative reward score returned from backend
               const isSubmitting = !!submitting[studentKey];
               
               return (
@@ -175,7 +175,7 @@ export default function CourseStudentProgress({
                 </tr>
               );
             })}
-            {/* 若最后一页不足条数，用空行填充，保持高度一致 */}
+            {/* if the last page has less than the number of rows, use empty rows to fill, keep the height consistent */}
             {Array.from({ length: Math.max(0, pageSize - pageRows.length) }).map((_, idx) => (
               <tr key={`placeholder-${idx}`} style={{ height: 36 }}>
                 <td style={td} />
@@ -189,7 +189,7 @@ export default function CourseStudentProgress({
         </table>
       </div>
 
-      {/* 自定义翻页条：固定在底部，无间距 */}
+      {/* custom pagination bar: fixed at the bottom, no spacing */}
       <Box
         sx={{
           borderTop: '1px solid rgba(0,0,0,0.06)',

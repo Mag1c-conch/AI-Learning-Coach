@@ -14,21 +14,21 @@ body{
   color:var(--ink);
 }
 
-/* 占满视口并把卡片居中 */
+/* fill the viewport and center the card */
 .container{
-  min-height: 100vh;      /* 桌面 */
-  min-height: 100dvh;     /* 移动端更精准 */
+  min-height: 100vh;      /* desktop */
+  min-height: 100dvh;     /* mobile more accurate */
   display: flex;
-  align-items: center;     /* 垂直居中 */
-  justify-content: center; /* 水平居中 */
+  align-items: center;     /* vertically center */
+  justify-content: center; /* horizontally center */
   padding: 24px;
   width: 100%;
 }
 
-/* 卡片 */
+/* card */
 .card{
   width: min(1040px, 95vw);
-  margin: 0 auto;             /* 双保险：水平居中 */
+  margin: 0 auto;             /* double insurance: horizontally center */
   background:var(--card);
   border-radius:var(--radius);
   box-shadow:0 10px 30px rgba(2,6,23,.08);
@@ -38,20 +38,20 @@ body{
   padding:32px;
 }
 
-/* 响应式：窄屏隐藏右侧色块 */
+/* responsive: narrow screen hide the right color block */
 @media (max-width:880px){
   .card{ grid-template-columns:1fr; }
   .illustration{ display:none; }
 }
 
-/* 小分组标题 */
+/* small group title */
 .section-label{
   display:block;
   margin:18px 0 8px;
   font-weight:600;
 }
 
-/* 右侧背景色块 */
+/* right background color block */
 .illustration{
   background:var(--illustration);
   border-radius:14px;

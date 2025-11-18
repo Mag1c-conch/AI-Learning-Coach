@@ -216,7 +216,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* 右侧图片 */}
+          {/* right image */}  
           <aside className="illustration" aria-hidden="true">
             <img 
               src={signinImage} 

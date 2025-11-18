@@ -1,4 +1,3 @@
-/* Minimal root layout – 不对页面做任何额外布局约束 */
 html, body, #root {
   height: 100%;
   width: 100%;
@@ -8,8 +7,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  display: block;        /* 关键：去掉 flex 布局，避免把内容“推向一边” */
+  display: block;        /* important: remove flex layout, avoid pushing content to one side */
   background: transparent;
 }
 
-/* 其余的重置/主题由组件自身或 App.css 负责 */

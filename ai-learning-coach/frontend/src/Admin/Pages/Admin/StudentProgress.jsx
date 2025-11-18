@@ -7,9 +7,9 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 export default function StudentProgress({
   rows = [],
-  pageSize = 6,          // 每页条数（默认 8）
-  height = 290,          // 组件固定高度（可按需微调）
-  maxWidth = 850,        // 最大宽度，保持布局稳定
+  pageSize = 6,          
+  height = 290,          
+  maxWidth = 850,        // maximum width, keep the layout stable
 }) {
   const [page, setPage] = useState(1);
 
@@ -21,7 +21,7 @@ export default function StudentProgress({
     return { total, totalPages, pageRows };
   }, [rows, page, pageSize]);
 
-  // 保证当前页在数据变更后也有效
+  // ensure the current page is valid after data changes
   if (page > Math.max(1, Math.ceil(rows.length / pageSize))) {
     setTimeout(() => setPage(1), 0);
   }
@@ -31,7 +31,7 @@ export default function StudentProgress({
       style={{
         width: '100%',
         maxWidth,
-        height,                  // 固定整体高度
+        height,                  // fixed overall height
         border: '1px solid rgba(0,0,0,0.2)',
         borderRadius: 8,
         background: '#fff',
@@ -39,7 +39,7 @@ export default function StudentProgress({
         flexDirection: 'column',
       }}
     >
-      {/* 表格区域：占满剩余空间，固定 5 行时不会溢出；若字段多可设置 overflow:auto */}
+      {/* table area: fill the remaining space, do not overflow when fixed 5 rows; if the fields are many, set overflow:auto */}
       <div style={{ flex: 1, overflow: 'hidden', padding: 16 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -67,7 +67,7 @@ export default function StudentProgress({
                 </tr>
               );
             })}
-            {/* 若最后一页不足 5 条，用空行填充，保持高度一致（可选） */}
+            {/* if the last page has less than 5 rows, use empty rows to fill, keep the height consistent */}
             {Array.from({ length: Math.max(0, pageSize - pageRows.length) }).map((_, idx) => (
               <tr key={`placeholder-${idx}`} style={{ height: 36 }}>
                 <td style={td} />
@@ -80,7 +80,7 @@ export default function StudentProgress({
         </table>
       </div>
 
-      {/* 自定义翻页条：固定在底部，无间距 */}
+      {/* custom pagination bar: fixed at the bottom, no spacing */}
       <Box
         sx={{
           borderTop: '1px solid rgba(0,0,0,0.06)',

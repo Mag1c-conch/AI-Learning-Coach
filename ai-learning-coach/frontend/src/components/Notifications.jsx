@@ -26,7 +26,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import { useSyncExternalStore } from "react";
 import http from "../api/http";
 
-// ========== 小工具 ==========
+// small tool
 function getCurrentUserId() {
   try {
     const token =
@@ -39,8 +39,7 @@ function getCurrentUserId() {
   }
 }
 
-// ========== 极简全局 Store（单例） ==========
-// 使用 useSyncExternalStore 让多个组件共享 & 同步刷新（无需 Provider）
+// simple global store (singleton)
 const createStore = () => {
   let state = {
     uid: getCurrentUserId(),
@@ -79,7 +78,6 @@ const createStore = () => {
       });
       const { data } = await http.get(`/feedback?${params.toString()}`);
       setState({ list: Array.isArray(data) ? data : [] });
-      // 可选广播
       window.dispatchEvent(new CustomEvent("feedback:updated", { detail: { notifications: data || [] } }));
     } catch (e) {
       console.error("Failed to load notifications", e?.response?.data || e.message);
@@ -149,7 +147,7 @@ const createStore = () => {
     setState({ list: [] });
   };
 
-  // 公开 API
+  // public API
   return {
     subscribe,
     getSnapshot,
@@ -160,16 +158,15 @@ const createStore = () => {
     deleteFeedback,
     deleteAllFeedback,
     unreadCount,
-    // 供外界在登录/登出时更新 uid
+    // update uid when logging in/out
     setUid: (uid) => setState({ uid }),
-    // 允许调整轮询间隔（可选）
     setPollMs: (ms) => setState({ pollMs: ms }),
   };
 };
 
 const store = createStore();
 
-// 监听登录事件或 storage 变化，自动更新 uid & 刷新
+// listen to login events or storage changes, automatically update uid & refresh
 (function initGlobalListeners() {
   const updateUid = () => store.setUid(getCurrentUserId());
   window.addEventListener("login:success", updateUid);
@@ -178,12 +175,12 @@ const store = createStore();
   });
 })();
 
-// ========== 组件：任何页面直接用就能同步 ==========
+// component: any page can use it to synchronize
 export default function NotificationsBell() {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const { open, list, loading, pollMs } = snap;
 
-  // 初次拉取 + 轮询
+  // initial fetch + polling
   useEffect(() => {
     store.fetchNotifications();
     const id = window.setInterval(store.fetchNotifications, pollMs);

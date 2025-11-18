@@ -6,11 +6,11 @@ export const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5001
 
 const http = axios.create({
   baseURL: API_BASE,
-  timeout: 60000, // 增加到 60 秒，因为 AI 请求需要更长时间
+  timeout: 60000, 
   withCredentials: false,
 });
 
-// 添加请求拦截器：打印日志并自动附带 Authorization
+// add request interceptor: print log and automatically append Authorization
 http.interceptors.request.use(
   (config) => {
     const token = getAuthToken();
@@ -29,7 +29,7 @@ http.interceptors.request.use(
   }
 );
 
-// 添加响应拦截器用于调试
+// add response interceptor for debugging
 http.interceptors.response.use(
   (response) => {
     console.log("API Response:", response.config.url, response.status);
