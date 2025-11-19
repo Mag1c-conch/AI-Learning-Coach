@@ -52,7 +52,7 @@ export default function CourseStudentProgress({
       setSubmitting(prev => ({ ...prev, [studentId]: true }));
       await onGiveReward(studentId, pointsToAdd);
       setInputRewards(prev => ({ ...prev, [studentId]: 0 }));
-      console.log(`✅ Gave ${pointsToAdd} points to student ${studentId}.`);
+      console.log(` Gave ${pointsToAdd} points to student ${studentId}.`);
     } catch (error) {
       console.error("Failed to give reward", error);
       const message = error?.message || "Failed to give reward";

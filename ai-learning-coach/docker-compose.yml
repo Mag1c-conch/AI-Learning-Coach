@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-learning-coach-backend
+    ports:
+      - "5001:5001"   # for debugging, frontend uses nginx /api proxy
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:////app/instance/app.db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - REDIS_URL=${REDIS_URL:-}
+      - SKIP_DB_CREATE_ALL=0
+    volumes:
+      - ./backend/instance:/app/instance
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/test"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_BASE=/api
+    container_name: ai-learning-coach-frontend
+    ports:
+      - "3000:80"   
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
