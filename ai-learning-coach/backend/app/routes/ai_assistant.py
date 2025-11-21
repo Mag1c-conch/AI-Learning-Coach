@@ -149,10 +149,6 @@ def get_conversation(conversation_id: int):
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["DELETE"])
 @jwt_required(optional=True)
 def delete_conversation_route(conversation_id: int):
-    """
-    Delete the specified conversation and all of its messages.
-    Requires a user_id query parameter to validate ownership.
-    """
     user_id_param = request.args.get("user_id", type=int)
     user = resolve_user(user_id_param, allow_token=True, require=True)
 
@@ -526,7 +522,7 @@ def _summarize_material(material, preview_limit: int = _MATERIAL_PREVIEW_CHARS):
     }
     try:
         preview = _load_material_text(material, limit=preview_limit)
-    except Exception as exc:  # noqa: BLE001 - best effort preview
+    except Exception as exc: 
         current_app.logger.debug("Unable to extract preview for material %s: %s", material.id, exc)
     else:
         if preview:

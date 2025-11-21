@@ -308,7 +308,7 @@ def _load_material_text(material: Material, limit: int = 4000) -> str:
             content = fh.read()
     elif ext == ".docx":
         try:
-            from docx import Document  # type: ignore
+            from docx import Document
         except ImportError as exc:
             raise ValueError("python-docx is not installed on the server; cannot parse .docx files.") from exc
         document = Document(file_path)
@@ -319,7 +319,7 @@ def _load_material_text(material: Material, limit: int = 4000) -> str:
             from pdfminer.high_level import extract_text  # type: ignore
         except ImportError:
             try:
-                import PyPDF2  # type: ignore
+                import PyPDF2
             except ImportError as exc:
                 raise ValueError("Neither pdfminer.six nor PyPDF2 is installed; cannot read .pdf files.") from exc
             try:

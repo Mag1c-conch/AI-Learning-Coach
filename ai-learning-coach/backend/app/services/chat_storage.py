@@ -1,14 +1,10 @@
-"""Helpers for persisting AI assistant conversations in both the database and Redis."""
 from __future__ import annotations
-
 import json
 from datetime import datetime, timezone
 from typing import List, Optional
-
 from flask import current_app
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
-
 from ..extensions import db
 from ..models import Conversation, ConversationMessage
 
@@ -172,10 +168,6 @@ def get_conversation_with_history(conversation_id: int, message_limit: Optional[
 
 
 def delete_conversation(conversation_id: int, user_id: Optional[int] = None) -> bool:
-    """
-    Delete a conversation and all of its messages.
-    When user_id is provided we verify ownership before removing it.
-    """
     conversation = db.session.get(Conversation, conversation_id)
     if not conversation:
         return False

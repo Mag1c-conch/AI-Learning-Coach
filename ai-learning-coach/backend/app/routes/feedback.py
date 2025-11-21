@@ -40,11 +40,7 @@ def _parse_bool(value, default=None):
 
 @bp.route("", methods=["POST"])
 def create_feedback():
-    """
-    Create a feedback record. The body must include teacher_id, student_id, and content (course_id is optional).
-    Only teachers (UserRole.ADMIN) may send feedback, and recipients must be students (UserRole.STUDENT).
-    When course_id is present, the teacher must own that course.
-    """
+
     payload = _require_json()
 
     teacher_id = _coerce_int("teacher_id", payload.get("teacher_id"))
@@ -84,11 +80,7 @@ def create_feedback():
 
 @bp.route("", methods=["GET"])
 def list_feedback():
-    """
-    Return feedback entries filtered by teacher_id, student_id, or course_id (at least one is required).
-    The include_related flag controls whether related teacher, student, and course data are included.
-    Use limit to cap how many entries are returned.
-    """
+
     query = Feedback.query
 
     teacher_id = request.args.get("teacher_id", type=int)
@@ -117,10 +109,7 @@ def list_feedback():
 
 @bp.route("/<int:feedback_id>/read", methods=["PATCH"])
 def mark_feedback_read(feedback_id):
-    """
-    Mark a feedback entry as read. Requires student_id and the desired is_read flag.
-    Only the recipient student may update the read status.
-    """
+
     payload = _require_json()
     
     student_id = _coerce_int("student_id", payload.get("student_id"))
@@ -145,9 +134,7 @@ def mark_feedback_read(feedback_id):
 
 @bp.route("/<int:feedback_id>", methods=["DELETE"])
 def delete_feedback(feedback_id):
-    """
-    Delete a feedback entry. Only the recipient student may remove it.
-    """
+
     student_id = request.args.get("student_id", type=int)
     if not student_id:
         abort(400, description="student_id is required")

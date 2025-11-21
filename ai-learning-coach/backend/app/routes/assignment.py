@@ -78,15 +78,7 @@ def create_assignment():
 @bp.route("/<int:assignment_id>/grades", methods=["POST"])
 @jwt_required(optional=True)
 def upsert_assignment_grade(assignment_id: int):
-    """
-    Creates or updates a grade for a student's assignment submission.
-    Expects JSON body with fields:
-    - teacher_id: int, id of the teacher grading (must own the assignment)
-    - student_id: int, id of the student being graded
-    - score: float, numeric grade value
-    - comment: optional text feedback
-    Returns 201 for new grade records and 200 for updates.
-    """
+
     assignment = Assignment.query.get_or_404(assignment_id)
 
     payload = request.get_json(silent=True)
@@ -163,15 +155,7 @@ def upsert_assignment_grade(assignment_id: int):
 @bp.route("/<int:assignment_id>/grades", methods=["GET"])
 @jwt_required(optional=True)
 def list_assignment_grades(assignment_id: int):
-    """
-    Lists grades for an assignment.
-    Query parameters:
-    - viewer_id: required int, id of the user requesting the grades.
-        * If teacher (admin) who owns the assignment, all grades are returned.
-        * If student, only their grade is returned.
-    - student_id: optional int, further filters grades (teachers only).
-    - include_related: optional bool, include related user information (default true).
-    """
+
     assignment = Assignment.query.get_or_404(assignment_id)
 
     viewer_id = request.args.get("viewer_id", type=int)

@@ -170,13 +170,7 @@ def _ensure_student_enrolled(course_id: int, student_id: int) -> None:
 
 @bp.route("", methods=["GET"])
 def list_materials():
-    """
-    Optional query parameters:
-    - course_id: int, filter materials by course
-    - include_submissions: bool, when true include student assignment submissions (default false)
-    Returns 200 with an array of material JSON objects.
-    Note: populate minimal assignment fields (including UTC/ISO due_date) when assignment_id is present.
-    """
+
     course_id = request.args.get("course_id", type=int)
     include_submissions = request.args.get("include_submissions", "false").lower() in {"true", "1", "yes"}
 
@@ -217,19 +211,7 @@ def list_materials():
 # upload new material to a course (only admin)
 @bp.route("", methods=["POST"])
 def upload_material():
-    """
-    Expects multipart/form-data payload with fields:
-    - file: binary file object to upload
-    - course_id: int, target course ID
-    - uploaded_by: int, admin user ID performing the upload
-    Optional form fields:
-    - file_type: str, one of {assignment, quiz, lab, lecture_slide, learning_material, practice}
-    - week_number: int, 1-based week index
-    - custom_name: str, rename the stored file
-    - assignment_id: link to an existing assignment when file_type is assignment/quiz/lab
-    - assignment_title / assignment_description / assignment_due_date / assignment_optional: metadata for a new assignment
-    Returns 201 with the created material JSON (and assignment metadata when applicable).
-    """
+
     if "file" not in request.files:
         abort(400, description="No file part in the request")
 
@@ -339,7 +321,6 @@ def upload_material():
 
     payload = material.to_dict()
     if assignment:
-        # Return due_date as a Z-suffixed ISO string for consistent client parsing
         payload["assignment"] = {
             **assignment.to_dict(),
             "due_date": _iso_utc(assignment.due_date),
@@ -349,12 +330,7 @@ def upload_material():
 
 @bp.route("/<int:material_id>", methods=["DELETE"])
 def delete_material(material_id: int):
-    """
-    Expects query parameter:
-    - deleted_by: int, admin user ID performing the deletion
-    Removes the file from storage (if present) and deletes the DB record.
-    Returns 200 with a confirmation message on success.
-    """
+
     deleted_by = request.args.get("deleted_by", type=int)
     if not deleted_by:
         abort(400, description="missing required deleted_by param")
@@ -402,11 +378,7 @@ def delete_material(material_id: int):
 # Download file
 @bp.route("/<int:material_id>/download", methods=["GET"])
 def download_material(material_id: int):
-    """
-    Streams the stored file associated with the material record.
-    Returns 200 with the file content when available.
-    Query parameter 'preview=true' to view inline instead of download.
-    """
+
     material = Material.query.get_or_404(material_id)
     file_path = _material_file_path(material)
     if not os.path.isfile(file_path):
@@ -425,13 +397,7 @@ def download_material(material_id: int):
 # Submit file (students)
 @bp.route("/assignments/<int:assignment_id>/submissions", methods=["POST"])
 def submit_assignment_material(assignment_id: int):
-    """
-    Allows a student to upload an assignment submission.
-    Expects multipart/form-data payload with fields:
-    - file: binary file object to upload
-    - student_id: int, id of the student submitting
-    Returns 201 with created material JSON (including student info).
-    """
+
     assignment = Assignment.query.get_or_404(assignment_id)
 
     if "file" not in request.files:
@@ -494,14 +460,7 @@ def submit_assignment_material(assignment_id: int):
 
 @bp.route("/assignments/<int:assignment_id>/submissions", methods=["GET"])
 def list_assignment_submissions(assignment_id: int):
-    """
-    Lists assignment submissions. Requires query parameter:
-    - viewer_id: id of the user requesting the list.
-      * If viewer is the teacher (admin) who owns the assignment, returns all submissions.
-      * If viewer is a student, returns only their submissions.
-    Optional query parameters:
-    - student_id: filter submissions to a specific student (teachers only).
-    """
+
     assignment = Assignment.query.get_or_404(assignment_id)
 
     viewer_id = request.args.get("viewer_id", type=int)

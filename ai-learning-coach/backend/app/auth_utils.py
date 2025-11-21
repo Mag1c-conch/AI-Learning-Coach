@@ -10,7 +10,6 @@ from .models import User, UserRole
 
 
 def create_user_access_token(user: User) -> str:
-    """Create a JWT access token for the given user."""
     claims = {
         "role": user.role.value if isinstance(user.role, UserRole) else str(user.role),
     }
@@ -18,7 +17,6 @@ def create_user_access_token(user: User) -> str:
 
 
 def current_user_from_token(optional: bool = False) -> Optional[User]:
-    """Return the authenticated user resolved from JWT identity."""
     identity = get_jwt_identity()
     if not identity:
         if optional:
@@ -46,7 +44,6 @@ def current_user_from_token(optional: bool = False) -> Optional[User]:
 
 
 def require_role(user: User, role: UserRole) -> None:
-    """Abort if the provided user does not match the role."""
     if not isinstance(user.role, UserRole):
         abort(403, description="invalid user role")
     if user.role != role:
@@ -60,13 +57,6 @@ def resolve_user(
     required_role: Optional[UserRole] = None,
     require: bool = True,
 ) -> Optional[User]:
-    """
-    Resolve a user either from an explicit ID or from the JWT token.
-
-    When no user can be determined:
-      * if `require` is True -> abort with 401/400
-      * otherwise returns None
-    """
     user: Optional[User] = None
     if provided_user_id is not None:
         user = User.query.get(provided_user_id)

@@ -638,7 +638,7 @@ const Dashboard = () => {
     };
     window.addEventListener("enrollment:updated", onUpdated);
     return () => window.removeEventListener("enrollment:updated", onUpdated);
-  }, [uid, rebuildProgress]);
+  }, [uid]);
 
   // recompute derived state whenever courses or uid changes
   useEffect(() => {

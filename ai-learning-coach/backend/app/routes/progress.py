@@ -14,10 +14,7 @@ bp = Blueprint("progress", __name__, url_prefix="/progress")
 
 
 def _resolve_student(student_id: int) -> User:
-    """
-    Students may only touch their own progress, so we map the JWT identity to a student
-    and double-check the requested id.
-    """
+
     student = resolve_user(
         None,
         required_role=UserRole.STUDENT,
@@ -30,10 +27,7 @@ def _resolve_student(student_id: int) -> User:
 
 
 def _resolve_teacher(course: Course) -> User:
-    """
-    Teacher-only endpoints use the same JWT resolution but verify that the caller owns
-    the course they are inspecting.
-    """
+
     teacher = resolve_user(
         None,
         required_role=UserRole.ADMIN,
@@ -59,10 +53,6 @@ def _iso(dt):
 
 
 def _normalize_items(payload):
-    """
-    Requests may send a partial list of items. We run the basic sanitisation inline so
-    each route stays short like the rest of the codebase.
-    """
     if not isinstance(payload, list):
         abort(400, description="items must be an array")
 

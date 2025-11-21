@@ -238,9 +238,6 @@ def list_user_enrollments(user_id):
 # Get all students enrolled in a course
 @bp.route("/<int:course_id>/students", methods=["GET"])
 def list_course_students(course_id):
-    """
-    Return all students enrolled in the course.
-    """
     # Ensure the course exists
     course = Course.query.get_or_404(course_id)
 

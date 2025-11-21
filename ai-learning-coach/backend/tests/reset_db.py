@@ -68,7 +68,7 @@ def _resolve_sqlite_path(database_uri: str) -> Optional[Path]:
         return None
 
     path_str = database_uri.replace("sqlite:///", "", 1)
-    # Handle Windows drive letters that may start with an extra slash (e.g. /C:/...)
+    # Handle Windows drive letters that may start with an extra slash
     if len(path_str) >= 3 and path_str[0] == "/" and path_str[2] == ":":
         path_str = path_str[1:]
     return Path(path_str).expanduser().resolve()
