@@ -9,15 +9,15 @@ from ..models import Conversation, ConversationMessage
 _DEFAULT_REDIS_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 days
 
 
-def _redis_client():
+def redis_client():
     return current_app.extensions.get("redis")
 
 
-def _redis_key(conversation_id):
+def redis_key(conversation_id):
     return f"conversation:{conversation_id}"
 
 
-def _redis_ttl():
+def redis_ttl():
     return int(current_app.config.get("CHAT_HISTORY_TTL", _DEFAULT_REDIS_TTL_SECONDS))
 
 
@@ -48,22 +48,22 @@ def append_message(conversation_id, role, content):
 
     db.session.commit()
 
-    client = _redis_client()
+    client = redis_client()
     if client:
         payload = {
             "role": role,
             "content": content,
             "created_at": message.created_at.isoformat() if message.created_at else None,
         }
-        client.rpush(_redis_key(conversation_id), json.dumps(payload))
-        ttl = _redis_ttl()
+        client.rpush(redis_key(conversation_id), json.dumps(payload))
+        ttl = redis_ttl()
         if ttl:
-            client.expire(_redis_key(conversation_id), ttl)
+            client.expire(redis_key(conversation_id), ttl)
 
     return message
 
 
-def _deserialize_redis_entries(entries):
+def parse_redis_messages(entries):
     history = []
     for entry in entries:
         try:
@@ -74,8 +74,8 @@ def _deserialize_redis_entries(entries):
 
 
 def get_history(conversation_id, limit=None):
-    client = _redis_client()
-    key = _redis_key(conversation_id)
+    client = redis_client()
+    key = redis_key(conversation_id)
     history = []
 
     if client:
@@ -84,7 +84,7 @@ def get_history(conversation_id, limit=None):
                 entries = client.lrange(key, 0, -1)
             else:
                 entries = client.lrange(key, max(0, -limit), -1)
-            history = _deserialize_redis_entries(entries)
+            history = parse_redis_messages(entries)
         except Exception:
             history = []
 
@@ -115,7 +115,7 @@ def get_history(conversation_id, limit=None):
             with client.pipeline() as pipe:
                 for item in history:
                     pipe.rpush(key, json.dumps(item))
-                ttl = _redis_ttl()
+                ttl = redis_ttl()
                 if ttl:
                     pipe.expire(key, ttl)
                 pipe.execute()
@@ -174,10 +174,10 @@ def delete_conversation(conversation_id, user_id=None):
         return False
 
     # Remove the Redis cache entry
-    client = _redis_client()
+    client = redis_client()
     if client:
         try:
-            client.delete(_redis_key(conversation_id))
+            client.delete(redis_key(conversation_id))
         except Exception:
             pass
 

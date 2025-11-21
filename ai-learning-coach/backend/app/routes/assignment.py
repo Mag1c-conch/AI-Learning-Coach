@@ -10,7 +10,7 @@ from ..auth_utils import resolve_user
 bp = Blueprint("assignment", __name__, url_prefix="/assignments")
 
 
-def _ensure_student_enrolled(course_id, student_id):
+def ensure_student_enrolled(course_id, student_id):
     if not Enrollment.query.filter_by(course_id=course_id, user_id=student_id).first():
         abort(403, description="student is not enrolled in this course")
 
@@ -117,7 +117,7 @@ def upsert_assignment_grade(assignment_id):
     if student.role != UserRole.STUDENT:
         abort(403, description="grades may only be recorded for students")
 
-    _ensure_student_enrolled(assignment.course_id, student.id)
+    ensure_student_enrolled(assignment.course_id, student.id)
 
     grade = AssignmentGrade.query.filter_by(
         assignment_id=assignment.id,
@@ -166,7 +166,7 @@ def list_assignment_grades(assignment_id):
     query = AssignmentGrade.query.filter_by(assignment_id=assignment.id)
 
     if viewer.role == UserRole.STUDENT:
-        _ensure_student_enrolled(assignment.course_id, viewer.id)
+        ensure_student_enrolled(assignment.course_id, viewer.id)
         query = query.filter_by(student_id=viewer.id)
     elif viewer.role == UserRole.ADMIN:
         if viewer.id != assignment.teacher_id:

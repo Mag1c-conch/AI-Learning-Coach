@@ -1,19 +1,19 @@
 from google import genai
 from flask import current_app
 
-_SUPPORTED_ROLES = {"user", "model"}
+ALLOWED_ROLES = {"user", "model"}
 
-def _format_messages(messages):
+def format_messages(messages):
     formatted = []
     for m in messages or []:
         role = m.get("role")
         content = m.get("content")
-        if role not in _SUPPORTED_ROLES or not content:
+        if role not in ALLOWED_ROLES or not content:
             raise ValueError("each message must include role ('user' or 'model') and non-empty content")
         formatted.append({"role": role, "parts": [{"text": str(content)}]})
     return formatted
 
-def _extract_text(resp):
+def extract_text(resp):
     text = getattr(resp, "text", None)
     if isinstance(text, str) and text.strip():
         return text.strip()
@@ -35,7 +35,7 @@ def generate_reply(messages, system_prompt=None, **generation_kwargs):
     client = genai.Client(api_key=api_key)
     model_name = current_app.config.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-    contents = _format_messages(messages)
+    contents = format_messages(messages)
 
     cast_map = {
         "temperature": float,
@@ -66,7 +66,7 @@ def generate_reply(messages, system_prompt=None, **generation_kwargs):
     except Exception as exc:
         raise RuntimeError(f"Gemini API call failed: {exc}") from exc
 
-    text = _extract_text(resp)
+    text = extract_text(resp)
     if text:
         return text
 
@@ -98,7 +98,7 @@ def generate_reply(messages, system_prompt=None, **generation_kwargs):
                 "max_output_tokens": 512
             },
         )
-        text2 = _extract_text(resp2)
+        text2 = extract_text(resp2)
         if text2:
             current_app.logger.info("Gemini fallback retry succeeded")
             return text2

@@ -153,7 +153,7 @@ def delete_conversation_route(conversation_id):
     return jsonify({"message": "conversation deleted successfully"}), 200
 
 
-def _parse_json_reply(text):
+def parse_json_reply(text):
     if not text:
         return None
     candidate = text.strip()
@@ -274,7 +274,7 @@ def grade_submission():
     except RuntimeError as err:
         abort(502, description=str(err))
 
-    parsed = _parse_json_reply(reply)
+    parsed = parse_json_reply(reply)
     response_payload = {
         "grading": parsed,
         "raw_reply": reply,
@@ -329,10 +329,10 @@ def get_plan():
             .all()
         )
 
-    week_start, week_end = _determine_week_window()
-    plan_context = _build_plan_context(student, courses, assignments, materials, week_start, week_end)
+    week_start, week_end = determine_week_window()
+    plan_context = build_plan_context(student, courses, assignments, materials, week_start, week_end)
     messages = [{"role": "user", "content": json.dumps(plan_context, ensure_ascii=False)}]
-    system_prompt = _build_study_plan_prompt(week_start, week_end)
+    system_prompt = build_study_plan_prompt(week_start, week_end)
 
     plan_payload = None
     plan_source = "ai"
@@ -343,7 +343,7 @@ def get_plan():
             temperature=0.2,
             max_output_tokens=_STUDY_PLAN_MAX_OUTPUT_TOKENS,
         )
-        plan_payload = _parse_json_reply(reply)
+        plan_payload = parse_json_reply(reply)
     except ValueError as err:
         abort(400, description=str(err))
     except RuntimeError as err:
@@ -353,9 +353,9 @@ def get_plan():
     if plan_payload is None:
         plan_source = "fallback"
         current_app.logger.warning("Using fallback study plan generation for student_id=%s", student_id)
-        plan_payload = _build_fallback_plan(student, courses, materials, week_start, week_end)
+        plan_payload = build_fallback_plan(student, courses, materials, week_start, week_end)
 
-    normalized_plan = _normalize_plan_payload(
+    normalized_plan = normalize_plan_payload(
         plan_payload,
         student_id=student.id,
         week_start=week_start,
@@ -366,8 +366,8 @@ def get_plan():
 
     if not any(day.get("tasks") for day in normalized_plan.get("days", [])):
         plan_source = "fallback"
-        fallback_payload = _build_fallback_plan(student, courses, materials, week_start, week_end)
-        normalized_plan = _normalize_plan_payload(
+        fallback_payload = build_fallback_plan(student, courses, materials, week_start, week_end)
+        normalized_plan = normalize_plan_payload(
             fallback_payload,
             student_id=student.id,
             week_start=week_start,
@@ -416,28 +416,28 @@ def retrieve_study_plan(student_id):
     return jsonify(plan.to_dict()), 200
 
 
-def _determine_week_window():
+def determine_week_window():
     today = datetime.now(SYDNEY_TZ).date()
     week_start = today
     week_end = week_start + timedelta(days=6)
     return week_start, week_end
 
 
-def _build_study_plan_prompt(week_start, week_end):
+def build_study_plan_prompt(week_start, week_end):
     return _STUDY_PLAN_PROMPT_TEMPLATE.format(
         week_start=week_start.isoformat(),
         week_end=week_end.isoformat(),
     )
 
 
-def _build_plan_context(student, courses, assignments, materials, week_start, week_end):
+def build_plan_context(student, courses, assignments, materials, week_start, week_end):
     course_context = {}
     for course in courses:
         course_context[course.id] = {
             "id": course.id,
             "code": course.code,
             "name": course.name,
-            "description": _trim_text(course.description, 400),
+            "description": trim_text(course.description, 400),
             "assignments": [],
             "materials": [],
         }
@@ -448,7 +448,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
             continue
         if len(entry["assignments"]) >= _COURSE_ASSIGNMENT_LIMIT:
             continue
-        entry["assignments"].append(_summarize_assignment(assignment))
+        entry["assignments"].append(summarize_assignment(assignment))
 
     materials_per_course = {}
     for material in materials:
@@ -458,7 +458,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
         count = materials_per_course.get(material.course_id, 0)
         if count >= _COURSE_MATERIAL_LIMIT:
             continue
-        entry["materials"].append(_summarize_material(material))
+        entry["materials"].append(summarize_material(material))
         materials_per_course[material.course_id] = count + 1
 
     return {
@@ -478,7 +478,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
     }
 
 
-def _trim_text(value, limit):
+def trim_text(value, limit):
     if value is None:
         return None
     text = str(value).strip()
@@ -489,18 +489,18 @@ def _trim_text(value, limit):
     return text[:limit].rstrip() + "..."
 
 
-def _summarize_assignment(assignment):
+def summarize_assignment(assignment):
     return {
         "id": assignment.id,
         "course_id": assignment.course_id,
         "title": assignment.title,
-        "description": _trim_text(assignment.description, 320),
+        "description": trim_text(assignment.description, 320),
         "due_date": assignment.due_date.isoformat() if assignment.due_date else None,
         "optional": assignment.optional,
     }
 
 
-def _summarize_material(material, preview_limit=_MATERIAL_PREVIEW_CHARS):
+def summarize_material(material, preview_limit=_MATERIAL_PREVIEW_CHARS):
     summary = {
         "id": material.id,
         "course_id": material.course_id,
@@ -519,7 +519,7 @@ def _summarize_material(material, preview_limit=_MATERIAL_PREVIEW_CHARS):
     return summary
 
 
-def _normalize_plan_payload(payload, student_id, week_start, week_end, course_ids, material_ids):
+def normalize_plan_payload(payload, student_id, week_start, week_end, course_ids, material_ids):
     course_set = set(course_ids or [])
     material_set = set(material_ids or [])
     allowed_dates = [
@@ -538,7 +538,7 @@ def _normalize_plan_payload(payload, student_id, week_start, week_end, course_id
     if not isinstance(raw_days, list):
         raw_days = []
 
-    day_map: Dict[str, Dict[str, object]] = {}
+    day_map = {}
     for raw_day in raw_days:
         if not isinstance(raw_day, dict):
             continue
@@ -548,7 +548,7 @@ def _normalize_plan_payload(payload, student_id, week_start, week_end, course_id
         raw_tasks = raw_day.get("tasks") if isinstance(raw_day.get("tasks"), list) else []
         normalized_tasks = []
         for task in raw_tasks:
-            normalized_task = _normalize_task(task, course_ids, course_set, material_set)
+            normalized_task = normalize_task(task, course_ids, course_set, material_set)
             if normalized_task:
                 normalized_tasks.append(normalized_task)
         if len(normalized_tasks) > _MAX_TASKS_PER_DAY:
@@ -561,7 +561,7 @@ def _normalize_plan_payload(payload, student_id, week_start, week_end, course_id
     return normalized
 
 
-def _normalize_task(task, course_ids, course_set, material_set):
+def normalize_task(task, course_ids, course_set, material_set):
     if not isinstance(task, dict):
         return None
 
@@ -586,13 +586,13 @@ def _normalize_task(task, course_ids, course_set, material_set):
         if material_id_int not in material_set:
             material_id_int = None
 
-    start_time = _parse_time_value(task.get("start_time")) or time(9, 0)
+    start_time = parse_time_value(task.get("start_time")) or time(9, 0)
     start_time = max(start_time, _PLAN_WINDOW_START)
-    end_time = _parse_time_value(task.get("end_time")) or _add_minutes(start_time, _DEFAULT_SESSION_MINUTES)
+    end_time = parse_time_value(task.get("end_time")) or add_minutes(start_time, _DEFAULT_SESSION_MINUTES)
     end_time = min(end_time, _PLAN_WINDOW_END)
 
     if end_time <= start_time:
-        adjusted = _add_minutes(start_time, 60)
+        adjusted = add_minutes(start_time, 60)
         if adjusted > _PLAN_WINDOW_END:
             return None
         end_time = adjusted
@@ -607,7 +607,7 @@ def _normalize_task(task, course_ids, course_set, material_set):
     }
 
 
-def _parse_time_value(value):
+def parse_time_value(value):
     if isinstance(value, time):
         return value
     if isinstance(value, str):
@@ -618,13 +618,13 @@ def _parse_time_value(value):
     return None
 
 
-def _add_minutes(start_time, minutes):
+def add_minutes(start_time, minutes):
     baseline = datetime.combine(datetime.now(SYDNEY_TZ).date(), start_time)
     baseline += timedelta(minutes=minutes)
     return baseline.time()
 
 
-def _build_fallback_plan(student, courses, materials, week_start, week_end):
+def build_fallback_plan(student, courses, materials, week_start, week_end):
     day_dates = [week_start + timedelta(days=offset) for offset in range((week_end - week_start).days + 1)]
     plan = {
         "student_id": student.id,

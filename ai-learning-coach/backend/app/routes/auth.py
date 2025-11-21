@@ -9,24 +9,6 @@ from ..extensions import db
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
-def _parse_role(role_str):
-    if role_str == "student":
-        return UserRole.STUDENT
-    if role_str == "admin":
-        return UserRole.ADMIN
-    raise ValueError("Invalid role! Must be either 'student' or 'admin'.")
-
-
-def _serialize_user(user):
-    return {
-        "id": user.id,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "username": user.username,
-        "role": user.role.value if isinstance(user.role, UserRole) else str(user.role),
-    }
-
-
 @bp.route("/register", methods=["POST"])
 def register():
     try:
@@ -53,7 +35,12 @@ def register():
             return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
 
         try:
-            role_enum = _parse_role(role_str)
+            if role_str == "student":
+                role_enum = UserRole.STUDENT
+            elif role_str == "admin":
+                role_enum = UserRole.ADMIN
+            else:
+                raise ValueError("Invalid role! Must be either 'student' or 'admin'.")
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
@@ -77,7 +64,13 @@ def register():
         db.session.add(user)
         db.session.commit()
 
-        serialized = _serialize_user(user)
+        serialized = {
+            "id": user.id,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "username": user.username,
+            "role": user.role.value if isinstance(user.role, UserRole) else str(user.role),
+        }
         token = create_user_access_token(user)
         response_payload = {"token": token, "user": serialized, **serialized}
         return jsonify(response_payload), 201
@@ -97,7 +90,12 @@ def login():
         return jsonify({"error": "username, role, and password are required"}), 400
 
     try:
-        role_enum = _parse_role(role_str)
+        if role_str == "student":
+            role_enum = UserRole.STUDENT
+        elif role_str == "admin":
+            role_enum = UserRole.ADMIN
+        else:
+            raise ValueError("Invalid role! Must be either 'student' or 'admin'.")
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -112,7 +110,13 @@ def login():
     if not is_valid:
         return jsonify({"error": "Invalid username or password!"}), 401
 
-    serialized = _serialize_user(user)
+    serialized = {
+        "id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "username": user.username,
+        "role": user.role.value if isinstance(user.role, UserRole) else str(user.role),
+    }
     token = create_user_access_token(user)
     response_payload = {"token": token, "user": serialized, **serialized}
     return jsonify(response_payload), 200
@@ -122,4 +126,11 @@ def login():
 @jwt_required()
 def me():
     user = current_user_from_token()
-    return jsonify(_serialize_user(user)), 200
+    payload = {
+        "id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "username": user.username,
+        "role": user.role.value if isinstance(user.role, UserRole) else str(user.role),
+    }
+    return jsonify(payload), 200

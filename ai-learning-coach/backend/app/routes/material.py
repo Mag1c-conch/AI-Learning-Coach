@@ -11,18 +11,7 @@ from ..models import Assignment, Course, Enrollment, Material, User, UserRole
 bp = Blueprint("material", __name__, url_prefix="/materials")
 
 
-def _reserve_unique_filename(directory, filename):
-    safe_name = secure_filename(filename) or "uploaded_file"
-    name, ext = os.path.splitext(safe_name)
-    candidate = safe_name
-    counter = 1
-    while os.path.exists(os.path.join(directory, candidate)):
-        candidate = f"{name}_{counter}{ext}"
-        counter += 1
-    return candidate
-
-
-def _material_file_path(material):
+def material_file_path(material):
     root = current_app.config["UPLOAD_FOLDER"]
     course_dir = os.path.join(root, str(material.course_id))
     if material.assignment_id:
@@ -42,34 +31,13 @@ def _material_file_path(material):
     return os.path.join(course_dir, material.stored_name)
 
 
-def _remove_file_from_disk(material):
-    file_path = _material_file_path(material)
+def delete_material_file(material):
+    file_path = material_file_path(material)
     if os.path.isfile(file_path):
         os.remove(file_path)
 
 
-def _sanitize_custom_basename(name):
-    safe = secure_filename(name or "")
-    if not safe:
-        return ""
-    base, _ = os.path.splitext(safe)
-    return base
-
-
-def _parse_bool(value):
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return value
-    normalized = str(value).strip().lower()
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-    return None
-
-
-def _iso_utc(dt):
+def iso_utc(dt):
     """Return a UTC ISO8601 string (trailing Z) for the provided datetime."""
     if not dt:
         return None
@@ -78,67 +46,7 @@ def _iso_utc(dt):
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _parse_due_date(raw):
-    """
-    Parse several accepted due-date formats:
-    - ISO8601 with or without offsets (trailing 'Z' allowed)
-    - 'YYYY-MM-DD' (defaults to 23:59:59 local time)
-    - 'YYYY-MM-DD HH:mm' or 'YYYY-MM-DD HH:mm:ss'
-    - Unix timestamps in seconds or milliseconds (numbers or numeric strings)
-    Inputs without an explicit timezone are interpreted using LOCAL_TZ (defaults to Australia/Sydney)
-    and the result is returned as a UTC tz-aware datetime.
-    """
-    if not raw:
-        return None
-
-    LOCAL_TZ = ZoneInfo(current_app.config.get("LOCAL_TZ", "Australia/Sydney"))
-
-    # Already a datetime object
-    if isinstance(raw, datetime):
-        dt = raw
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=LOCAL_TZ)
-        return dt.astimezone(timezone.utc)
-
-    s = str(raw).strip()
-    if not s:
-        return None
-
-    # Pure digits -> treat as a timestamp
-    if s.isdigit():
-        iv = int(s)
-        if iv < 10**12:  # seconds
-            return datetime.fromtimestamp(iv, tz=timezone.utc)
-        return datetime.fromtimestamp(iv / 1000, tz=timezone.utc)  # milliseconds
-
-    # Accept a trailing 'Z'
-    if s.endswith("Z"):
-        s = s[:-1] + "+00:00"
-
-    # 'YYYY-MM-DD' -> same day 23:59:59 in the local time zone
-    if len(s) == 10 and s[4] == "-" and s[7] == "-" and s[:4].isdigit():
-        try:
-            base = datetime.strptime(s, "%Y-%m-%d")
-            dt = base.replace(hour=23, minute=59, second=59, tzinfo=LOCAL_TZ)
-            return dt.astimezone(timezone.utc)
-        except ValueError:
-            abort(400, description="assignment_due_date invalid 'YYYY-MM-DD'")
-
-    # Replace the space in 'YYYY-MM-DD HH:mm(:ss)?' with 'T'
-    if " " in s and s[4] == "-" and s[7] == "-":
-        s = s.replace(" ", "T")
-
-    # Otherwise fall back to a normal ISO8601 parse
-    try:
-        dt = datetime.fromisoformat(s)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=LOCAL_TZ)
-        return dt.astimezone(timezone.utc)
-    except ValueError:
-        abort(400, description="assignment_due_date must be ISO8601/date/timestamp")
-
-
-def _build_submission_stored_name(course_dir, assignment, student, original_name):
+def build_submission_stored_name(course_dir, assignment, student, original_name):
     assignment_dir = os.path.join(course_dir, str(assignment.id))
     os.makedirs(assignment_dir, exist_ok=True)
 
@@ -147,7 +55,7 @@ def _build_submission_stored_name(course_dir, assignment, student, original_name
     return assignment_dir, stored_name
 
 
-def _material_with_student_dict(material):
+def material_with_student_dict(material):
     data = material.to_dict()
     student = User.query.get(material.uploaded_by)
     if student and student.role == UserRole.STUDENT:
@@ -162,7 +70,7 @@ def _material_with_student_dict(material):
     return data
 
 
-def _ensure_student_enrolled(course_id, student_id):
+def ensure_student_enrolled(course_id, student_id):
     if not Enrollment.query.filter_by(course_id=course_id, user_id=student_id).first():
         abort(403, description="student is not enrolled in this course")
 
@@ -201,7 +109,7 @@ def list_materials():
             d["assignment"] = {
                 "id": a.id,
                 "title": a.title,
-                "due_date": _iso_utc(a.due_date),  # Normalize to a Z-suffixed ISO string
+                "due_date": iso_utc(a.due_date),  # Normalize to a Z-suffixed ISO string
             }
         out.append(d)
     return jsonify(out), 200
@@ -262,12 +170,54 @@ def upload_material():
                 or request.form.get("additional_notes")
                 or None
             )
-            due_date = _parse_due_date(
+            raw_due = (
                 request.form.get("assignment_due_date")
                 or request.form.get("due_date")
                 or request.form.get("deadline")
             )
-            optional_flag = _parse_bool(request.form.get("assignment_optional"))
+            due_date = None
+            if raw_due:
+                s = str(raw_due).strip()
+                LOCAL_TZ = ZoneInfo(current_app.config.get("LOCAL_TZ", "Australia/Sydney"))
+                if s.isdigit():
+                    iv = int(s)
+                    if iv < 10**12:
+                        due_date = datetime.fromtimestamp(iv, tz=timezone.utc)
+                    else:
+                        due_date = datetime.fromtimestamp(iv / 1000, tz=timezone.utc)
+                else:
+                    if s.endswith("Z"):
+                        s = s[:-1] + "+00:00"
+                    if " " in s and len(s) >= 10 and s[4] == "-" and s[7] == "-":
+                        s = s.replace(" ", "T")
+                    if len(s) == 10 and s[4] == "-" and s[7] == "-" and s[:4].isdigit():
+                        try:
+                            base = datetime.strptime(s, "%Y-%m-%d")
+                            due_date = base.replace(hour=23, minute=59, second=59, tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+                        except ValueError:
+                            abort(400, description="assignment_due_date invalid 'YYYY-MM-DD'")
+                    else:
+                        try:
+                            parsed = datetime.fromisoformat(s)
+                            if parsed.tzinfo is None:
+                                parsed = parsed.replace(tzinfo=LOCAL_TZ)
+                            due_date = parsed.astimezone(timezone.utc)
+                        except ValueError:
+                            abort(400, description="assignment_due_date must be ISO8601/date/timestamp")
+
+            raw_optional = request.form.get("assignment_optional")
+            if raw_optional is None:
+                optional_flag = None
+            elif isinstance(raw_optional, bool):
+                optional_flag = raw_optional
+            else:
+                normalized = str(raw_optional).strip().lower()
+                if normalized in {"1", "true", "yes", "on"}:
+                    optional_flag = True
+                elif normalized in {"0", "false", "no", "off"}:
+                    optional_flag = False
+                else:
+                    optional_flag = None
 
             assignment = Assignment(
                 course_id=course.id,
@@ -283,15 +233,20 @@ def upload_material():
         assignment_dir = os.path.join(course_dir, str(assignment.id))
         os.makedirs(assignment_dir, exist_ok=True)
 
-    base_name = _sanitize_custom_basename(custom_name)
-    if base_name:
-        _, ext = os.path.splitext(original_name)
-        candidate_name = f"{base_name}{ext}"
-    else:
-        candidate_name = original_name
+    safe_custom = secure_filename(custom_name or "")
+    base_name = ""
+    if safe_custom:
+        base_name = os.path.splitext(safe_custom)[0]
+    candidate_name = f"{base_name}{os.path.splitext(original_name)[1]}" if base_name else original_name
 
     target_dir = assignment_dir or course_dir
-    stored_name = _reserve_unique_filename(target_dir, candidate_name)
+    safe_name = secure_filename(candidate_name) or "uploaded_file"
+    name, ext = os.path.splitext(safe_name)
+    stored_name = safe_name
+    counter = 1
+    while os.path.exists(os.path.join(target_dir, stored_name)):
+        stored_name = f"{name}_{counter}{ext}"
+        counter += 1
     file_path = os.path.join(target_dir, stored_name)
     file.save(file_path)
 
@@ -322,7 +277,7 @@ def upload_material():
     if assignment:
         payload["assignment"] = {
             **assignment.to_dict(),
-            "due_date": _iso_utc(assignment.due_date),
+            "due_date": iso_utc(assignment.due_date),
         }
     return jsonify(payload), 201
 
@@ -352,9 +307,9 @@ def delete_material(material_id):
             )
 
     try:
-        _remove_file_from_disk(material)
+        delete_material_file(material)
         for extra in extra_materials:
-            _remove_file_from_disk(extra)
+            delete_material_file(extra)
     except OSError as exc:
         abort(500, description=f"failed to delete file: {exc}")
 
@@ -379,7 +334,7 @@ def delete_material(material_id):
 def download_material(material_id):
 
     material = Material.query.get_or_404(material_id)
-    file_path = _material_file_path(material)
+    file_path = material_file_path(material)
     if not os.path.isfile(file_path):
         abort(404, description="file not found on server")
 
@@ -414,13 +369,13 @@ def submit_assignment_material(assignment_id):
     if student.role != UserRole.STUDENT:
         abort(403, description="only students may submit assignments")
 
-    _ensure_student_enrolled(assignment.course_id, student.id)
+    ensure_student_enrolled(assignment.course_id, student.id)
 
     root = current_app.config["UPLOAD_FOLDER"]
     course_dir = os.path.join(root, str(assignment.course_id))
     os.makedirs(course_dir, exist_ok=True)
 
-    assignment_dir, stored_name = _build_submission_stored_name(
+    assignment_dir, stored_name = build_submission_stored_name(
         course_dir, assignment, student, file.filename
     )
     file_path = os.path.join(assignment_dir, stored_name)
@@ -431,7 +386,7 @@ def submit_assignment_material(assignment_id):
         uploaded_by=student.id,
     ).all()
     for previous in previous_submissions:
-        _remove_file_from_disk(previous)
+        delete_material_file(previous)
         db.session.delete(previous)
 
     file.save(file_path)
@@ -450,10 +405,10 @@ def submit_assignment_material(assignment_id):
     try:
         db.session.add(submission)
         db.session.commit()
-        return jsonify(_material_with_student_dict(submission)), 201
+        return jsonify(material_with_student_dict(submission)), 201
     except Exception as exc:
         db.session.rollback()
-        _remove_file_from_disk(submission)
+        delete_material_file(submission)
         abort(500, description=str(exc))
 
 
@@ -474,7 +429,7 @@ def list_assignment_submissions(assignment_id):
     if viewer.role == UserRole.STUDENT:
         if viewer.id != viewer_id:
             abort(403, description="students may only view their own submissions")
-        _ensure_student_enrolled(assignment.course_id, viewer.id)
+        ensure_student_enrolled(assignment.course_id, viewer.id)
         query = query.filter_by(uploaded_by=viewer.id)
     elif viewer.role == UserRole.ADMIN:
         if viewer.id != assignment.teacher_id:
@@ -486,4 +441,4 @@ def list_assignment_submissions(assignment_id):
         abort(403, description="unsupported user role")
 
     submissions = query.order_by(Material.uploaded_at.desc()).all()
-    return jsonify([_material_with_student_dict(m) for m in submissions]), 200
+    return jsonify([material_with_student_dict(m) for m in submissions]), 200

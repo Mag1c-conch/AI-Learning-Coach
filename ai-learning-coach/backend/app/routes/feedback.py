@@ -7,45 +7,33 @@ from ..models import Course, Feedback, User, UserRole
 bp = Blueprint("feedback", __name__, url_prefix="/feedback")
 
 
-def _require_json():
-    data = request.get_json(silent=True)
-    if data is None:
-        abort(400, description="request payload must be valid JSON")
-    return data
-
-
-def _coerce_int(field, value, required=True):
-    if value is None:
-        if required:
-            abort(400, description=f"{field} is required")
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        abort(400, description=f"{field} must be an integer")
-
-
-def _parse_bool(value, default=None):
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    txt = str(value).strip().lower()
-    if txt in {"1", "true", "yes", "y", "on"}:
-        return True
-    if txt in {"0", "false", "no", "n", "off"}:
-        return False
-    return default
-
-
 @bp.route("", methods=["POST"])
 def create_feedback():
 
-    data = _require_json()
+    data = request.get_json(silent=True)
+    if data is None:
+        abort(400, description="request payload must be valid JSON")
 
-    teacher_id = _coerce_int("teacher_id", data.get("teacher_id"))
-    student_id = _coerce_int("student_id", data.get("student_id"))
-    course_id = _coerce_int("course_id", data.get("course_id"), required=False)
+    teacher_raw = data.get("teacher_id")
+    student_raw = data.get("student_id")
+    course_raw = data.get("course_id")
+
+    if teacher_raw is None or student_raw is None:
+        abort(400, description="teacher_id and student_id are required")
+
+    try:
+        teacher_id = int(teacher_raw)
+        student_id = int(student_raw)
+    except (TypeError, ValueError):
+        abort(400, description="teacher_id and student_id must be integers")
+
+    if course_raw is None:
+        course_id = None
+    else:
+        try:
+            course_id = int(course_raw)
+        except (TypeError, ValueError):
+            abort(400, description="course_id must be an integer")
     content_raw = data.get("content")
 
     content = str(content_raw).strip() if content_raw is not None else ""
@@ -86,7 +74,14 @@ def list_feedback():
     teacher_id = request.args.get("teacher_id", type=int)
     student_id = request.args.get("student_id", type=int)
     course_id = request.args.get("course_id", type=int)
-    include_related = _parse_bool(request.args.get("include_related"), default=True)
+    raw_include = request.args.get("include_related")
+    if raw_include is None:
+        include_related = True
+    elif isinstance(raw_include, bool):
+        include_related = raw_include
+    else:
+        val = str(raw_include).strip().lower()
+        include_related = val in {"1", "true", "yes", "y", "on"}
     limit = request.args.get("limit", type=int)
 
     if teacher_id:
@@ -110,14 +105,34 @@ def list_feedback():
 @bp.route("/<int:feedback_id>/read", methods=["PATCH"])
 def mark_feedback_read(feedback_id):
 
-    data = _require_json()
-    
-    student_id = _coerce_int("student_id", data.get("student_id"))
-    is_read = _parse_bool(data.get("is_read"), default=True)
+    data = request.get_json(silent=True)
+    if data is None:
+        abort(400, description="request payload must be valid JSON")
+
+    student_raw = data.get("student_id")
+    if student_raw is None:
+        abort(400, description="student_id is required")
+    try:
+        student_id = int(student_raw)
+    except (TypeError, ValueError):
+        abort(400, description="student_id must be an integer")
+
+    is_read_raw = data.get("is_read")
+    if is_read_raw is None:
+        is_read = True
+    elif isinstance(is_read_raw, bool):
+        is_read = is_read_raw
+    else:
+        val = str(is_read_raw).strip().lower()
+        if val in {"1", "true", "yes", "y", "on"}:
+            is_read = True
+        elif val in {"0", "false", "no", "n", "off"}:
+            is_read = False
+        else:
+            is_read = True
     
     feedback = Feedback.query.get_or_404(feedback_id)
     
-    # Ensure only the recipient student can update the read status
     if feedback.student_id != student_id:
         abort(403, description="you can only mark your own feedback as read")
     

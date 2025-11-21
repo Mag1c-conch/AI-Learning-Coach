@@ -11,7 +11,7 @@ from ..models import Course, Enrollment, StudyProgressItem, User, UserRole
 bp = Blueprint("progress", __name__, url_prefix="/progress")
 
 
-def _resolve_student(student_id):
+def pick_student(student_id):
 
     student = resolve_user(
         None,
@@ -24,7 +24,7 @@ def _resolve_student(student_id):
     return student
 
 
-def _resolve_teacher(course):
+def pick_teacher(course):
 
     teacher = resolve_user(
         None,
@@ -37,12 +37,12 @@ def _resolve_teacher(course):
     return teacher
 
 
-def _ensure_enrolled(course_id, student_id):
+def ensure_enrolled(course_id, student_id):
     if not Enrollment.query.filter_by(course_id=course_id, user_id=student_id).first():
         abort(403, description="student is not enrolled in this course")
 
 
-def _iso(dt):
+def iso_str(dt):
     if not dt:
         return None
     if dt.tzinfo is None:
@@ -50,7 +50,7 @@ def _iso(dt):
     return dt.astimezone(timezone.utc).isoformat()
 
 
-def _normalize_items(payload):
+def normalize_items(payload):
     if not isinstance(payload, list):
         abort(400, description="items must be an array")
 
@@ -103,9 +103,9 @@ def _normalize_items(payload):
 @bp.route("/study/<int:student_id>/<int:course_id>", methods=["GET"])
 @jwt_required()
 def get_study_progress(student_id, course_id):
-    student = _resolve_student(student_id)
+    student = pick_student(student_id)
     course = Course.query.get_or_404(course_id)
-    _ensure_enrolled(course.id, student.id)
+    ensure_enrolled(course.id, student.id)
 
     items = (
         StudyProgressItem.query.filter_by(student_id=student.id, course_id=course.id)
@@ -128,7 +128,7 @@ def get_study_progress(student_id, course_id):
             "course_id": course.id,
             "item_count": item_count,
             "overall_percent": overall_percent,
-            "updated_at": _iso(last_updated),
+            "updated_at": iso_str(last_updated),
             "items": [item.to_dict() for item in items],
         }
     )
@@ -137,13 +137,13 @@ def get_study_progress(student_id, course_id):
 @bp.route("/study/<int:student_id>/<int:course_id>", methods=["PUT"])
 @jwt_required()
 def upsert_study_progress(student_id, course_id):
-    student = _resolve_student(student_id)
+    student = pick_student(student_id)
     course = Course.query.get_or_404(course_id)
-    _ensure_enrolled(course.id, student.id)
+    ensure_enrolled(course.id, student.id)
 
     data = request.get_json(silent=True) or {}
     replace = bool(data.get("replace", False))
-    normalized_items = _normalize_items(data.get("items", []))
+    normalized_items = normalize_items(data.get("items", []))
 
     existing = {
         item.item_key: item
@@ -188,7 +188,7 @@ def upsert_study_progress(student_id, course_id):
 @bp.route("/courses/<int:student_id>", methods=["GET"])
 @jwt_required()
 def list_course_progress(student_id):
-    student = _resolve_student(student_id)
+    student = pick_student(student_id)
 
     course_ids = request.args.getlist("course_id", type=int)
 
@@ -224,7 +224,7 @@ def list_course_progress(student_id):
                 "course_name": row.course_name,
                 "item_count": row.item_count,
                 "overall_percent": int(round(avg)),
-                "updated_at": _iso(row.updated_at),
+                "updated_at": iso_str(row.updated_at),
             }
         )
 
@@ -235,7 +235,7 @@ def list_course_progress(student_id):
 @jwt_required()
 def list_course_student_progress(course_id):
     course = Course.query.get_or_404(course_id)
-    teacher = _resolve_teacher(course)
+    teacher = pick_teacher(course)
 
     progress_subq = (
         db.session.query(
@@ -285,8 +285,8 @@ def list_course_student_progress(course_id):
                 "student_full_name": full_name or row.username,
                 "item_count": int(row.item_count or 0),
                 "overall_percent": int(round(avg)),
-                "updated_at": _iso(row.updated_at),
-                "enrolled_at": _iso(row.enrolled_at),
+                "updated_at": iso_str(row.updated_at),
+                "enrolled_at": iso_str(row.enrolled_at),
             }
         )
 

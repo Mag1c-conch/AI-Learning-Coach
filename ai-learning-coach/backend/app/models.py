@@ -9,7 +9,7 @@ from .extensions import db
 SYDNEY_TZ = ZoneInfo("Australia/Sydney")
 
 
-def _to_sydney_iso(dt):
+def to_sydney_iso(dt):
     if not dt:
         return None
     if dt.tzinfo is None:
@@ -125,7 +125,7 @@ class Course(db.Model):
             "description": self.description,
             "image_url": self.image_url,
             "created_by": self.created_by,
-            "created_at": _to_sydney_iso(self.created_at),
+            "created_at": to_sydney_iso(self.created_at),
         }
 
 
@@ -183,8 +183,8 @@ class StudyProgressItem(db.Model):
             "item_type": self.item_type,
             "title": self.title,
             "percent": self.percent,
-            "created_at": _to_sydney_iso(self.created_at),
-            "updated_at": _to_sydney_iso(self.updated_at),
+            "created_at": to_sydney_iso(self.created_at),
+            "updated_at": to_sydney_iso(self.updated_at),
         }
         if include_metadata:
             data["metadata"] = self.metadata_dict
@@ -237,7 +237,7 @@ class Material(db.Model):
             "assignment_id": self.assignment_id,
             "stored_name": self.stored_name,
             "original_name": self.original_name,
-            "uploaded_at": _to_sydney_iso(self.uploaded_at),
+            "uploaded_at": to_sydney_iso(self.uploaded_at),
             "uploaded_by": self.uploaded_by,
             "file_size": self.file_size,
             "file_type": self.file_type,
@@ -274,9 +274,9 @@ class Assignment(db.Model):
             "teacher_id": self.teacher_id,
             "title": self.title,
             "description": self.description,
-            "due_date": _to_sydney_iso(self.due_date),
+            "due_date": to_sydney_iso(self.due_date),
             "optional": bool(self.optional),
-            "created_at": _to_sydney_iso(self.created_at),
+            "created_at": to_sydney_iso(self.created_at),
         }
 
 
@@ -322,8 +322,8 @@ class AssignmentGrade(db.Model):
             "graded_by": self.graded_by,
             "score": self.score,
             "comment": self.comment,
-            "graded_at": _to_sydney_iso(self.graded_at),
-            "updated_at": _to_sydney_iso(self.updated_at),
+            "graded_at": to_sydney_iso(self.graded_at),
+            "updated_at": to_sydney_iso(self.updated_at),
         }
         if include_related:
             data["student"] = (
@@ -388,9 +388,9 @@ class Feedback(db.Model):
             "student_id": self.student_id,
             "content": self.content,
             "is_read": self.is_read,
-            "read_at": _to_sydney_iso(self.read_at) if self.read_at else None,
-            "created_at": _to_sydney_iso(self.created_at),
-            "updated_at": _to_sydney_iso(self.updated_at),
+            "read_at": to_sydney_iso(self.read_at) if self.read_at else None,
+            "created_at": to_sydney_iso(self.created_at),
+            "updated_at": to_sydney_iso(self.updated_at),
         }
         if include_related:
             data["teacher"] = (
@@ -445,8 +445,8 @@ class Conversation(db.Model):
             "id": self.id,
             "user_id": self.user_id,
             "title": self.title,
-            "created_at": _to_sydney_iso(self.created_at),
-            "updated_at": _to_sydney_iso(self.updated_at),
+            "created_at": to_sydney_iso(self.created_at),
+            "updated_at": to_sydney_iso(self.updated_at),
         }
 
 
@@ -467,7 +467,7 @@ class ConversationMessage(db.Model):
             "conversation_id": self.conversation_id,
             "role": self.role,
             "content": self.content,
-            "created_at": _to_sydney_iso(self.created_at),
+            "created_at": to_sydney_iso(self.created_at),
         }
 
 
@@ -510,6 +510,6 @@ class StudyPlan(db.Model):
             "week_start": self.week_start.isoformat(),
             "week_end": self.week_end.isoformat(),
             "plan": self.plan,
-            "created_at": _to_sydney_iso(self.created_at),
-            "updated_at": _to_sydney_iso(self.updated_at),
+            "created_at": to_sydney_iso(self.created_at),
+            "updated_at": to_sydney_iso(self.updated_at),
         }
