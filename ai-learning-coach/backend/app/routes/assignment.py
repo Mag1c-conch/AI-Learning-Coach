@@ -10,7 +10,7 @@ from ..auth_utils import resolve_user
 bp = Blueprint("assignment", __name__, url_prefix="/assignments")
 
 
-def _ensure_student_enrolled(course_id: int, student_id: int) -> None:
+def _ensure_student_enrolled(course_id, student_id):
     if not Enrollment.query.filter_by(course_id=course_id, user_id=student_id).first():
         abort(403, description="student is not enrolled in this course")
 
@@ -72,7 +72,7 @@ def create_assignment():
 
 @bp.route("/<int:assignment_id>/grades", methods=["POST"])
 @jwt_required(optional=True)
-def upsert_assignment_grade(assignment_id: int):
+def upsert_assignment_grade(assignment_id):
 
     assignment = Assignment.query.get_or_404(assignment_id)
 
@@ -149,7 +149,7 @@ def upsert_assignment_grade(assignment_id: int):
 
 @bp.route("/<int:assignment_id>/grades", methods=["GET"])
 @jwt_required(optional=True)
-def list_assignment_grades(assignment_id: int):
+def list_assignment_grades(assignment_id):
 
     assignment = Assignment.query.get_or_404(assignment_id)
 

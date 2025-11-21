@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime, timezone
 
 from flask import Blueprint, abort, jsonify, request
@@ -13,7 +11,7 @@ from ..models import Course, Enrollment, StudyProgressItem, User, UserRole
 bp = Blueprint("progress", __name__, url_prefix="/progress")
 
 
-def _resolve_student(student_id: int) -> User:
+def _resolve_student(student_id):
 
     student = resolve_user(
         None,
@@ -26,7 +24,7 @@ def _resolve_student(student_id: int) -> User:
     return student
 
 
-def _resolve_teacher(course: Course) -> User:
+def _resolve_teacher(course):
 
     teacher = resolve_user(
         None,
@@ -39,7 +37,7 @@ def _resolve_teacher(course: Course) -> User:
     return teacher
 
 
-def _ensure_enrolled(course_id: int, student_id: int) -> None:
+def _ensure_enrolled(course_id, student_id):
     if not Enrollment.query.filter_by(course_id=course_id, user_id=student_id).first():
         abort(403, description="student is not enrolled in this course")
 
@@ -104,7 +102,7 @@ def _normalize_items(payload):
 
 @bp.route("/study/<int:student_id>/<int:course_id>", methods=["GET"])
 @jwt_required()
-def get_study_progress(student_id: int, course_id: int):
+def get_study_progress(student_id, course_id):
     student = _resolve_student(student_id)
     course = Course.query.get_or_404(course_id)
     _ensure_enrolled(course.id, student.id)
@@ -138,7 +136,7 @@ def get_study_progress(student_id: int, course_id: int):
 
 @bp.route("/study/<int:student_id>/<int:course_id>", methods=["PUT"])
 @jwt_required()
-def upsert_study_progress(student_id: int, course_id: int):
+def upsert_study_progress(student_id, course_id):
     student = _resolve_student(student_id)
     course = Course.query.get_or_404(course_id)
     _ensure_enrolled(course.id, student.id)
@@ -189,7 +187,7 @@ def upsert_study_progress(student_id: int, course_id: int):
 
 @bp.route("/courses/<int:student_id>", methods=["GET"])
 @jwt_required()
-def list_course_progress(student_id: int):
+def list_course_progress(student_id):
     student = _resolve_student(student_id)
 
     course_ids = request.args.getlist("course_id", type=int)
@@ -235,7 +233,7 @@ def list_course_progress(student_id: int):
 
 @bp.route("/course/<int:course_id>/students", methods=["GET"])
 @jwt_required()
-def list_course_student_progress(course_id: int):
+def list_course_student_progress(course_id):
     course = Course.query.get_or_404(course_id)
     teacher = _resolve_teacher(course)
 

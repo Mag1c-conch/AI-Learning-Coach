@@ -314,7 +314,7 @@ class AssignmentGrade(db.Model):
         db.UniqueConstraint("assignment_id", "student_id", name="uq_assignment_grade_assignment_student"),
     )
 
-    def to_dict(self, include_related: bool = False):
+    def to_dict(self, include_related=False):
         data = {
             "id": self.id,
             "assignment_id": self.assignment_id,
@@ -380,7 +380,7 @@ class Feedback(db.Model):
         lazy="joined",
     )
 
-    def to_dict(self, include_related: bool = False):
+    def to_dict(self, include_related=False):
         data = {
             "id": self.id,
             "course_id": self.course_id,

@@ -7,14 +7,14 @@ from ..models import Course, Feedback, User, UserRole
 bp = Blueprint("feedback", __name__, url_prefix="/feedback")
 
 
-def _require_json() -> dict:
+def _require_json():
     data = request.get_json(silent=True)
     if data is None:
         abort(400, description="request payload must be valid JSON")
     return data
 
 
-def _coerce_int(field: str, value, required: bool = True):
+def _coerce_int(field, value, required=True):
     if value is None:
         if required:
             abort(400, description=f"{field} is required")

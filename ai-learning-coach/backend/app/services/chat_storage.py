@@ -1,10 +1,7 @@
-from __future__ import annotations
 import json
 from datetime import datetime, timezone
-from typing import List, Optional
 from flask import current_app
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
 from ..extensions import db
 from ..models import Conversation, ConversationMessage
 
@@ -16,26 +13,26 @@ def _redis_client():
     return current_app.extensions.get("redis")
 
 
-def _redis_key(conversation_id: int) -> str:
+def _redis_key(conversation_id):
     return f"conversation:{conversation_id}"
 
 
-def _redis_ttl() -> int:
+def _redis_ttl():
     return int(current_app.config.get("CHAT_HISTORY_TTL", _DEFAULT_REDIS_TTL_SECONDS))
 
 
-def create_conversation(user_id: Optional[int] = None, title: Optional[str] = None) -> Conversation:
+def create_conversation(user_id=None, title=None):
     conversation = Conversation(user_id=user_id, title=title)
     db.session.add(conversation)
     db.session.commit()
     return conversation
 
 
-def get_conversation(conversation_id: int) -> Optional[Conversation]:
+def get_conversation(conversation_id):
     return db.session.get(Conversation, conversation_id)
 
 
-def append_message(conversation_id: int, role: str, content: str) -> ConversationMessage:
+def append_message(conversation_id, role, content):
     timestamp = datetime.now(timezone.utc)
     message = ConversationMessage(
         conversation_id=conversation_id,
@@ -66,7 +63,7 @@ def append_message(conversation_id: int, role: str, content: str) -> Conversatio
     return message
 
 
-def _deserialize_redis_entries(entries: List[str]) -> List[dict]:
+def _deserialize_redis_entries(entries):
     history = []
     for entry in entries:
         try:
@@ -76,10 +73,10 @@ def _deserialize_redis_entries(entries: List[str]) -> List[dict]:
     return history
 
 
-def get_history(conversation_id: int, limit: Optional[int] = None) -> List[dict]:
+def get_history(conversation_id, limit=None):
     client = _redis_client()
     key = _redis_key(conversation_id)
-    history: List[dict] = []
+    history = []
 
     if client:
         try:
@@ -128,7 +125,7 @@ def get_history(conversation_id: int, limit: Optional[int] = None) -> List[dict]
     return history
 
 
-def conversation_to_dict(conversation: Conversation, include_messages: bool = False) -> dict:
+def conversation_to_dict(conversation, include_messages=False):
     data = conversation.to_dict()
     if include_messages:
         data["messages"] = get_history(conversation.id)
@@ -136,11 +133,11 @@ def conversation_to_dict(conversation: Conversation, include_messages: bool = Fa
 
 
 def list_conversations(
-    user_id: int,
-    limit: Optional[int] = None,
-    include_messages: bool = False,
-    message_limit: Optional[int] = None,
-) -> List[dict]:
+    user_id,
+    limit=None,
+    include_messages=False,
+    message_limit=None,
+):
     query = (
         Conversation.query.filter(Conversation.user_id == user_id)
         .order_by(Conversation.updated_at.desc())
@@ -158,7 +155,7 @@ def list_conversations(
     return results
 
 
-def get_conversation_with_history(conversation_id: int, message_limit: Optional[int] = None) -> Optional[dict]:
+def get_conversation_with_history(conversation_id, message_limit=None):
     conversation = db.session.get(Conversation, conversation_id)
     if not conversation:
         return None
@@ -167,7 +164,7 @@ def get_conversation_with_history(conversation_id: int, message_limit: Optional[
     return data
 
 
-def delete_conversation(conversation_id: int, user_id: Optional[int] = None) -> bool:
+def delete_conversation(conversation_id, user_id=None):
     conversation = db.session.get(Conversation, conversation_id)
     if not conversation:
         return False

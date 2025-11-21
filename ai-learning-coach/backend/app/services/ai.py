@@ -1,11 +1,9 @@
-# app/services/ai.py
-from typing import List, Dict, Any
 from google import genai
 from flask import current_app
 
 _SUPPORTED_ROLES = {"user", "model"}
 
-def _format_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _format_messages(messages):
     formatted = []
     for m in messages or []:
         role = m.get("role")
@@ -15,7 +13,7 @@ def _format_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         formatted.append({"role": role, "parts": [{"text": str(content)}]})
     return formatted
 
-def _extract_text(resp) -> str:
+def _extract_text(resp):
     text = getattr(resp, "text", None)
     if isinstance(text, str) and text.strip():
         return text.strip()
@@ -30,7 +28,7 @@ def _extract_text(resp) -> str:
                 return snippet.strip()
     return ""
 
-def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **generation_kwargs) -> str:
+def generate_reply(messages, system_prompt=None, **generation_kwargs):
     api_key = current_app.config.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
@@ -46,7 +44,7 @@ def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **
         "max_output_tokens": int,
         "candidate_count": int,
     }
-    gen_config: Dict[str, Any] = {}
+    gen_config = {}
     for key, caster in cast_map.items():
         if key in generation_kwargs:
             try:
@@ -54,7 +52,7 @@ def generate_reply(messages: List[Dict[str, Any]], system_prompt: str = None, **
             except (TypeError, ValueError):
                 continue
 
-    config: Dict[str, Any] = {}
+    config = {}
     if system_prompt:
         config["system_instruction"] = system_prompt
     config.update(gen_config)

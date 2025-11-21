@@ -9,7 +9,7 @@ from ..extensions import db
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
-def _parse_role(role_str: str | None) -> UserRole:
+def _parse_role(role_str):
     if role_str == "student":
         return UserRole.STUDENT
     if role_str == "admin":
@@ -17,7 +17,7 @@ def _parse_role(role_str: str | None) -> UserRole:
     raise ValueError("Invalid role! Must be either 'student' or 'admin'.")
 
 
-def _serialize_user(user: User) -> dict:
+def _serialize_user(user):
     return {
         "id": user.id,
         "first_name": user.first_name,

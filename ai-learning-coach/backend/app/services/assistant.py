@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
 
 from flask import current_app
 from sqlalchemy import func, or_
@@ -55,7 +52,7 @@ WRONG_ANSWER_PROMPT = (
 )
 
 
-def process_assistant_request(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+def process_assistant_request(messages):
     classification = classify_task(messages)
     task = classification.get("task") or "general_chat"
     raw_params = classification.get("params")
@@ -86,7 +83,7 @@ def process_assistant_request(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     return handler(messages, params)
 
 
-def classify_task(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+def classify_task(messages):
     raw = generate_reply(messages, system_prompt=CLASSIFIER_PROMPT, temperature=0)
     data = None
     if raw:
@@ -106,12 +103,12 @@ def classify_task(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     return data
 
 
-def handle_general_chat(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+def handle_general_chat(messages, params):
     text = generate_reply(messages, system_prompt=GENERAL_CHAT_PROMPT)
     return {"task": "general_chat", "text": text}
 
 
-def handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+def handle_generate_practice(messages, params):
     material, error_response = find_material(params)
     if error_response:
         return error_response
@@ -154,7 +151,7 @@ def handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, A
     }
 
 
-def handle_material_qa(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+def handle_material_qa(messages, params):
     material, error_response = find_material(params, task_name="material_qa")
     if error_response:
         return error_response
@@ -197,7 +194,7 @@ def handle_material_qa(messages: List[Dict[str, Any]], params: Dict[str, Any]) -
     }
 
 
-def handle_wrong_answer_hint(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+def handle_wrong_answer_hint(messages, params):
     question = params.get("question") or last_user_text(messages)
     student_answer = params.get("student_answer")
     if not student_answer:
@@ -230,7 +227,7 @@ def handle_wrong_answer_hint(messages: List[Dict[str, Any]], params: Dict[str, A
     }
 
 
-def find_material(params: Dict[str, Any], task_name: str = "generate_practice"):
+def find_material(params, task_name="generate_practice"):
     course_id = params.get("course_id")
     material_name = params.get("material_name")
 
@@ -273,7 +270,7 @@ def find_material(params: Dict[str, Any], task_name: str = "generate_practice"):
         ])
 
     exact_matches = base_query.filter(or_(*conditions)).all()
-    candidates: List[Material] = []
+    candidates = []
     seen = set()
     for candidate in exact_matches:
         if candidate.id not in seen:
@@ -324,7 +321,7 @@ def find_material(params: Dict[str, Any], task_name: str = "generate_practice"):
     return candidates[0], None
 
 
-def read_material_text(material: Material, limit: int = 4000) -> str:
+def read_material_text(material, limit=4000):
     root = current_app.config.get("UPLOAD_FOLDER")
     if not root:
         raise ValueError("UPLOAD_FOLDER is not configured; cannot read materials.")
@@ -390,12 +387,12 @@ def read_material_text(material: Material, limit: int = 4000) -> str:
 
 
 def build_practice_prompt(
-    material: Material,
-    material_text: str,
-    request_text: Optional[str],
-    question_count: int,
-    difficulty: Optional[str],
-) -> str:
+    material,
+    material_text,
+    request_text,
+    question_count,
+    difficulty,
+):
     course = material.course
     course_info = f"{course.name} ({course.code})" if course else f"Course ID {material.course_id}"
     material_label = material.stored_name or material.original_name
@@ -417,13 +414,13 @@ def build_practice_prompt(
     )
 
 
-def last_user_text(messages: List[Dict[str, Any]]) -> str:
+def last_user_text(messages):
     for message in reversed(messages or []):
         if message.get("role") == "user" and message.get("content"):
             return str(message["content"])
     return ""
 
-def find_filename_in_messages(messages: List[Dict[str, Any]]) -> Optional[str]:
+def find_filename_in_messages(messages):
     import re
 
     pattern = re.compile(r"([^\s\\/:*?\"<>|]+\.(?:pdf|docx|txt|md|csv|json))", re.IGNORECASE)
@@ -441,9 +438,7 @@ def find_filename_in_messages(messages: List[Dict[str, Any]]) -> Optional[str]:
     return None
 
 
-def fill_material_info(
-    params: Dict[str, Any], missing: List[str], messages: List[Dict[str, Any]]
-) -> Tuple[Dict[str, Any], List[str]]:
+def fill_material_info(params, missing, messages):
     updated_params = dict(params or {})
     missing_set = set(missing or [])
 

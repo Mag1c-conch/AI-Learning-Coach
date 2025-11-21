@@ -57,7 +57,7 @@ def delete_course(course_id):
         db.session.rollback()
         abort(500, description=str(e))
 
-def _build_course_payload(course: Course):
+def _build_course_payload(course):
     user = User.query.get(course.created_by) if getattr(course, "created_by", None) else None
     if user:
         first = (getattr(user, "first_name", "") or "").strip()

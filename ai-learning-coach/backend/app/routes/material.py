@@ -2,7 +2,6 @@ from flask import Blueprint, abort, current_app, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime, timezone
-from typing import Optional
 from sqlalchemy import or_, select
 from zoneinfo import ZoneInfo
 
@@ -12,7 +11,7 @@ from ..models import Assignment, Course, Enrollment, Material, User, UserRole
 bp = Blueprint("material", __name__, url_prefix="/materials")
 
 
-def _reserve_unique_filename(directory: str, filename: str) -> str:
+def _reserve_unique_filename(directory, filename):
     safe_name = secure_filename(filename) or "uploaded_file"
     name, ext = os.path.splitext(safe_name)
     candidate = safe_name
@@ -23,7 +22,7 @@ def _reserve_unique_filename(directory: str, filename: str) -> str:
     return candidate
 
 
-def _material_file_path(material: Material) -> str:
+def _material_file_path(material):
     root = current_app.config["UPLOAD_FOLDER"]
     course_dir = os.path.join(root, str(material.course_id))
     if material.assignment_id:
@@ -43,13 +42,13 @@ def _material_file_path(material: Material) -> str:
     return os.path.join(course_dir, material.stored_name)
 
 
-def _remove_file_from_disk(material: Material) -> None:
+def _remove_file_from_disk(material):
     file_path = _material_file_path(material)
     if os.path.isfile(file_path):
         os.remove(file_path)
 
 
-def _sanitize_custom_basename(name: str) -> str:
+def _sanitize_custom_basename(name):
     safe = secure_filename(name or "")
     if not safe:
         return ""
@@ -70,7 +69,7 @@ def _parse_bool(value):
     return None
 
 
-def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
+def _iso_utc(dt):
     """Return a UTC ISO8601 string (trailing Z) for the provided datetime."""
     if not dt:
         return None
@@ -139,7 +138,7 @@ def _parse_due_date(raw):
         abort(400, description="assignment_due_date must be ISO8601/date/timestamp")
 
 
-def _build_submission_stored_name(course_dir: str, assignment: Assignment, student: User, original_name: str) -> tuple[str, str]:
+def _build_submission_stored_name(course_dir, assignment, student, original_name):
     assignment_dir = os.path.join(course_dir, str(assignment.id))
     os.makedirs(assignment_dir, exist_ok=True)
 
@@ -148,7 +147,7 @@ def _build_submission_stored_name(course_dir: str, assignment: Assignment, stude
     return assignment_dir, stored_name
 
 
-def _material_with_student_dict(material: Material) -> dict:
+def _material_with_student_dict(material):
     data = material.to_dict()
     student = User.query.get(material.uploaded_by)
     if student and student.role == UserRole.STUDENT:
@@ -163,7 +162,7 @@ def _material_with_student_dict(material: Material) -> dict:
     return data
 
 
-def _ensure_student_enrolled(course_id: int, student_id: int) -> None:
+def _ensure_student_enrolled(course_id, student_id):
     if not Enrollment.query.filter_by(course_id=course_id, user_id=student_id).first():
         abort(403, description="student is not enrolled in this course")
 
@@ -329,7 +328,7 @@ def upload_material():
 
 
 @bp.route("/<int:material_id>", methods=["DELETE"])
-def delete_material(material_id: int):
+def delete_material(material_id):
 
     deleted_by = request.args.get("deleted_by", type=int)
     if not deleted_by:
@@ -377,7 +376,7 @@ def delete_material(material_id: int):
 
 # Download file
 @bp.route("/<int:material_id>/download", methods=["GET"])
-def download_material(material_id: int):
+def download_material(material_id):
 
     material = Material.query.get_or_404(material_id)
     file_path = _material_file_path(material)
@@ -396,7 +395,7 @@ def download_material(material_id: int):
 
 # Submit file (students)
 @bp.route("/assignments/<int:assignment_id>/submissions", methods=["POST"])
-def submit_assignment_material(assignment_id: int):
+def submit_assignment_material(assignment_id):
 
     assignment = Assignment.query.get_or_404(assignment_id)
 
@@ -459,7 +458,7 @@ def submit_assignment_material(assignment_id: int):
 
 
 @bp.route("/assignments/<int:assignment_id>/submissions", methods=["GET"])
-def list_assignment_submissions(assignment_id: int):
+def list_assignment_submissions(assignment_id):
 
     assignment = Assignment.query.get_or_404(assignment_id)
 

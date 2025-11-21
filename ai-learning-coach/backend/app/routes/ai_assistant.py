@@ -1,7 +1,5 @@
-# app/routes/ai_assistant.py
 import json
 from datetime import datetime, time, timedelta
-from typing import Dict, Optional
 
 from flask import Blueprint, abort, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
@@ -125,7 +123,7 @@ def list_conversations():
 # get a specific conversation by ID
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["GET"])
 @jwt_required(optional=True)
-def get_conversation(conversation_id: int):
+def get_conversation(conversation_id):
     user_id_param = request.args.get("user_id", type=int)
     message_limit = request.args.get("message_limit", type=int)
 
@@ -144,7 +142,7 @@ def get_conversation(conversation_id: int):
 # delete a conversation by ID
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["DELETE"])
 @jwt_required(optional=True)
-def delete_conversation_route(conversation_id: int):
+def delete_conversation_route(conversation_id):
     user_id_param = request.args.get("user_id", type=int)
     user = resolve_user(user_id_param, allow_token=True, require=True)
 
@@ -155,7 +153,7 @@ def delete_conversation_route(conversation_id: int):
     return jsonify({"message": "conversation deleted successfully"}), 200
 
 
-def _parse_json_reply(text: str):
+def _parse_json_reply(text):
     if not text:
         return None
     candidate = text.strip()
@@ -336,7 +334,7 @@ def get_plan():
     messages = [{"role": "user", "content": json.dumps(plan_context, ensure_ascii=False)}]
     system_prompt = _build_study_plan_prompt(week_start, week_end)
 
-    plan_payload: Optional[dict] = None
+    plan_payload = None
     plan_source = "ai"
     try:
         reply = generate_reply(
@@ -402,7 +400,7 @@ def get_plan():
 
 # get study plan for a student
 @bp.route("/assistant/study_plan/<int:student_id>", methods=["GET"])
-def retrieve_study_plan(student_id: int):
+def retrieve_study_plan(student_id):
     query = StudyPlan.query.filter_by(student_id=student_id)
     week_start_param = request.args.get("week_start")
     if week_start_param:
@@ -433,7 +431,7 @@ def _build_study_plan_prompt(week_start, week_end):
 
 
 def _build_plan_context(student, courses, assignments, materials, week_start, week_end):
-    course_context: Dict[int, Dict[str, object]] = {}
+    course_context = {}
     for course in courses:
         course_context[course.id] = {
             "id": course.id,
@@ -452,7 +450,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
             continue
         entry["assignments"].append(_summarize_assignment(assignment))
 
-    materials_per_course: Dict[int, int] = {}
+    materials_per_course = {}
     for material in materials:
         entry = course_context.get(material.course_id)
         if not entry:
@@ -502,7 +500,7 @@ def _summarize_assignment(assignment):
     }
 
 
-def _summarize_material(material, preview_limit: int = _MATERIAL_PREVIEW_CHARS):
+def _summarize_material(material, preview_limit=_MATERIAL_PREVIEW_CHARS):
     summary = {
         "id": material.id,
         "course_id": material.course_id,
@@ -609,7 +607,7 @@ def _normalize_task(task, course_ids, course_set, material_set):
     }
 
 
-def _parse_time_value(value: Optional[str]):
+def _parse_time_value(value):
     if isinstance(value, time):
         return value
     if isinstance(value, str):
@@ -620,7 +618,7 @@ def _parse_time_value(value: Optional[str]):
     return None
 
 
-def _add_minutes(start_time: time, minutes: int):
+def _add_minutes(start_time, minutes):
     baseline = datetime.combine(datetime.now(SYDNEY_TZ).date(), start_time)
     baseline += timedelta(minutes=minutes)
     return baseline.time()
