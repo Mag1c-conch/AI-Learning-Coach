@@ -175,13 +175,13 @@ def _parse_json_reply(text: str):
 @bp.route("/assistant/grade_submission", methods=["POST"])
 @jwt_required(optional=True)
 def grade_submission():
-    payload = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
 
-    material_id_raw = payload.get("material_id")
-    teacher_id_raw = payload.get("teacher_id")
-    rubric = payload.get("rubric")
-    additional_instructions = payload.get("instructions")
-    max_score_raw = payload.get("max_score", 100)
+    material_id_raw = data.get("material_id")
+    teacher_id_raw = data.get("teacher_id")
+    rubric = data.get("rubric")
+    additional_instructions = data.get("instructions")
+    max_score_raw = data.get("max_score", 100)
 
     try:
         material_id = int(material_id_raw)
@@ -297,8 +297,8 @@ def grade_submission():
 # generate study plan for a student
 @bp.route("/get_plan", methods=["POST"])
 def get_plan():
-    payload = request.get_json(silent=True) or {}
-    student_id = payload.get("student_id")
+    data = request.get_json(silent=True) or {}
+    student_id = data.get("student_id")
     if not student_id:
         abort(400, description="missing required fields")
     student = User.query.get_or_404(student_id)

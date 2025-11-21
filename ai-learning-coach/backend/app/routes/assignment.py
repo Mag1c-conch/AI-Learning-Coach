@@ -17,11 +17,6 @@ def _ensure_student_enrolled(course_id: int, student_id: int) -> None:
 
 @bp.route("", methods=["GET"])
 def list_assignments():
-    """
-    Optional query parameters:
-    - course_id: int, filter assignments by course
-    Returns 200 with an array of assignment JSON objects.
-    """
     course_id = request.args.get("course_id", type=int)
 
     query = Assignment.query
@@ -81,11 +76,11 @@ def upsert_assignment_grade(assignment_id: int):
 
     assignment = Assignment.query.get_or_404(assignment_id)
 
-    payload = request.get_json(silent=True)
-    if payload is None:
+    data = request.get_json(silent=True)
+    if data is None:
         abort(400, description="request payload must be valid JSON")
 
-    teacher_raw = payload.get("teacher_id")
+    teacher_raw = data.get("teacher_id")
     if teacher_raw is None:
         abort(400, description="teacher_id is required")
     try:
@@ -93,7 +88,7 @@ def upsert_assignment_grade(assignment_id: int):
     except (TypeError, ValueError):
         abort(400, description="teacher_id must be an integer")
 
-    student_raw = payload.get("student_id")
+    student_raw = data.get("student_id")
     if student_raw is None:
         abort(400, description="student_id is required")
     try:
@@ -101,14 +96,14 @@ def upsert_assignment_grade(assignment_id: int):
     except (TypeError, ValueError):
         abort(400, description="student_id must be an integer")
 
-    score_raw = payload.get("score")
+    score_raw = data.get("score")
     if score_raw is None:
         abort(400, description="score is required")
     try:
         score = float(score_raw)
     except (TypeError, ValueError):
         abort(400, description="score must be a number")
-    comment_raw = payload.get("comment")
+    comment_raw = data.get("comment")
     comment = str(comment_raw).strip() if comment_raw is not None else None
     if comment == "":
         comment = None

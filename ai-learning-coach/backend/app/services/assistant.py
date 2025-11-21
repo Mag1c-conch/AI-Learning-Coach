@@ -40,10 +40,6 @@ WRONG_ANSWER_PROMPT = (
 )
 
 
-class TaskExecutionError(RuntimeError):
-    """Raised when a task cannot be completed."""
-
-
 def process_assistant_request(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     classification = _classify_task(messages)
     task = classification.get("task") or "general_chat"
