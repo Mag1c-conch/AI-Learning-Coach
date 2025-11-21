@@ -14,62 +14,29 @@ from ..models import Material
 from .ai import generate_reply
 
 GENERAL_CHAT_PROMPT = (
-    "You are an expert AI teaching assistant designed to support teachers and educators. "
-    "Your role is to provide professional, practical advice on all aspects of teaching.\n\n"
-    "You can help with:\n"
-    "- Teaching methods and pedagogical strategies\n"
-    "- Course design, curriculum planning, and syllabus development\n"
-    "- Student motivation, engagement, and classroom management\n"
-    "- Assessment design, grading strategies, and rubric creation\n"
-    "- Addressing diverse learning needs and differentiated instruction\n"
-    "- Educational technology integration and online teaching\n"
-    "- Professional development and teaching reflection\n"
-    "- Communication with students and feedback techniques\n"
-    "- Time management and workload balance for teachers\n\n"
-    "Guidelines:\n"
-    "- Provide detailed, actionable, and evidence-based answers\n"
-    "- Use specific examples and step-by-step guidance when helpful\n"
-    "- Draw from educational research and best practices\n"
-    "- Adapt your response to the teacher's context and experience level\n"
-    "- Be supportive and encouraging while maintaining professional standards\n"
-    "- When relevant, suggest using specialized features like generating practice questions or analyzing student errors\n\n"
-    "If the user greets you, respond warmly and ask how you can assist with their teaching today."
+    "Act as a practical teaching coach. Give grounded, specific advice on classroom practice, "
+    "course design, feedback, and workload. Offer examples or steps when they help. "
+    "Keep the tone encouraging and adjust depth to the teacher's context."
 )
 
 CLASSIFIER_PROMPT = (
-    "You are a routing assistant for an educational platform. Based on the full "
-    "conversation history, decide which task to run. Available tasks:\n"
-    "- generate_practice: create practice questions from a specific course material. "
-    "Requires either `material_id` (int) or `material_name` (str). Capture the exact "
-    "name when the user references a file. Optional fields: `course_id` (int) to "
-    "disambiguate, `question_count` (int), `difficulty` (str), and any additional "
-    "`instruction` text.\n"
-    "- wrong_answer_hint: provide hints when a student submits an incorrect answer. "
-    "Requires `question` (str) and `student_answer` (str). Optional: `correct_answer` (str).\n"
-    "- general_chat: default conversational response when no special task fits.\n\n"
-    "Return a JSON object with keys:\n"
-    "`task`: one of the task names.\n"
-    "`params`: object containing extracted parameters.\n"
-    "`missing`: array of parameter names still required to execute the task (empty array if ready).\n"
-    "If information is insufficient for specialised tasks, prefer setting task to general_chat. "
-    "Respond with JSON only without markdown fences or additional commentary."
+    "You help decide which task to run from the conversation history. Tasks:\n"
+    "- generate_practice: build practice questions from a course material. Needs `material_id`(int) or `material_name`(str); "
+    "optional `course_id`(int), `question_count`(int), `difficulty`(str), and extra `instruction` text.\n"
+    "- wrong_answer_hint: give a hint on an incorrect answer. Needs `question`(str) and `student_answer`(str); optional `correct_answer`(str).\n"
+    "- general_chat: when nothing else fits.\n"
+    "Return JSON only with keys: task, params, missing (array of still-needed fields). If unsure, pick general_chat."
 )
 
 PRACTICE_PROMPT = (
-    "You are an expert instructor. Create high-quality practice questions from the "
-    "provided course material. Return the questions as plain text, numbered list. "
-    "For each question include:\n"
-    "- Question text\n"
-    "- If multiple choice: label options A), B), C) etc. and mark the correct one clearly.\n"
-    "- Provide the correct answer or brief rationale after each question using the format 'Answer: ...'.\n"
-    "Keep questions aligned with the supplied material and avoid revealing answers directly when hints suffice."
+    "Create practice questions from the provided material. Return plain text in a numbered list. "
+    "For multiple choice, label options A), B), C) etc. and mark the correct one. "
+    "Add a short answer or rationale after each item using 'Answer: ...'. Keep every question tied to the material."
 )
 
 WRONG_ANSWER_PROMPT = (
-    "You are a supportive tutor. Review the question, the student's incorrect answer, "
-    "and the correct answer if available. Provide a constructive hint (not the full "
-    "solution unless explicitly requested) that helps the student understand the mistake "
-    "and identify the correct reasoning."
+    "Read the question, the student's answer, and the correct answer if present. "
+    "Give a concise hint that steers the student toward the right reasoning without dumping the full solution unless asked."
 )
 
 
@@ -80,8 +47,10 @@ class TaskExecutionError(RuntimeError):
 def process_assistant_request(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     classification = _classify_task(messages)
     task = classification.get("task") or "general_chat"
-    params = _safe_dict(classification.get("params"))
-    missing = _ensure_list(classification.get("missing"))
+    raw_params = classification.get("params")
+    params = raw_params if isinstance(raw_params, dict) else {}
+    raw_missing = classification.get("missing")
+    missing = [str(v) for v in raw_missing] if isinstance(raw_missing, list) else []
 
     if missing:
         missing_str = ", ".join(missing)
@@ -412,17 +381,6 @@ def _extract_json(text: str) -> Any:
         return json.loads(stripped)
     except json.JSONDecodeError:
         return None
-
-
-def _safe_dict(value: Any) -> Dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _ensure_list(value: Any) -> List[str]:
-    if isinstance(value, list):
-        return [str(v) for v in value]
-    return []
-
 
 def _build_sequential_pattern(value: str) -> Optional[str]:
     stripped = "".join(ch for ch in value if ch.isalnum())
