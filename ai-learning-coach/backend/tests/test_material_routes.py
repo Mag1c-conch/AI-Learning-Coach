@@ -8,7 +8,6 @@ from .test_auth_course_flow import app, client
 
 
 def _seed_materials(app, *, include_submission: bool = True):
-    """Create a course with an admin, a student, and sample materials."""
     with app.app_context():
         admin = User(
             username="admin_material@example.com",

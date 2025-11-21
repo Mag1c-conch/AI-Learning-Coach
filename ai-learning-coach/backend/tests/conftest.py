@@ -23,8 +23,8 @@ class _RedisStub:
 redis_stub.Redis = _RedisStub
 sys.modules.setdefault("redis", redis_stub)
 
-from app import create_app  # noqa: E402
-from app.extensions import db  # noqa: E402
+from app import create_app
+from app.extensions import db
 
 
 @pytest.fixture()

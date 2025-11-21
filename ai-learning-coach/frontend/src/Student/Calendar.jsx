@@ -26,6 +26,7 @@ function getCurrentUserId() {
 
 // fetch timetable events from lovalStorage
 const TT_KEY = (uid) => `timetableEvents:${uid || "anon"}`;
+const CALENDAR_KEY = (uid) => `calendar_tasks_v1:${uid || "anon"}`;
 
 function ttGetEvents(uid) {
   try {
@@ -93,7 +94,13 @@ export default function TimeTable() {
 
   const [tasks, setTasks] = useState(() => {
     try {
-      const raw = localStorage.getItem("calendar_tasks_v1");
+      // migrate legacy key once to per-user key
+      const legacyRaw = localStorage.getItem("calendar_tasks_v1");
+      if (legacyRaw) {
+        localStorage.setItem(CALENDAR_KEY(uid), legacyRaw);
+        localStorage.removeItem("calendar_tasks_v1");
+      }
+      const raw = localStorage.getItem(CALENDAR_KEY(uid));
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -107,8 +114,8 @@ export default function TimeTable() {
 
   // store calendar state to browser(localStorage)
   useEffect(() => {
-    localStorage.setItem("calendar_tasks_v1", JSON.stringify(tasks));
-  }, [tasks]);
+    localStorage.setItem(CALENDAR_KEY(uid), JSON.stringify(tasks));
+  }, [tasks, uid]);
 
   // inital load AI plan events
   useEffect(() => {

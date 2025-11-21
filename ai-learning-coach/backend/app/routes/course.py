@@ -57,7 +57,7 @@ def delete_course(course_id):
         db.session.rollback()
         abort(500, description=str(e))
 
-def _build_course_payload(course: Course):
+def build_course_payload(course):
     user = User.query.get(course.created_by) if getattr(course, "created_by", None) else None
     if user:
         first = (getattr(user, "first_name", "") or "").strip()
@@ -111,7 +111,7 @@ def list_courses():
         query = query.filter(Course.created_by == created_by)
 
     courses = query.order_by(Course.created_at.desc()).all()
-    return jsonify([_build_course_payload(course) for course in courses]), 200
+    return jsonify([build_course_payload(course) for course in courses]), 200
 
 # Enroll a student in a course
 @bp.route("/<int:course_id>/enroll",methods=['POST'])
@@ -238,9 +238,6 @@ def list_user_enrollments(user_id):
 # Get all students enrolled in a course
 @bp.route("/<int:course_id>/students", methods=["GET"])
 def list_course_students(course_id):
-    """
-    Return all students enrolled in the course.
-    """
     # Ensure the course exists
     course = Course.query.get_or_404(course_id)
 

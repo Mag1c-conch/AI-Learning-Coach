@@ -1,7 +1,5 @@
-# app/routes/ai_assistant.py
 import json
 from datetime import datetime, time, timedelta
-from typing import Dict, Optional
 
 from flask import Blueprint, abort, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
@@ -9,7 +7,7 @@ from app.models import Assignment, Course, Enrollment, Material, StudyPlan, SYDN
 
 from ..extensions import db
 from ..services import chat_storage
-from ..services.assistant import _load_material_text, process_assistant_request
+from ..services.assistant import read_material_text, process_assistant_request
 from ..services.ai import generate_reply
 from ..auth_utils import resolve_user
 
@@ -24,15 +22,11 @@ _COURSE_MATERIAL_LIMIT = 5
 _MATERIAL_PREVIEW_CHARS = 240
 _STUDY_PLAN_MAX_OUTPUT_TOKENS = 3072
 _STUDY_PLAN_PROMPT_TEMPLATE = (
-    "You are an expert study coach. Using the JSON input, craft a personalised study plan.\n"
-    "Create a schedule covering each day from {week_start} to {week_end} inclusive (local time).\n"
-    "Requirements:\n"
-    "- Schedule study blocks only between 08:00 and 18:00.\n"
-    "- Every task must focus on a single material or assignment and include `course_id`; include `material_id` when one is provided, otherwise use null.\n"
-    "- Provide concise titles (<= 8 words) and actionable descriptions (<= 20 words).\n"
-    "- Limit each day to at most 3 study blocks and keep each block <= 120 minutes.\n"
-    "- Respect upcoming due dates and distribute the workload evenly.\n"
-    "- Return strict JSON (no markdown) following this schema:\n"
+    "Use the JSON input to draft a study plan for the week {week_start} to {week_end} (local time).\n"
+    "Keep study blocks between 08:00 and 18:00, no more than 3 blocks per day, each no longer than 120 minutes.\n"
+    "Every task should stick to one material or assignment and include `course_id`; use `material_id` when known, otherwise null.\n"
+    "Titles should be short (<= 8 words) with clear descriptions (<= 20 words). Balance workload and respect due dates.\n"
+    "Return strict JSON (no markdown) shaped exactly like:\n"
     "{{\n"
     '  \"student_id\": <int>,\n'
     '  \"week_start\": \"YYYY-MM-DD\",\n'
@@ -43,7 +37,7 @@ _STUDY_PLAN_PROMPT_TEMPLATE = (
     "    ]}}\n"
     "  ]\n"
     "}}\n"
-    "If information is missing, make reasonable assumptions and still produce a full seven-day plan."
+    "If details are missing, make reasonable assumptions and still return a complete seven-day plan."
 )
 
 # use gemini api to generate chat reply
@@ -129,7 +123,7 @@ def list_conversations():
 # get a specific conversation by ID
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["GET"])
 @jwt_required(optional=True)
-def get_conversation(conversation_id: int):
+def get_conversation(conversation_id):
     user_id_param = request.args.get("user_id", type=int)
     message_limit = request.args.get("message_limit", type=int)
 
@@ -148,11 +142,7 @@ def get_conversation(conversation_id: int):
 # delete a conversation by ID
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["DELETE"])
 @jwt_required(optional=True)
-def delete_conversation_route(conversation_id: int):
-    """
-    Delete the specified conversation and all of its messages.
-    Requires a user_id query parameter to validate ownership.
-    """
+def delete_conversation_route(conversation_id):
     user_id_param = request.args.get("user_id", type=int)
     user = resolve_user(user_id_param, allow_token=True, require=True)
 
@@ -163,7 +153,7 @@ def delete_conversation_route(conversation_id: int):
     return jsonify({"message": "conversation deleted successfully"}), 200
 
 
-def _parse_json_reply(text: str):
+def parse_json_reply(text):
     if not text:
         return None
     candidate = text.strip()
@@ -183,13 +173,13 @@ def _parse_json_reply(text: str):
 @bp.route("/assistant/grade_submission", methods=["POST"])
 @jwt_required(optional=True)
 def grade_submission():
-    payload = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
 
-    material_id_raw = payload.get("material_id")
-    teacher_id_raw = payload.get("teacher_id")
-    rubric = payload.get("rubric")
-    additional_instructions = payload.get("instructions")
-    max_score_raw = payload.get("max_score", 100)
+    material_id_raw = data.get("material_id")
+    teacher_id_raw = data.get("teacher_id")
+    rubric = data.get("rubric")
+    additional_instructions = data.get("instructions")
+    max_score_raw = data.get("max_score", 100)
 
     try:
         material_id = int(material_id_raw)
@@ -225,7 +215,7 @@ def grade_submission():
     student = User.query.get(material.uploaded_by)
 
     try:
-        submission_text = _load_material_text(material, limit=4000)
+        submission_text = read_material_text(material, limit=4000)
     except FileNotFoundError:
         abort(404, description="submission file not found on server")
     except ValueError as exc:
@@ -256,9 +246,7 @@ def grade_submission():
     user_message = f"{grading_context}\n\n{submission_block}"
 
     system_prompt = (
-        "You are an experienced instructor grading a student's assignment submission. "
-        "Analyze the assignment details and the student's work. "
-        "Respond with a strict JSON object (no extra commentary) matching this schema:\n"
+        "Grade the submission using the details provided. Reply with JSON only, no markdown, using this shape:\n"
         "{\n"
         '  "score": {"value": <number>, "max": ' + str(max_score) + ', "explanation": "<short summary>"},\n'
         '  "strengths": ["<positive observation>", ...],\n'
@@ -274,10 +262,7 @@ def grade_submission():
         "  ],\n"
         '  "next_steps": "<overall advice for the student>"\n'
         "}\n"
-        f"The numeric score must be between 0 and {max_score}. "
-        "Provide at least one mistake entry when issues are found; if the work is excellent, return an empty list and explain why. "
-        "Use concise English for all text values. "
-        "Do not include markdown or additional prose outside the JSON object."
+        f"The score must be between 0 and {max_score}. If there are problems, include at least one mistake entry; if the work is excellent, explain why and leave mistakes empty. Keep the language concise."
     )
 
     messages = [{"role": "user", "content": user_message}]
@@ -289,7 +274,7 @@ def grade_submission():
     except RuntimeError as err:
         abort(502, description=str(err))
 
-    parsed = _parse_json_reply(reply)
+    parsed = parse_json_reply(reply)
     response_payload = {
         "grading": parsed,
         "raw_reply": reply,
@@ -310,8 +295,8 @@ def grade_submission():
 # generate study plan for a student
 @bp.route("/get_plan", methods=["POST"])
 def get_plan():
-    payload = request.get_json(silent=True) or {}
-    student_id = payload.get("student_id")
+    data = request.get_json(silent=True) or {}
+    student_id = data.get("student_id")
     if not student_id:
         abort(400, description="missing required fields")
     student = User.query.get_or_404(student_id)
@@ -344,12 +329,12 @@ def get_plan():
             .all()
         )
 
-    week_start, week_end = _determine_week_window()
-    plan_context = _build_plan_context(student, courses, assignments, materials, week_start, week_end)
+    week_start, week_end = determine_week_window()
+    plan_context = build_plan_context(student, courses, assignments, materials, week_start, week_end)
     messages = [{"role": "user", "content": json.dumps(plan_context, ensure_ascii=False)}]
-    system_prompt = _build_study_plan_prompt(week_start, week_end)
+    system_prompt = build_study_plan_prompt(week_start, week_end)
 
-    plan_payload: Optional[dict] = None
+    plan_payload = None
     plan_source = "ai"
     try:
         reply = generate_reply(
@@ -358,7 +343,7 @@ def get_plan():
             temperature=0.2,
             max_output_tokens=_STUDY_PLAN_MAX_OUTPUT_TOKENS,
         )
-        plan_payload = _parse_json_reply(reply)
+        plan_payload = parse_json_reply(reply)
     except ValueError as err:
         abort(400, description=str(err))
     except RuntimeError as err:
@@ -368,9 +353,9 @@ def get_plan():
     if plan_payload is None:
         plan_source = "fallback"
         current_app.logger.warning("Using fallback study plan generation for student_id=%s", student_id)
-        plan_payload = _build_fallback_plan(student, courses, materials, week_start, week_end)
+        plan_payload = build_fallback_plan(student, courses, materials, week_start, week_end)
 
-    normalized_plan = _normalize_plan_payload(
+    normalized_plan = normalize_plan_payload(
         plan_payload,
         student_id=student.id,
         week_start=week_start,
@@ -381,8 +366,8 @@ def get_plan():
 
     if not any(day.get("tasks") for day in normalized_plan.get("days", [])):
         plan_source = "fallback"
-        fallback_payload = _build_fallback_plan(student, courses, materials, week_start, week_end)
-        normalized_plan = _normalize_plan_payload(
+        fallback_payload = build_fallback_plan(student, courses, materials, week_start, week_end)
+        normalized_plan = normalize_plan_payload(
             fallback_payload,
             student_id=student.id,
             week_start=week_start,
@@ -415,7 +400,7 @@ def get_plan():
 
 # get study plan for a student
 @bp.route("/assistant/study_plan/<int:student_id>", methods=["GET"])
-def retrieve_study_plan(student_id: int):
+def retrieve_study_plan(student_id):
     query = StudyPlan.query.filter_by(student_id=student_id)
     week_start_param = request.args.get("week_start")
     if week_start_param:
@@ -431,28 +416,28 @@ def retrieve_study_plan(student_id: int):
     return jsonify(plan.to_dict()), 200
 
 
-def _determine_week_window():
+def determine_week_window():
     today = datetime.now(SYDNEY_TZ).date()
     week_start = today
     week_end = week_start + timedelta(days=6)
     return week_start, week_end
 
 
-def _build_study_plan_prompt(week_start, week_end):
+def build_study_plan_prompt(week_start, week_end):
     return _STUDY_PLAN_PROMPT_TEMPLATE.format(
         week_start=week_start.isoformat(),
         week_end=week_end.isoformat(),
     )
 
 
-def _build_plan_context(student, courses, assignments, materials, week_start, week_end):
-    course_context: Dict[int, Dict[str, object]] = {}
+def build_plan_context(student, courses, assignments, materials, week_start, week_end):
+    course_context = {}
     for course in courses:
         course_context[course.id] = {
             "id": course.id,
             "code": course.code,
             "name": course.name,
-            "description": _trim_text(course.description, 400),
+            "description": trim_text(course.description, 400),
             "assignments": [],
             "materials": [],
         }
@@ -463,9 +448,9 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
             continue
         if len(entry["assignments"]) >= _COURSE_ASSIGNMENT_LIMIT:
             continue
-        entry["assignments"].append(_summarize_assignment(assignment))
+        entry["assignments"].append(summarize_assignment(assignment))
 
-    materials_per_course: Dict[int, int] = {}
+    materials_per_course = {}
     for material in materials:
         entry = course_context.get(material.course_id)
         if not entry:
@@ -473,7 +458,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
         count = materials_per_course.get(material.course_id, 0)
         if count >= _COURSE_MATERIAL_LIMIT:
             continue
-        entry["materials"].append(_summarize_material(material))
+        entry["materials"].append(summarize_material(material))
         materials_per_course[material.course_id] = count + 1
 
     return {
@@ -493,7 +478,7 @@ def _build_plan_context(student, courses, assignments, materials, week_start, we
     }
 
 
-def _trim_text(value, limit):
+def trim_text(value, limit):
     if value is None:
         return None
     text = str(value).strip()
@@ -504,18 +489,18 @@ def _trim_text(value, limit):
     return text[:limit].rstrip() + "..."
 
 
-def _summarize_assignment(assignment):
+def summarize_assignment(assignment):
     return {
         "id": assignment.id,
         "course_id": assignment.course_id,
         "title": assignment.title,
-        "description": _trim_text(assignment.description, 320),
+        "description": trim_text(assignment.description, 320),
         "due_date": assignment.due_date.isoformat() if assignment.due_date else None,
         "optional": assignment.optional,
     }
 
 
-def _summarize_material(material, preview_limit: int = _MATERIAL_PREVIEW_CHARS):
+def summarize_material(material, preview_limit=_MATERIAL_PREVIEW_CHARS):
     summary = {
         "id": material.id,
         "course_id": material.course_id,
@@ -525,8 +510,8 @@ def _summarize_material(material, preview_limit: int = _MATERIAL_PREVIEW_CHARS):
         "uploaded_at": material.uploaded_at.isoformat() if material.uploaded_at else None,
     }
     try:
-        preview = _load_material_text(material, limit=preview_limit)
-    except Exception as exc:  # noqa: BLE001 - best effort preview
+        preview = read_material_text(material, limit=preview_limit)
+    except Exception as exc: 
         current_app.logger.debug("Unable to extract preview for material %s: %s", material.id, exc)
     else:
         if preview:
@@ -534,7 +519,7 @@ def _summarize_material(material, preview_limit: int = _MATERIAL_PREVIEW_CHARS):
     return summary
 
 
-def _normalize_plan_payload(payload, student_id, week_start, week_end, course_ids, material_ids):
+def normalize_plan_payload(payload, student_id, week_start, week_end, course_ids, material_ids):
     course_set = set(course_ids or [])
     material_set = set(material_ids or [])
     allowed_dates = [
@@ -553,7 +538,7 @@ def _normalize_plan_payload(payload, student_id, week_start, week_end, course_id
     if not isinstance(raw_days, list):
         raw_days = []
 
-    day_map: Dict[str, Dict[str, object]] = {}
+    day_map = {}
     for raw_day in raw_days:
         if not isinstance(raw_day, dict):
             continue
@@ -563,7 +548,7 @@ def _normalize_plan_payload(payload, student_id, week_start, week_end, course_id
         raw_tasks = raw_day.get("tasks") if isinstance(raw_day.get("tasks"), list) else []
         normalized_tasks = []
         for task in raw_tasks:
-            normalized_task = _normalize_task(task, course_ids, course_set, material_set)
+            normalized_task = normalize_task(task, course_ids, course_set, material_set)
             if normalized_task:
                 normalized_tasks.append(normalized_task)
         if len(normalized_tasks) > _MAX_TASKS_PER_DAY:
@@ -576,7 +561,7 @@ def _normalize_plan_payload(payload, student_id, week_start, week_end, course_id
     return normalized
 
 
-def _normalize_task(task, course_ids, course_set, material_set):
+def normalize_task(task, course_ids, course_set, material_set):
     if not isinstance(task, dict):
         return None
 
@@ -601,13 +586,13 @@ def _normalize_task(task, course_ids, course_set, material_set):
         if material_id_int not in material_set:
             material_id_int = None
 
-    start_time = _parse_time_value(task.get("start_time")) or time(9, 0)
+    start_time = parse_time_value(task.get("start_time")) or time(9, 0)
     start_time = max(start_time, _PLAN_WINDOW_START)
-    end_time = _parse_time_value(task.get("end_time")) or _add_minutes(start_time, _DEFAULT_SESSION_MINUTES)
+    end_time = parse_time_value(task.get("end_time")) or add_minutes(start_time, _DEFAULT_SESSION_MINUTES)
     end_time = min(end_time, _PLAN_WINDOW_END)
 
     if end_time <= start_time:
-        adjusted = _add_minutes(start_time, 60)
+        adjusted = add_minutes(start_time, 60)
         if adjusted > _PLAN_WINDOW_END:
             return None
         end_time = adjusted
@@ -622,7 +607,7 @@ def _normalize_task(task, course_ids, course_set, material_set):
     }
 
 
-def _parse_time_value(value: Optional[str]):
+def parse_time_value(value):
     if isinstance(value, time):
         return value
     if isinstance(value, str):
@@ -633,13 +618,13 @@ def _parse_time_value(value: Optional[str]):
     return None
 
 
-def _add_minutes(start_time: time, minutes: int):
+def add_minutes(start_time, minutes):
     baseline = datetime.combine(datetime.now(SYDNEY_TZ).date(), start_time)
     baseline += timedelta(minutes=minutes)
     return baseline.time()
 
 
-def _build_fallback_plan(student, courses, materials, week_start, week_end):
+def build_fallback_plan(student, courses, materials, week_start, week_end):
     day_dates = [week_start + timedelta(days=offset) for offset in range((week_end - week_start).days + 1)]
     plan = {
         "student_id": student.id,

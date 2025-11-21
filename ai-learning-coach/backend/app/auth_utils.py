@@ -1,24 +1,17 @@
-"""Helpers for JWT-based authentication and current-user resolution."""
-from __future__ import annotations
-
-from typing import Optional
-
 from flask import abort
 from flask_jwt_extended import create_access_token, get_jwt_identity
 
 from .models import User, UserRole
 
 
-def create_user_access_token(user: User) -> str:
-    """Create a JWT access token for the given user."""
+def create_user_access_token(user):
     claims = {
         "role": user.role.value if isinstance(user.role, UserRole) else str(user.role),
     }
     return create_access_token(identity=str(user.id), additional_claims=claims)
 
 
-def current_user_from_token(optional: bool = False) -> Optional[User]:
-    """Return the authenticated user resolved from JWT identity."""
+def current_user_from_token(optional=False):
     identity = get_jwt_identity()
     if not identity:
         if optional:
@@ -45,8 +38,7 @@ def current_user_from_token(optional: bool = False) -> Optional[User]:
     return user
 
 
-def require_role(user: User, role: UserRole) -> None:
-    """Abort if the provided user does not match the role."""
+def require_role(user, role):
     if not isinstance(user.role, UserRole):
         abort(403, description="invalid user role")
     if user.role != role:
@@ -54,20 +46,13 @@ def require_role(user: User, role: UserRole) -> None:
 
 
 def resolve_user(
-    provided_user_id: Optional[int],
+    provided_user_id,
     *,
-    allow_token: bool = True,
-    required_role: Optional[UserRole] = None,
-    require: bool = True,
-) -> Optional[User]:
-    """
-    Resolve a user either from an explicit ID or from the JWT token.
-
-    When no user can be determined:
-      * if `require` is True -> abort with 401/400
-      * otherwise returns None
-    """
-    user: Optional[User] = None
+    allow_token=True,
+    required_role=None,
+    require=True,
+):
+    user = None
     if provided_user_id is not None:
         user = User.query.get(provided_user_id)
         if not user:
