@@ -1,10 +1,10 @@
 # app/services/assistant.py
-"""Task routing logic for the AI assistant with conversation persistence support."""
+"""Task routing logic for the assistant with conversation persistence support."""
 from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from flask import current_app
 from sqlalchemy import func, or_
@@ -40,10 +40,14 @@ CLASSIFIER_PROMPT = (
     "You are a routing assistant for an educational platform. Based on the full "
     "conversation history, decide which task to run. Available tasks:\n"
     "- generate_practice: create practice questions from a specific course material. "
-    "Requires either `material_id` (int) or `material_name` (str). Capture the exact "
-    "name when the user references a file. Optional fields: `course_id` (int) to "
+    "Requires `material_name` (str). Capture the exact name when the user references a "
+    "file. Optional fields: `course_id` (int) to "
     "disambiguate, `question_count` (int), `difficulty` (str), and any additional "
     "`instruction` text.\n"
+    "- material_qa: answer questions, summaries, or explanations about a specific course "
+    "material. Trigger this whenever the user references a material file by name. "
+    "Requires `material_name` (str). Optional: `course_id` (int) "
+    "to disambiguate and `question` (str) or `instruction` capturing the user's request.\n"
     "- wrong_answer_hint: provide hints when a student submits an incorrect answer. "
     "Requires `question` (str) and `student_answer` (str). Optional: `correct_answer` (str).\n"
     "- general_chat: default conversational response when no special task fits.\n\n"
@@ -51,8 +55,9 @@ CLASSIFIER_PROMPT = (
     "`task`: one of the task names.\n"
     "`params`: object containing extracted parameters.\n"
     "`missing`: array of parameter names still required to execute the task (empty array if ready).\n"
-    "If information is insufficient for specialised tasks, prefer setting task to general_chat. "
-    "Respond with JSON only without markdown fences or additional commentary."
+    "If the user refers to a material but details are missing, keep task as material_qa and list missing items; "
+    "otherwise default to general_chat when no special task applies. Respond with JSON only without markdown fences "
+    "or additional commentary."
 )
 
 PRACTICE_PROMPT = (
@@ -60,9 +65,16 @@ PRACTICE_PROMPT = (
     "provided course material. Return the questions as plain text, numbered list. "
     "For each question include:\n"
     "- Question text\n"
-    "- If multiple choice: label options A), B), C) etc. and mark the correct one clearly.\n"
-    "- Provide the correct answer or brief rationale after each question using the format 'Answer: ...'.\n"
+    "- If multiple choice: label options A), B), C) etc.\n"
+    "Don't give correct answers, just give the questions."
     "Keep questions aligned with the supplied material and avoid revealing answers directly when hints suffice."
+)
+
+MATERIAL_QA_PROMPT = (
+    "You are an expert teaching assistant. Use the provided course material to answer "
+    "the user's request. Base your response strictly on the supplied excerpt and avoid "
+    "inventing details. Keep explanations concise and clear. If the excerpt lacks "
+    "enough information, say so briefly and suggest what else is needed."
 )
 
 WRONG_ANSWER_PROMPT = (
@@ -82,6 +94,9 @@ def process_assistant_request(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     task = classification.get("task") or "general_chat"
     params = _safe_dict(classification.get("params"))
     missing = _ensure_list(classification.get("missing"))
+
+    if missing and task in {"generate_practice", "material_qa"}:
+        params, missing = _fill_missing_material_params(params, missing, messages)
 
     if missing:
         missing_str = ", ".join(missing)
@@ -143,6 +158,49 @@ def _handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, 
     }
 
 
+def _handle_material_qa(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    material, error_response = _resolve_material(params, task_name="material_qa")
+    if error_response:
+        return error_response
+
+    try:
+        material_text = _load_material_text(material)
+        
+    except ValueError as exc:
+        return {
+            "task": "material_qa",
+            "text": str(exc),
+        }
+
+    question = params.get("question") or params.get("instruction") or _last_user_message(messages)
+    question_str = str(question).strip() if question is not None else ""
+    if not question_str:
+        return {
+            "task": "material_qa",
+            "missing": ["question"],
+            "text": "Please provide a question or instruction about the material.",
+        }
+
+    course = material.course
+    course_info = f"{course.name} ({course.code})" if course else f"Course ID {material.course_id}"
+    material_label = material.stored_name or material.original_name
+
+    prompt = (
+        f"Course: {course_info}\n"
+        f"Material file: {material_label}\n"
+        f"User request:\n{question_str}\n\n"
+        "Material excerpt (truncated to first 4000 characters):\n"
+        f"{material_text}"
+    )
+    answer = generate_reply([{"role": "user", "content": prompt}], system_prompt=MATERIAL_QA_PROMPT)
+    if not answer or not answer.strip():
+        answer = "The model did not return any content."
+    return {
+        "task": "material_qa",
+        "text": answer.strip(),
+    }
+
+
 def _handle_wrong_answer_hint(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
     question = params.get("question") or _last_user_message(messages)
     student_answer = params.get("student_answer")
@@ -176,8 +234,7 @@ def _handle_wrong_answer_hint(messages: List[Dict[str, Any]], params: Dict[str, 
     }
 
 
-def _resolve_material(params: Dict[str, Any]):
-    material_id = params.get("material_id")
+def _resolve_material(params: Dict[str, Any], task_name: str = "generate_practice"):
     course_id = params.get("course_id")
     material_name = params.get("material_name")
 
@@ -185,25 +242,15 @@ def _resolve_material(params: Dict[str, Any]):
     if course_id is not None:
         base_query = base_query.filter(Material.course_id == course_id)
 
-    if material_id is not None:
-        try:
-            material_id = int(material_id)
-        except (TypeError, ValueError):
-            return None, {
-                "task": "generate_practice",
-                "text": "Invalid material_id. Please provide an integer.",
-            }
-        material = Material.query.get(material_id)
-        if not material:
-            return None, {
-                "task": "generate_practice",
-                "text": f"No material found with ID {material_id}.",
-            }
-        return material, None
+    if params.get("material_id") is not None:
+        return None, {
+            "task": task_name,
+            "text": "material_id is not supported; please provide material_name (file name).",
+        }
 
     if not material_name:
         return None, {
-            "task": "generate_practice",
+            "task": task_name,
             "missing": ["material_name"],
             "text": "Please provide the material_name you want to use.",
         }
@@ -211,7 +258,7 @@ def _resolve_material(params: Dict[str, Any]):
     name_str = str(material_name).strip()
     if not name_str:
         return None, {
-            "task": "generate_practice",
+            "task": task_name,
             "missing": ["material_name"],
             "text": "Material name cannot be empty.",
         }
@@ -263,8 +310,8 @@ def _resolve_material(params: Dict[str, Any]):
 
     if not candidates:
         return None, {
-            "task": "generate_practice",
-            "text": f"No material matched '{name_str}'. Verify the file name or provide material_id.",
+            "task": task_name,
+            "text": f"No material matched '{name_str}'. Verify the file name (material_name).",
         }
 
     if len(candidates) > 1:
@@ -273,8 +320,8 @@ def _resolve_material(params: Dict[str, Any]):
         if len(names) > 5:
             preview += " ..."
         return None, {
-            "task": "generate_practice",
-            "text": f"Multiple materials matched ({preview}). Provide a more precise file name or specify material_id.",
+            "task": task_name,
+            "text": f"Multiple materials matched ({preview}). Provide a more precise file name or include course_id to disambiguate.",
         }
 
     return candidates[0], None
@@ -354,9 +401,10 @@ def _build_practice_prompt(
 ) -> str:
     course = material.course
     course_info = f"{course.name} ({course.code})" if course else f"Course ID {material.course_id}"
+    material_label = material.stored_name or material.original_name
     summary_parts = [
         f"Course: {course_info}",
-        f"Material title: {material.original_name}",
+        f"Material file: {material_label}",
         f"Requested questions: {question_count}",
     ]
     if difficulty:
@@ -374,11 +422,11 @@ def _build_practice_prompt(
 
 def _format_questions_text(response: str) -> str:
     if not response:
-        return "The model did not return any content."
+        return "No content returned."
 
     lines = [line.rstrip() for line in response.splitlines() if line.strip()]
     if not lines:
-        return response.strip() or "The model did not return any content."
+        return response.strip() or "No content returned."
 
     return "\n".join(lines)
 
@@ -431,8 +479,52 @@ def _build_sequential_pattern(value: str) -> Optional[str]:
     return "%" + "%".join(stripped) + "%"
 
 
+def _extract_filename_from_messages(messages: List[Dict[str, Any]]) -> Optional[str]:
+    import re
+
+    pattern = re.compile(r"([^\s\\/:*?\"<>|]+\.(?:pdf|docx|txt|md|csv|json))", re.IGNORECASE)
+    for message in reversed(messages or []):
+        if (message.get("role") or "").lower() != "user":
+            continue
+        content = message.get("content")
+        if not isinstance(content, str):
+            continue
+        match = pattern.search(content)
+        if match:
+            candidate = match.group(1).strip().rstrip('.,;:!?)]}>\"\'')
+            if candidate:
+                return candidate
+    return None
+
+
+def _fill_missing_material_params(
+    params: Dict[str, Any], missing: List[str], messages: List[Dict[str, Any]]
+) -> Tuple[Dict[str, Any], List[str]]:
+    """
+    If the classifier missed a material name but the user typed a filename, fill it in.
+    Removes material-related missing fields when a name is inferred.
+    """
+    updated_params = dict(params or {})
+    missing_set = set(missing or [])
+
+    has_material = bool(updated_params.get("material_name"))
+    if not has_material:
+        filename = _extract_filename_from_messages(messages)
+        if filename:
+            updated_params["material_name"] = filename
+            missing_set.discard("material_name")
+
+    if "material_id" in missing_set:
+        missing_set.discard("material_id")
+        if not updated_params.get("material_name"):
+            missing_set.add("material_name")
+
+    return updated_params, list(missing_set)
+
+
 _TASK_HANDLERS = {
     "general_chat": _handle_general_chat,
     "generate_practice": _handle_generate_practice,
+    "material_qa": _handle_material_qa,
     "wrong_answer_hint": _handle_wrong_answer_hint,
 }
