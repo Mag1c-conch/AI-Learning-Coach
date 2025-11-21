@@ -9,7 +9,7 @@ from app.models import Assignment, Course, Enrollment, Material, StudyPlan, SYDN
 
 from ..extensions import db
 from ..services import chat_storage
-from ..services.assistant import _load_material_text, process_assistant_request
+from ..services.assistant import read_material_text, process_assistant_request
 from ..services.ai import generate_reply
 from ..auth_utils import resolve_user
 
@@ -221,7 +221,7 @@ def grade_submission():
     student = User.query.get(material.uploaded_by)
 
     try:
-        submission_text = _load_material_text(material, limit=4000)
+        submission_text = read_material_text(material, limit=4000)
     except FileNotFoundError:
         abort(404, description="submission file not found on server")
     except ValueError as exc:
@@ -521,7 +521,7 @@ def _summarize_material(material, preview_limit: int = _MATERIAL_PREVIEW_CHARS):
         "uploaded_at": material.uploaded_at.isoformat() if material.uploaded_at else None,
     }
     try:
-        preview = _load_material_text(material, limit=preview_limit)
+        preview = read_material_text(material, limit=preview_limit)
     except Exception as exc: 
         current_app.logger.debug("Unable to extract preview for material %s: %s", material.id, exc)
     else:

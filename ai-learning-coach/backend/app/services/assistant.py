@@ -14,50 +14,24 @@ from ..models import Material
 from .ai import generate_reply
 
 GENERAL_CHAT_PROMPT = (
-    "You are an expert AI teaching assistant designed to support teachers and educators. "
-    "Your role is to provide professional, practical advice on all aspects of teaching.\n\n"
-    "You can help with:\n"
-    "- Teaching methods and pedagogical strategies\n"
-    "- Course design, curriculum planning, and syllabus development\n"
-    "- Student motivation, engagement, and classroom management\n"
-    "- Assessment design, grading strategies, and rubric creation\n"
-    "- Addressing diverse learning needs and differentiated instruction\n"
-    "- Educational technology integration and online teaching\n"
-    "- Professional development and teaching reflection\n"
-    "- Communication with students and feedback techniques\n"
-    "- Time management and workload balance for teachers\n\n"
-    "Guidelines:\n"
-    "- Provide detailed, actionable, and evidence-based answers\n"
-    "- Use specific examples and step-by-step guidance when helpful\n"
-    "- Draw from educational research and best practices\n"
-    "- Adapt your response to the teacher's context and experience level\n"
-    "- Be supportive and encouraging while maintaining professional standards\n"
-    "- When relevant, suggest using specialized features like generating practice questions or analyzing student errors\n\n"
-    "If the user greets you, respond warmly and ask how you can assist with their teaching today."
+    "Role: AI teaching assistant.\n"
+    "Provide practical answers about pedagogy, course design, and assessment. "
+    "Keep responses concise and contextual."
+    "if user greets you"
 )
 
 CLASSIFIER_PROMPT = (
-    "You are a routing assistant for an educational platform. Based on the full "
-    "conversation history, decide which task to run. Available tasks:\n"
-    "- generate_practice: create practice questions from a specific course material. "
-    "Requires `material_name` (str). Capture the exact name when the user references a "
-    "file. Optional fields: `course_id` (int) to "
-    "disambiguate, `question_count` (int), `difficulty` (str), and any additional "
-    "`instruction` text.\n"
-    "- material_qa: answer questions, summaries, or explanations about a specific course "
-    "material. Trigger this whenever the user references a material file by name. "
-    "Requires `material_name` (str). Optional: `course_id` (int) "
-    "to disambiguate and `question` (str) or `instruction` capturing the user's request.\n"
-    "- wrong_answer_hint: provide hints when a student submits an incorrect answer. "
-    "Requires `question` (str) and `student_answer` (str). Optional: `correct_answer` (str).\n"
-    "- general_chat: default conversational response when no special task fits.\n\n"
-    "Return a JSON object with keys:\n"
-    "`task`: one of the task names.\n"
-    "`params`: object containing extracted parameters.\n"
-    "`missing`: array of parameter names still required to execute the task (empty array if ready).\n"
-    "If the user refers to a material but details are missing, keep task as material_qa and list missing items; "
-    "otherwise default to general_chat when no special task applies. Respond with JSON only without markdown fences "
-    "or additional commentary."
+    "Pick a task from the full chat and only return JSON (no extra text). Options:\n"
+    "- generate_practice: make practice questions from a file. Required: `material_name`. Optional: `course_id`, "
+    "`question_count`, `difficulty`, `instruction`.\n"
+    "- material_qa: answer or explain content from a file. Required: `material_name`. Optional: `course_id`, "
+    "`question` or `instruction`.\n"
+    "- wrong_answer_hint: give a hint for a wrong student answer. Required: `question`, `student_answer`. "
+    "Optional: `correct_answer`.\n"
+    "- general_chat: everything else.\n\n"
+    "Return JSON like {\"task\": <name>, \"params\": {...}, \"missing\": []}. "
+    "If a file is mentioned but info is missing, keep task as material_qa and list missing fields; "
+    "use general_chat only when no task fits."
 )
 
 PRACTICE_PROMPT = (
@@ -85,18 +59,24 @@ WRONG_ANSWER_PROMPT = (
 )
 
 
-class TaskExecutionError(RuntimeError):
-    """Raised when a task cannot be completed."""
-
-
 def process_assistant_request(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
-    classification = _classify_task(messages)
+    classification = classify_task(messages)
     task = classification.get("task") or "general_chat"
-    params = _safe_dict(classification.get("params"))
-    missing = _ensure_list(classification.get("missing"))
+    raw_params = classification.get("params")
+    params = raw_params if isinstance(raw_params, dict) else {}
+    raw_missing = classification.get("missing")
+    missing = [str(item) for item in raw_missing] if isinstance(raw_missing, list) else []
 
     if missing and task in {"generate_practice", "material_qa"}:
-        params, missing = _fill_missing_material_params(params, missing, messages)
+        params, missing = fill_material_info(params, missing, messages)
+
+    required_fields = {
+        "generate_practice": {"material_name"},
+        "material_qa": {"material_name"},
+        "wrong_answer_hint": {"student_answer"},
+        "general_chat": set(),
+    }.get(task, set())
+    missing = [field for field in missing if field in required_fields]
 
     if missing:
         missing_str = ", ".join(missing)
@@ -106,30 +86,42 @@ def process_assistant_request(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
             "text": f"Provide the following details before we can continue: {missing_str}.",
         }
 
-    handler = _TASK_HANDLERS.get(task, _handle_general_chat)
+    handler = TASK_HANDLERS.get(task, handle_general_chat)
     return handler(messages, params)
 
 
-def _classify_task(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+def classify_task(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     raw = generate_reply(messages, system_prompt=CLASSIFIER_PROMPT, temperature=0)
-    payload = _extract_json(raw)
-    if not payload:
+    data = None
+    if raw:
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.strip("`")
+            if "\n" in stripped:
+                stripped = stripped.split("\n", 1)[1]
+            if stripped.lower().startswith("json"):
+                stripped = stripped[4:].lstrip("\n")
+        try:
+            data = json.loads(stripped)
+        except json.JSONDecodeError:
+            data = None
+    if not data:
         return {"task": "general_chat", "params": {}, "missing": []}
-    return payload
+    return data
 
 
-def _handle_general_chat(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+def handle_general_chat(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
     text = generate_reply(messages, system_prompt=GENERAL_CHAT_PROMPT)
     return {"task": "general_chat", "text": text}
 
 
-def _handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
-    material, error_response = _resolve_material(params)
+def handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    material, error_response = find_material(params)
     if error_response:
         return error_response
 
     try:
-        material_text = _load_material_text(material)
+        material_text = read_material_text(material)
     except FileNotFoundError:
         return {
             "task": "generate_practice",
@@ -141,16 +133,24 @@ def _handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, 
             "text": str(exc),
         }
 
-    request_text = params.get("instruction") or _last_user_message(messages)
-    question_count = _coerce_int(params.get("question_count"), default=5, minimum=1, maximum=20)
+    request_text = params.get("instruction") or last_user_text(messages)
+    try:
+        question_count_raw = int(params.get("question_count"))
+        question_count = max(1, min(20, question_count_raw))
+    except (TypeError, ValueError):
+        question_count = 5
     difficulty = params.get("difficulty")
 
-    user_prompt = _build_practice_prompt(material, material_text, request_text, question_count, difficulty)
+    user_prompt = build_practice_prompt(material, material_text, request_text, question_count, difficulty)
     ai_response = generate_reply(
         [{"role": "user", "content": user_prompt}],
         system_prompt=PRACTICE_PROMPT,
     )
-    formatted = _format_questions_text(ai_response)
+    if not ai_response:
+        formatted = "No content returned."
+    else:
+        lines = [line.rstrip() for line in ai_response.splitlines() if line.strip()]
+        formatted = "\n".join(lines) if lines else (ai_response.strip() or "No content returned.")
 
     return {
         "task": "generate_practice",
@@ -158,13 +158,13 @@ def _handle_generate_practice(messages: List[Dict[str, Any]], params: Dict[str, 
     }
 
 
-def _handle_material_qa(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
-    material, error_response = _resolve_material(params, task_name="material_qa")
+def handle_material_qa(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    material, error_response = find_material(params, task_name="material_qa")
     if error_response:
         return error_response
 
     try:
-        material_text = _load_material_text(material)
+        material_text = read_material_text(material)
         
     except ValueError as exc:
         return {
@@ -172,7 +172,7 @@ def _handle_material_qa(messages: List[Dict[str, Any]], params: Dict[str, Any]) 
             "text": str(exc),
         }
 
-    question = params.get("question") or params.get("instruction") or _last_user_message(messages)
+    question = params.get("question") or params.get("instruction") or last_user_text(messages)
     question_str = str(question).strip() if question is not None else ""
     if not question_str:
         return {
@@ -201,8 +201,8 @@ def _handle_material_qa(messages: List[Dict[str, Any]], params: Dict[str, Any]) 
     }
 
 
-def _handle_wrong_answer_hint(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
-    question = params.get("question") or _last_user_message(messages)
+def handle_wrong_answer_hint(messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    question = params.get("question") or last_user_text(messages)
     student_answer = params.get("student_answer")
     if not student_answer:
         return {
@@ -234,7 +234,7 @@ def _handle_wrong_answer_hint(messages: List[Dict[str, Any]], params: Dict[str, 
     }
 
 
-def _resolve_material(params: Dict[str, Any], task_name: str = "generate_practice"):
+def find_material(params: Dict[str, Any], task_name: str = "generate_practice"):
     course_id = params.get("course_id")
     material_name = params.get("material_name")
 
@@ -296,8 +296,9 @@ def _resolve_material(params: Dict[str, Any], task_name: str = "generate_practic
                 Material.original_name.ilike(pattern),
                 Material.stored_name.ilike(pattern),
             ])
-            seq_pattern = _build_sequential_pattern(value)
-            if seq_pattern:
+            stripped = "".join(ch for ch in value if ch.isalnum())
+            if stripped:
+                seq_pattern = "%" + "%".join(stripped) + "%"
                 fuzzy_conditions.extend([
                     Material.original_name.ilike(seq_pattern),
                     Material.stored_name.ilike(seq_pattern),
@@ -327,7 +328,7 @@ def _resolve_material(params: Dict[str, Any], task_name: str = "generate_practic
     return candidates[0], None
 
 
-def _load_material_text(material: Material, limit: int = 4000) -> str:
+def read_material_text(material: Material, limit: int = 4000) -> str:
     root = current_app.config.get("UPLOAD_FOLDER")
     if not root:
         raise ValueError("UPLOAD_FOLDER is not configured; cannot read materials.")
@@ -392,7 +393,7 @@ def _load_material_text(material: Material, limit: int = 4000) -> str:
     return content[:limit]
 
 
-def _build_practice_prompt(
+def build_practice_prompt(
     material: Material,
     material_text: str,
     request_text: Optional[str],
@@ -420,66 +421,13 @@ def _build_practice_prompt(
     )
 
 
-def _format_questions_text(response: str) -> str:
-    if not response:
-        return "No content returned."
-
-    lines = [line.rstrip() for line in response.splitlines() if line.strip()]
-    if not lines:
-        return response.strip() or "No content returned."
-
-    return "\n".join(lines)
-
-
-def _last_user_message(messages: List[Dict[str, Any]]) -> str:
+def last_user_text(messages: List[Dict[str, Any]]) -> str:
     for message in reversed(messages or []):
         if message.get("role") == "user" and message.get("content"):
             return str(message["content"])
     return ""
 
-
-def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
-    try:
-        number = int(value)
-        return max(minimum, min(maximum, number))
-    except (TypeError, ValueError):
-        return default
-
-
-def _extract_json(text: str) -> Any:
-    if not text:
-        return None
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.strip("`")
-        if "\n" in stripped:
-            stripped = stripped.split("\n", 1)[1]
-        if stripped.lower().startswith("json"):
-            stripped = stripped[4:].lstrip("\n")
-    try:
-        return json.loads(stripped)
-    except json.JSONDecodeError:
-        return None
-
-
-def _safe_dict(value: Any) -> Dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _ensure_list(value: Any) -> List[str]:
-    if isinstance(value, list):
-        return [str(v) for v in value]
-    return []
-
-
-def _build_sequential_pattern(value: str) -> Optional[str]:
-    stripped = "".join(ch for ch in value if ch.isalnum())
-    if not stripped:
-        return None
-    return "%" + "%".join(stripped) + "%"
-
-
-def _extract_filename_from_messages(messages: List[Dict[str, Any]]) -> Optional[str]:
+def find_filename_in_messages(messages: List[Dict[str, Any]]) -> Optional[str]:
     import re
 
     pattern = re.compile(r"([^\s\\/:*?\"<>|]+\.(?:pdf|docx|txt|md|csv|json))", re.IGNORECASE)
@@ -497,7 +445,7 @@ def _extract_filename_from_messages(messages: List[Dict[str, Any]]) -> Optional[
     return None
 
 
-def _fill_missing_material_params(
+def fill_material_info(
     params: Dict[str, Any], missing: List[str], messages: List[Dict[str, Any]]
 ) -> Tuple[Dict[str, Any], List[str]]:
     """
@@ -509,7 +457,7 @@ def _fill_missing_material_params(
 
     has_material = bool(updated_params.get("material_name"))
     if not has_material:
-        filename = _extract_filename_from_messages(messages)
+        filename = find_filename_in_messages(messages)
         if filename:
             updated_params["material_name"] = filename
             missing_set.discard("material_name")
@@ -522,9 +470,9 @@ def _fill_missing_material_params(
     return updated_params, list(missing_set)
 
 
-_TASK_HANDLERS = {
-    "general_chat": _handle_general_chat,
-    "generate_practice": _handle_generate_practice,
-    "material_qa": _handle_material_qa,
-    "wrong_answer_hint": _handle_wrong_answer_hint,
+TASK_HANDLERS = {
+    "general_chat": handle_general_chat,
+    "generate_practice": handle_generate_practice,
+    "material_qa": handle_material_qa,
+    "wrong_answer_hint": handle_wrong_answer_hint,
 }
