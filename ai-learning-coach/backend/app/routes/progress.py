@@ -143,9 +143,9 @@ def upsert_study_progress(student_id: int, course_id: int):
     course = Course.query.get_or_404(course_id)
     _ensure_enrolled(course.id, student.id)
 
-    payload = request.get_json(silent=True) or {}
-    replace = bool(payload.get("replace", False))
-    normalized_items = _normalize_items(payload.get("items", []))
+    data = request.get_json(silent=True) or {}
+    replace = bool(data.get("replace", False))
+    normalized_items = _normalize_items(data.get("items", []))
 
     existing = {
         item.item_key: item

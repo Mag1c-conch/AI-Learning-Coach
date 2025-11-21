@@ -8,10 +8,10 @@ bp = Blueprint("feedback", __name__, url_prefix="/feedback")
 
 
 def _require_json() -> dict:
-    payload = request.get_json(silent=True)
-    if payload is None:
+    data = request.get_json(silent=True)
+    if data is None:
         abort(400, description="request payload must be valid JSON")
-    return payload
+    return data
 
 
 def _coerce_int(field: str, value, required: bool = True):
@@ -41,12 +41,12 @@ def _parse_bool(value, default=None):
 @bp.route("", methods=["POST"])
 def create_feedback():
 
-    payload = _require_json()
+    data = _require_json()
 
-    teacher_id = _coerce_int("teacher_id", payload.get("teacher_id"))
-    student_id = _coerce_int("student_id", payload.get("student_id"))
-    course_id = _coerce_int("course_id", payload.get("course_id"), required=False)
-    content_raw = payload.get("content")
+    teacher_id = _coerce_int("teacher_id", data.get("teacher_id"))
+    student_id = _coerce_int("student_id", data.get("student_id"))
+    course_id = _coerce_int("course_id", data.get("course_id"), required=False)
+    content_raw = data.get("content")
 
     content = str(content_raw).strip() if content_raw is not None else ""
     if not content:
@@ -110,10 +110,10 @@ def list_feedback():
 @bp.route("/<int:feedback_id>/read", methods=["PATCH"])
 def mark_feedback_read(feedback_id):
 
-    payload = _require_json()
+    data = _require_json()
     
-    student_id = _coerce_int("student_id", payload.get("student_id"))
-    is_read = _parse_bool(payload.get("is_read"), default=True)
+    student_id = _coerce_int("student_id", data.get("student_id"))
+    is_read = _parse_bool(data.get("is_read"), default=True)
     
     feedback = Feedback.query.get_or_404(feedback_id)
     
