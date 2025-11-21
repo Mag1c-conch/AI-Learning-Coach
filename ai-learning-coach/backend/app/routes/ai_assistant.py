@@ -24,15 +24,11 @@ _COURSE_MATERIAL_LIMIT = 5
 _MATERIAL_PREVIEW_CHARS = 240
 _STUDY_PLAN_MAX_OUTPUT_TOKENS = 3072
 _STUDY_PLAN_PROMPT_TEMPLATE = (
-    "You are an expert study coach. Using the JSON input, craft a personalised study plan.\n"
-    "Create a schedule covering each day from {week_start} to {week_end} inclusive (local time).\n"
-    "Requirements:\n"
-    "- Schedule study blocks only between 08:00 and 18:00.\n"
-    "- Every task must focus on a single material or assignment and include `course_id`; include `material_id` when one is provided, otherwise use null.\n"
-    "- Provide concise titles (<= 8 words) and actionable descriptions (<= 20 words).\n"
-    "- Limit each day to at most 3 study blocks and keep each block <= 120 minutes.\n"
-    "- Respect upcoming due dates and distribute the workload evenly.\n"
-    "- Return strict JSON (no markdown) following this schema:\n"
+    "Use the JSON input to draft a study plan for the week {week_start} to {week_end} (local time).\n"
+    "Keep study blocks between 08:00 and 18:00, no more than 3 blocks per day, each no longer than 120 minutes.\n"
+    "Every task should stick to one material or assignment and include `course_id`; use `material_id` when known, otherwise null.\n"
+    "Titles should be short (<= 8 words) with clear descriptions (<= 20 words). Balance workload and respect due dates.\n"
+    "Return strict JSON (no markdown) shaped exactly like:\n"
     "{{\n"
     '  \"student_id\": <int>,\n'
     '  \"week_start\": \"YYYY-MM-DD\",\n'
@@ -43,7 +39,7 @@ _STUDY_PLAN_PROMPT_TEMPLATE = (
     "    ]}}\n"
     "  ]\n"
     "}}\n"
-    "If information is missing, make reasonable assumptions and still produce a full seven-day plan."
+    "If details are missing, make reasonable assumptions and still return a complete seven-day plan."
 )
 
 # use gemini api to generate chat reply
@@ -179,13 +175,13 @@ def _parse_json_reply(text: str):
 @bp.route("/assistant/grade_submission", methods=["POST"])
 @jwt_required(optional=True)
 def grade_submission():
-    payload = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
 
-    material_id_raw = payload.get("material_id")
-    teacher_id_raw = payload.get("teacher_id")
-    rubric = payload.get("rubric")
-    additional_instructions = payload.get("instructions")
-    max_score_raw = payload.get("max_score", 100)
+    material_id_raw = data.get("material_id")
+    teacher_id_raw = data.get("teacher_id")
+    rubric = data.get("rubric")
+    additional_instructions = data.get("instructions")
+    max_score_raw = data.get("max_score", 100)
 
     try:
         material_id = int(material_id_raw)
@@ -252,9 +248,7 @@ def grade_submission():
     user_message = f"{grading_context}\n\n{submission_block}"
 
     system_prompt = (
-        "You are an experienced instructor grading a student's assignment submission. "
-        "Analyze the assignment details and the student's work. "
-        "Respond with a strict JSON object (no extra commentary) matching this schema:\n"
+        "Grade the submission using the details provided. Reply with JSON only, no markdown, using this shape:\n"
         "{\n"
         '  "score": {"value": <number>, "max": ' + str(max_score) + ', "explanation": "<short summary>"},\n'
         '  "strengths": ["<positive observation>", ...],\n'
@@ -270,10 +264,7 @@ def grade_submission():
         "  ],\n"
         '  "next_steps": "<overall advice for the student>"\n'
         "}\n"
-        f"The numeric score must be between 0 and {max_score}. "
-        "Provide at least one mistake entry when issues are found; if the work is excellent, return an empty list and explain why. "
-        "Use concise English for all text values. "
-        "Do not include markdown or additional prose outside the JSON object."
+        f"The score must be between 0 and {max_score}. If there are problems, include at least one mistake entry; if the work is excellent, explain why and leave mistakes empty. Keep the language concise."
     )
 
     messages = [{"role": "user", "content": user_message}]
@@ -306,8 +297,8 @@ def grade_submission():
 # generate study plan for a student
 @bp.route("/get_plan", methods=["POST"])
 def get_plan():
-    payload = request.get_json(silent=True) or {}
-    student_id = payload.get("student_id")
+    data = request.get_json(silent=True) or {}
+    student_id = data.get("student_id")
     if not student_id:
         abort(400, description="missing required fields")
     student = User.query.get_or_404(student_id)

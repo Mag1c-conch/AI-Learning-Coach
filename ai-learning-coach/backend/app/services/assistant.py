@@ -1,5 +1,3 @@
-# app/services/assistant.py
-"""Task routing logic for the assistant with conversation persistence support."""
 from __future__ import annotations
 
 import json
@@ -17,7 +15,7 @@ GENERAL_CHAT_PROMPT = (
     "Role: AI teaching assistant.\n"
     "Provide practical answers about pedagogy, course design, and assessment. "
     "Keep responses concise and contextual."
-    "if user greets you"
+    "if user greets you, greet them back."
 )
 
 CLASSIFIER_PROMPT = (
@@ -52,10 +50,8 @@ MATERIAL_QA_PROMPT = (
 )
 
 WRONG_ANSWER_PROMPT = (
-    "You are a supportive tutor. Review the question, the student's incorrect answer, "
-    "and the correct answer if available. Provide a constructive hint (not the full "
-    "solution unless explicitly requested) that helps the student understand the mistake "
-    "and identify the correct reasoning."
+    "Read the question, the student's answer, and the correct answer if present. "
+    "Give a concise hint that steers the student toward the right reasoning without dumping the full solution unless asked."
 )
 
 
@@ -448,10 +444,6 @@ def find_filename_in_messages(messages: List[Dict[str, Any]]) -> Optional[str]:
 def fill_material_info(
     params: Dict[str, Any], missing: List[str], messages: List[Dict[str, Any]]
 ) -> Tuple[Dict[str, Any], List[str]]:
-    """
-    If the classifier missed a material name but the user typed a filename, fill it in.
-    Removes material-related missing fields when a name is inferred.
-    """
     updated_params = dict(params or {})
     missing_set = set(missing or [])
 
