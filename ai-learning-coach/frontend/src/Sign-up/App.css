@@ -55,5 +55,5 @@ body{
 .illustration{
   background:var(--illustration);
   border-radius:14px;
-  min-height:520px;   /* 需要更高/更矮可调这里 */
+  min-height:520px;   
 }

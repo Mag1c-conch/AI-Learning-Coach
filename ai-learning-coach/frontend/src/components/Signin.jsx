@@ -115,12 +115,6 @@ const Signin = ({ setToken }) => {
             onChange={(e) => setPassword(e.target.value)}
           />
 
-          <Box textAlign="left" mb={2}>
-            <Link href="#" underline="always" sx={{ color: "#6F6C6C" }}>
-              Forgot password?
-            </Link>
-          </Box>
-
           <Button
             variant="contained"
             fullWidth
