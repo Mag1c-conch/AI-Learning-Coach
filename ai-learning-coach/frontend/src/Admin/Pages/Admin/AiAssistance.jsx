@@ -16,11 +16,28 @@ import PersonIcon from '@mui/icons-material/Person';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Button } from '@mui/material';
 import { authFetch, API_BASE } from '../../../api/http';
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
+
 const DEFAULT_GREETING = {
   role: 'model',
   content:
     "Hello! I'm your AI teaching assistant. I can help you answer course-related questions, assist in creating teaching plans, analyze student progress, and more. How can I help you today?",
 };
+
+function autoFormatQA(raw) {
+  if (typeof raw !== "string") return raw;
+  let t = raw;
+  // Puts question numbers like 1. at the start of a new paragraph
+  t = t.replace(/\s*(\d+)\.\s+/g, "\n\n$1. ");
+  // Forces choices A)onto their own lines as markdown list items
+  t = t.replace(/\s([A-D])\)\s+/g, "\n- $1) ");
+  // Moves Answer: to a new line and bolds the label
+  t = t.replace(/\s*Answer:\s*/gi, "\n**Answer:** ");
+
+  return t.trim();
+}
 
 export default function AiAssistance() {
   const [conversationId, setConversationId] = useState(null);
@@ -249,16 +266,69 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
     }
   };
 
+  // markdown fotmatter
   const formatMessage = (content) => {
-    const safe = typeof content === 'string' ? content : String(content ?? '');
-    return safe
-      .split('\n\n')
-      .map((paragraph, idx) => (
-        <Typography key={idx} sx={{ mb: idx === 0 ? 0 : 1.5, lineHeight: 1.6 }}>
-          {paragraph}
-        </Typography>
-      ));
-  };
+  const raw =
+    typeof content === "string"
+      ? content
+      : "```json\n" + JSON.stringify(content ?? "", null, 2) + "\n```";
+  const text = autoFormatQA(raw);
+
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}         
+      rehypePlugins={[rehypeHighlight]}   
+      components={{
+        p: ({ node, ...props }) => (
+          <Typography
+            sx={{ lineHeight: 1.8, mb: 1.2, whiteSpace: "pre-wrap" }}
+            {...props}
+          />
+        ),
+        li: ({ node, ...props }) => (
+          <li style={{ marginBottom: 6 }} {...props} />
+        ),
+        code: ({ inline, className, children, ...props }) => {
+          if (inline) {
+            return (
+              <code
+                style={{
+                  background: "rgba(2,122,255,.08)",
+                  padding: "2px 6px",
+                  borderRadius: 6,
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                }}
+                {...props}
+              >
+                {children}
+              </code>
+            );
+          }
+          return (
+            <pre
+              style={{
+                padding: 12,
+                borderRadius: 10,
+                overflowX: "auto",
+                border: "1px solid rgba(0,0,0,0.06)",
+                background: "#fafafa",
+                margin: 0,
+              }}
+            >
+              <code className={className} {...props}>
+                {children}
+              </code>
+            </pre>
+          );
+        },
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
+};
+
 
   if (initialLoading) {
     return (
