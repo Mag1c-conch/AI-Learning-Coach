@@ -19,11 +19,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { authFetch, API_BASE } from "../api/http";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { Button } from "@mui/material";
 
 const DEFAULT_GREETING = {
   role: "model",
   content:
-    "Hello! I'm your AI teaching assistant. I can help you answer course-related questions, assist in creating teaching plans, analyze student progress, and more. How can I help you today?",
+    "Hello! I'm your AI teaching assistant. I can help you answer course-related questions, assist in Course-related Q&A and Practice-question generation, and more. How can I help you today?",
 };
 
 // guards non-string input
@@ -56,7 +58,8 @@ export default function AiAssistance() {
   const userInfo = useMemo(() => {
     try {
       const token =
-        window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
+        window.sessionStorage.getItem("token") ||
+        window.localStorage.getItem("token");
       if (!token) return null;
       return JSON.parse(token);
     } catch (err) {
@@ -82,6 +85,32 @@ export default function AiAssistance() {
     }));
   };
 
+  const handleClearChat = async () => {
+    if (!window.confirm("Are you sure you want to clear all history?")) {
+      return;
+    }
+
+    try {
+      if (conversationId && userId) {
+        await authFetch(
+          `${API_BASE}/assistant/conversations/${conversationId}?user_id=${userId}`,
+          { method: "DELETE" }
+        );
+        if (conversationStorageKey) {
+          localStorage.removeItem(conversationStorageKey);
+        }
+      }
+      setConversationId(null);
+      setMessages([DEFAULT_GREETING]);
+      setConversationTitle("AI Teaching Assistant");
+      setInputValue("");
+      setError(null);
+    } catch (err) {
+      console.error("Failed to clear chat:", err);
+      setError("Failed to clear chat history");
+    }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -92,7 +121,7 @@ export default function AiAssistance() {
 
   useEffect(() => {
     const initializeConversation = async () => {
-      if (!userId) { 
+      if (!userId) {
         setInitialLoading(false);
         return;
       }
@@ -123,23 +152,27 @@ export default function AiAssistance() {
       }
 
       if (!resolvedConversationId) {
-        const params = new URLSearchParams({ // build query params
+        const params = new URLSearchParams({
+          // build query params
           user_id: String(userId),
           limit: "1",
           include_messages: "true",
           message_limit: "200",
         });
-        const resp = await authFetch( // fetch user conversations
+        const resp = await authFetch(
+          // fetch user conversations
           `${API_BASE}/assistant/conversations?${params.toString()}`
         ).catch(() => null);
-        if (resp?.ok) { // if request ok, parse Json
+        if (resp?.ok) {
+          // if request ok, parse Json
           const data = await resp.json();
           if (Array.isArray(data) && data.length > 0) {
             const conversation = data[0]; // take the first one
             resolvedConversationId = conversation.id; // Save its id as the resolvedConversationId
             setMessages(mapMessages(conversation.messages)); // Put its messages into state (mapping them to your UI schema)
-            setConversationTitle(conversation.title || "AI Teaching Assistant"); // Set the title 
-            if (conversationStorageKey) { // Persist id to localStorage if you have a key defined
+            setConversationTitle(conversation.title || "AI Teaching Assistant"); // Set the title
+            if (conversationStorageKey) {
+              // Persist id to localStorage if you have a key defined
               localStorage.setItem(
                 conversationStorageKey,
                 String(conversation.id)
@@ -211,7 +244,7 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
       }
 
       const data = await res.json(); // parses the server response
-      const returnedId = data?.conversation_id; 
+      const returnedId = data?.conversation_id;
       if (returnedId && returnedId !== conversationId) {
         setConversationId(returnedId);
         if (conversationStorageKey) {
@@ -444,7 +477,7 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
                   AI Teaching Assistant
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                  Providing teaching support and course management advice.
+                  Providing Course-related Q&A and Practice-question generation.
                 </Typography>
                 {conversationTitle &&
                   conversationTitle !== "AI Teaching Assistant" && (
@@ -453,6 +486,21 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
                     </Typography>
                   )}
               </Box>
+              <Button
+                variant="outlined" color="inherit" startIcon={<DeleteIcon />}
+                onClick={handleClearChat}
+                disabled={!conversationId || loading}
+                sx=
+                {{
+                  marginLeft: "auto",
+                  borderColor: "rgba(255,255,255,0.3)",
+                  "&:hover": {
+                    borderColor: "rgba(255,255,255,0.6)",
+                    bgcolor: "rgba(255,255,255,0.1)",
+                  },
+                }}
+                > Clear Chat
+              </Button>
             </Box>
 
             {/* Messages */}
