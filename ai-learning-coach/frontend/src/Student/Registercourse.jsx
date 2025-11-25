@@ -157,7 +157,7 @@ const Registercourse = () => {
     if (!uid) return alert("user not logged in or session expired");
 
     try {
-      // call backend api to entoll
+      // call backend api to enroll
       await http.post(`/courses/${selected.id}/enroll`, { student_id: uid });
 
       // persist to localstorage
@@ -172,7 +172,7 @@ const Registercourse = () => {
       });
 
       setOpen(false);
-      alert("Entollment successful");
+      alert("Enrollment successful");
     } catch (e) {
       alert(e?.response?.data?.description || "Enrollment failed");
     }
