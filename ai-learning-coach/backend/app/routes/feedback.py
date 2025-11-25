@@ -156,7 +156,7 @@ def delete_feedback(feedback_id):
     
     feedback = Feedback.query.get_or_404(feedback_id)
     
-    # Ensure only the recipient student can delete the feedback
+    # check ownership
     if feedback.student_id != student_id:
         abort(403, description="you can only delete your own feedback")
     

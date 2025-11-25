@@ -7,7 +7,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  display: block;        /* important: remove flex layout, avoid pushing content to one side */
+  display: block;        
   background: transparent;
 }
 

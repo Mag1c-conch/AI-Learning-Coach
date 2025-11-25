@@ -82,7 +82,7 @@ def build_course_payload(course):
                 teacher_email = value.strip()
                 break
 
-    # Count how many students are enrolled in the course
+    # count enrolled students
     student_count = Enrollment.query.filter_by(course_id=course.id).count()
 
     data = course.to_dict()

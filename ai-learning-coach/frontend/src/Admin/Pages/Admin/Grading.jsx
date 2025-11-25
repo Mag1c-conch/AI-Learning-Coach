@@ -32,7 +32,6 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import DownloadIcon from "@mui/icons-material/Download";
 import http from "../../../api/http";
 
-/* ---------- 搜索栏样式 ---------- */
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
   borderRadius: theme.shape.borderRadius,
@@ -132,7 +131,7 @@ export default function Grading() {
     return null;
   };
 
-  // get the courses created by the teacher
+  // get the courses 
   useEffect(() => {
     const fetchCourses = async () => {
       setCoursesLoading(true);
@@ -460,7 +459,7 @@ export default function Grading() {
     } catch (error) {
       console.error("Failed to submit grade:", error);
       const errorMsg = error?.response?.data?.error || error?.response?.data?.description || error.message;
-      alert("❌ Failed to submit grade: " + errorMsg);
+      alert(" Failed to submit grade: " + errorMsg);
     }
   };
 
@@ -776,7 +775,7 @@ export default function Grading() {
           </Button>
         </Paper>
 
-        {/*  Right Panel: Student Feedback and Guidance */}
+        {/*  Right Panel: Student Feedback and guidance */}
         <Paper
           elevation={2}
           sx={{
@@ -792,7 +791,7 @@ export default function Grading() {
             💬 Student Feedback & Guidance
           </Typography>
 
-          {/* Guidance Message Input */}
+          {/* Guidance message input */}
           <TextField
             fullWidth
             label="Feedback Message to Student"
@@ -804,7 +803,7 @@ export default function Grading() {
             sx={{ mb: 3, flex: 1 }}
           />
 
-          {/* AI Generate Feedback Button */}
+          {/* AI Generate feedback button */}
           <Button
             variant="outlined"
             fullWidth
@@ -841,7 +840,7 @@ export default function Grading() {
             Send to Student
           </Button>
 
-          {/* Info Card */}
+          {/* Infocard */}
           <Card sx={{ mt: 3, bgcolor: "#e3f2fd" }}>
             <CardContent>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: "#1976d2" }}>

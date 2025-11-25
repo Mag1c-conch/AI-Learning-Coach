@@ -91,7 +91,7 @@ def list_materials():
 
     materials = query.order_by(Material.uploaded_at.desc()).all()
 
-    # Batch fetch assignments so the frontend does not fall back to uploaded_at when due_date is missing
+    # fetch assignments to get due dates
     assign_ids = {m.assignment_id for m in materials if m.assignment_id}
     assign_map = {}
     if assign_ids:

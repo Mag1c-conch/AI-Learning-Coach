@@ -158,7 +158,6 @@ const createStore = () => {
     deleteFeedback,
     deleteAllFeedback,
     unreadCount,
-    // update uid when logging in/out
     setUid: (uid) => setState({ uid }),
     setPollMs: (ms) => setState({ pollMs: ms }),
   };

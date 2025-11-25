@@ -158,15 +158,12 @@ volumes:
 ```
 
 ### HTTPS
-
-Set up nginx reverse proxy or use Let's Encrypt for HTTPS.
+Use nginx reverse proxy or Let's Encrypt for HTTPS.
 
 ## Cleanup
 
 ```bash
-# remove containers and volumes
-docker-compose down -v
 
-# remove images too
+docker-compose down -v
 docker-compose down --rmi all
 ```

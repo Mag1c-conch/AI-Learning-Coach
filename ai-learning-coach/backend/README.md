@@ -37,11 +37,11 @@ Update `DATABASE_URL` if you want to run against a different database (e.g. Post
 ## Database Migrations
 Flask-Migrate (Alembic) is configured for schema management. After installing dependencies and activating the virtual environment:
 ```bash
-flask db upgrade        # apply migrations
-flask db migrate -m "message"  # create a new migration
-每次更新models.py后执行：
-flask --app wsgi db migrate -m "message"  #生成迁移脚本
-flask --app wsgi db upgrade  #把迁移应用到数据库
+flask db upgrade        
+flask db migrate -m "message"  
+#every time update models.py then run：
+flask --app wsgi db migrate -m "message"  
+flask --app wsgi db upgrade  
 ```
 
 ## Running the Server
@@ -55,7 +55,7 @@ The API will be available at `http://127.0.0.1:5000`.
 
 ## Available Endpoints
 - `GET /test` - health check endpoint that returns "Hello, World!".
-- `POST /auth/register` - accepts `first_name`, `last_name`, `username`, and `password` in JSON and currently echoes the payload (persistence to the database is still a TODO).
+- `POST /auth/register` - accepts `first_name`, `last_name`, `username`, and `password` in JSON and currently echoes the payload .
 
 ## Project Structure
 ```
@@ -77,5 +77,3 @@ backend/
 - Implement persistent user registration and authentication workflows.
 - Add automated tests (e.g. pytest) covering models and routes.
 - Harden configuration for production (secrets handling, logging, etc.).
-
-# material使用formData来传输数据

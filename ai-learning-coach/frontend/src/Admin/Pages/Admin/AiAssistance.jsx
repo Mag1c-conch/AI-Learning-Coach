@@ -29,13 +29,12 @@ const DEFAULT_GREETING = {
 function autoFormatQA(raw) {
   if (typeof raw !== "string") return raw;
   let t = raw;
-  // Puts question numbers like 1. at the start of a new paragraph
+  // Puts question num 
   t = t.replace(/\s*(\d+)\.\s+/g, "\n\n$1. ");
   // Forces choices A)onto their own lines as markdown list items
   t = t.replace(/\s([A-D])\)\s+/g, "\n- $1) ");
-  // Moves Answer: to a new line and bolds the label
+  // Moves Answer
   t = t.replace(/\s*Answer:\s*/gi, "\n**Answer:** ");
-
   return t.trim();
 }
 
@@ -328,6 +327,7 @@ Please answer teachers' questions in a professional, friendly, and clear manner.
     </ReactMarkdown>
   );
 };
+
 
 
   if (initialLoading) {

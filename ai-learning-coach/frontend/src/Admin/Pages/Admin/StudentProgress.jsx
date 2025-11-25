@@ -9,7 +9,7 @@ export default function StudentProgress({
   rows = [],
   pageSize = 6,          
   height = 290,          
-  maxWidth = 850,        // maximum width, keep the layout stable
+  maxWidth = 850,        
 }) {
   const [page, setPage] = useState(1);
 
@@ -31,7 +31,7 @@ export default function StudentProgress({
       style={{
         width: '100%',
         maxWidth,
-        height,                  // fixed overall height
+        height,                  
         border: '1px solid rgba(0,0,0,0.2)',
         borderRadius: 8,
         background: '#fff',
@@ -80,7 +80,7 @@ export default function StudentProgress({
         </table>
       </div>
 
-      {/* custom pagination bar: fixed at the bottom, no spacing */}
+      {/* custom pagination bar no spacing */}
       <Box
         sx={{
           borderTop: '1px solid rgba(0,0,0,0.06)',

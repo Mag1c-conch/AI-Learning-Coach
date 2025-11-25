@@ -6,13 +6,11 @@ WORKDIR /app
 # copy package files
 COPY package*.json ./
 
-# install deps
 RUN npm ci
 
 # copy source code
 COPY . .
 
-# build app, need to set api base
 # use /api prefix, nginx will proxy it to backend
 ARG REACT_APP_API_BASE=/api
 ENV REACT_APP_API_BASE=$REACT_APP_API_BASE

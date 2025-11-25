@@ -32,7 +32,7 @@ import CalendarPanel from './CalendarPanel';
 import { authFetch, API_BASE } from "../../../api/http";
 
 
-/* your search bar style */
+/* search bar style */
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
   borderRadius: theme.shape.borderRadius,
@@ -98,7 +98,7 @@ function useDisplayName() {
   }, []);
 }
 
-/* get the greeting based on the time */
+/* get the greeting  */
 function useGreeting() {
   return useMemo(() => {
     const hour = new Date().getHours();
@@ -112,7 +112,7 @@ function useGreeting() {
   }, []);
 }
 
-/* course data (example) */
+/* course data ) */
 const recentCourses = [
   {
     id: "5259_01567",
@@ -156,7 +156,7 @@ const recentCourses = [
   },
 ];
 
-/* 230×210 course card */
+/* course card */
 const CourseCard = ({ course, navigate }) => (
   <Box
     sx={{
@@ -182,7 +182,6 @@ const CourseCard = ({ course, navigate }) => (
         },
       }}
       onClick={() => {
-        // navigate to the course page
         navigate(`/admin/course/${course.code ?? course.id}`);
       }}
     />
@@ -200,7 +199,7 @@ const CourseCard = ({ course, navigate }) => (
         variant="caption"
         sx={{ color: "text.secondary" }}
       >
-        {course.studentCount || 0} 人
+        {course.studentCount || 0} people
       </Typography>
     </Box>
   </Box>
@@ -211,26 +210,24 @@ export default function Dashboard() {
   const greeting = useGreeting();
   const navigate = useNavigate();
 
-  // —— course list state
-  const [courses, setCourses] = useState([]);  // initialize as an empty array, wait for loading from backend
-  const [coursesLoading, setCoursesLoading] = useState(true);  // initialize as true, show loading state
+  // course list state
+  const [courses, setCourses] = useState([]);  
+  const [coursesLoading, setCoursesLoading] = useState(true);  
 
-  // —— student list state
+  // student list state
   const [allStudents, setAllStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
 
-  // —— pagination (fixed display 3 cards)
+  // pagination 
   const CARDS_PER_PAGE = 3;
   const [page, setPage] = useState(0);
   const totalPages = Math.max(1, Math.ceil(courses.length / CARDS_PER_PAGE));
   const start = page * CARDS_PER_PAGE;
   const visible = courses.slice(start, start + CARDS_PER_PAGE);
 
-  // —— popup
   const [openAdd, setOpenAdd] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   
-  // —— create course form data
   const [courseForm, setCourseForm] = useState({
     course_name: "",
     course_code: "",
@@ -240,7 +237,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
-  // —— delete course related state
+  // delete course related state
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -260,16 +257,16 @@ export default function Dashboard() {
     }
   };
 
-  // —— default learning related images
+  // default learning related images
   const defaultCourseImages = [
-    "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", // 书本和笔记本
-    "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=800&auto=format&fit=crop", // 课堂学习
-    "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=800&auto=format&fit=crop", // 大学生活
-    "https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=800&auto=format&fit=crop", // 图书馆
-    "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=800&auto=format&fit=crop", // 笔记本电脑学习
+    "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", 
+    "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=800&auto=format&fit=crop", 
+    "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=800&auto=format&fit=crop", 
+    "https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=800&auto=format&fit=crop", 
+    "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=800&auto=format&fit=crop", 
   ];
 
-  // —— fetch the course list from backend
+  // fetch the course list from backend
   const fetchCourses = async () => {
     setCoursesLoading(true);
     const adminId = getCurrentUserId();
@@ -321,7 +318,7 @@ export default function Dashboard() {
     }
   };
 
-  // —— fetch all students from backend
+  // fetch all students from backend
   const fetchAllStudents = async () => {
     const adminId = getCurrentUserId();
     if (!adminId) {
@@ -379,19 +376,18 @@ export default function Dashboard() {
     }
   };
 
-  // —— when the component is mounted, fetch the course list and student list
+  // when the component is mounted, fetch the course and student list
   useEffect(() => {
     fetchCourses();
     fetchAllStudents();
   }, []);
 
-  // —— handle the form input
   const handleFormChange = (field, value) => {
     setCourseForm(prev => ({ ...prev, [field]: value }));
     setError(""); // Clear error when user types
   };
 
-    // —— create course
+    // create course
   const handleAddCourse = async () => {
     // validate the required fields
     if (!courseForm.course_name || !courseForm.course_code) {
@@ -426,7 +422,6 @@ export default function Dashboard() {
       });
 
       if (response.ok) {
-        // successfully created
         setOpenAdd(false);
         setCourseForm({ course_name: "", course_code: "", description: "", image_url: "" });
         alert("Course created successfully!");
@@ -443,14 +438,14 @@ export default function Dashboard() {
     }
   };
 
-  // —— when the popup is closed, reset the form
+  // when the popup is closed, reset the form
   const handleCloseAdd = () => {
     setOpenAdd(false);
     setCourseForm({ course_name: "", course_code: "", description: "", image_url: "" });
     setError("");
   };
 
-  // —— delete course
+  // delete course
   const handleDeleteCourse = async () => {
     if (!selectedCourseId) {
       setDeleteError("Please select a course to delete");
@@ -492,7 +487,6 @@ export default function Dashboard() {
         setOpenDel(false);
         setSelectedCourseId(null);
         alert("Course deleted successfully!");
-        // refresh the course list
         fetchCourses();
       } else {
         const data = await response.json();
@@ -505,7 +499,7 @@ export default function Dashboard() {
     }
   };
 
-  // —— when the delete popup is closed, reset the state
+  // when the delete popup is closed, reset the state
   const handleCloseDel = () => {
     setOpenDel(false);
     setSelectedCourseId(null);
@@ -605,7 +599,7 @@ export default function Dashboard() {
         </Box>
       </Box>
 
-      {/* Left (label + carousel + dots) + Right (calendar) in one row */}
+      {/* Left  + Right  in one row */}
       <Box
         sx={{
           display: "flex",
@@ -718,13 +712,13 @@ export default function Dashboard() {
           </Box>
         </Box>
 
-        {/* RIGHT: calendar card */}
+        {/* right: calendar card */}
         <Box sx={{ flex: "0 0" }}>
           <CalendarPanel />
         </Box>
       </Box>
 
-      {/* Student Progress */}
+      {/* Studentprogress */}
       <Box sx={{ mt: 0, mb: 4 }}>
         <Box
           sx={{
@@ -769,7 +763,7 @@ export default function Dashboard() {
         )}
       </Box>
 
-      {/* Model：Add  */}
+      {/* Model：add cou */}
       <Dialog open={openAdd} onClose={handleCloseAdd} fullWidth maxWidth="sm">
         <DialogTitle>Add Course</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -832,7 +826,7 @@ export default function Dashboard() {
         </DialogActions>
       </Dialog>
 
-      {/* popup: Delete */}
+      {/* popup: delete */}
       <Dialog open={openDel} onClose={handleCloseDel} fullWidth maxWidth="sm">
         <DialogTitle>Delete Course</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -870,7 +864,7 @@ export default function Dashboard() {
           {selectedCourseId && (
             <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 1 }}>
               <Typography variant="body2" color="warning.main">
-                 Warning: This action cannot be undone. All related enrollments will also be deleted.
+                 Warning: This action cannot be undone. 
               </Typography>
             </Box>
           )}

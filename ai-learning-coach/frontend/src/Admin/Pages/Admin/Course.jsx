@@ -90,11 +90,11 @@ const courses = [
 
 // image for course
 const defaultCourseImages = [
-  "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", // 书本和笔记本
-  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=800&auto=format&fit=crop", // 课堂学习
-  "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=800&auto=format&fit=crop", // 大学生活
-  "https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=800&auto=format&fit=crop", // 图书馆
-  "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=800&auto=format&fit=crop", // 笔记本电脑学习
+  "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop", 
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=800&auto=format&fit=crop", 
+  "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=800&auto=format&fit=crop", 
+  "https://images.unsplash.com/photo-1513258496099-48168024aec0?q=80&w=800&auto=format&fit=crop", 
+  "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=800&auto=format&fit=crop", 
 ];
 
 // Hook to get user display name (consistent with Dashboard)
@@ -349,15 +349,13 @@ export default function Course() {
             if (chosenWeek && Number(chosenWeek) > 0) {
               weekKey = `Week ${chosenWeek}`;
             } else if (material.uploaded_at) {
-              // fallback: estimate the week number by upload date
               const uploadDate = new Date(material.uploaded_at);
               const diffTime = earliestDate ? (uploadDate - earliestDate) : 0;
               const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
               const weekIndex = Math.max(1, Math.floor(diffDays / 7) + 1);
               weekKey = `Week ${weekIndex}`;
             } else {
-              // last fallback: no upload date
-              weekKey = "其他";
+              weekKey = "Other";
             }
             
             if (!grouped[weekKey]) {
@@ -373,11 +371,19 @@ export default function Course() {
             });
           });
           
+          Object.keys(grouped).forEach(weekKey => {
+            grouped[weekKey].sort((a, b) => {
+              const dateA = a.material.uploaded_at ? new Date(a.material.uploaded_at) : new Date(0);
+              const dateB = b.material.uploaded_at ? new Date(b.material.uploaded_at) : new Date(0);
+              return dateA - dateB; // ascending order
+            });
+          });
+          
           // sort by week number Week 1, Week 2, ... 
           const sortedGrouped = {};
           const weekKeys = Object.keys(grouped).sort((a, b) => {
-            if (a === "其他") return 1;
-            if (b === "其他") return -1;
+            if (a === "Other") return 1;
+            if (b === "Other") return -1;
             const numA = parseInt(a.replace("Week ", ""));
             const numB = parseInt(b.replace("Week ", ""));
             return numA - numB;
@@ -389,12 +395,12 @@ export default function Course() {
           Object.assign(grouped, sortedGrouped);
         }
         
-        // if there are no files, keep the default structure
+        // if no files, keep the default structure
         if (Object.keys(grouped).length === 0) {
           setFiles({});
         } else {
           setFiles(grouped);
-          // default expand the first week
+          //first week
           if (Object.keys(grouped).length > 0) {
             setExpandedWeeks(new Set([Object.keys(grouped)[0]]));
           }
@@ -409,12 +415,11 @@ export default function Course() {
     }
   };
 
-  // when the course information is loaded, fetch the file list
+  // when the course information loaded, fetch file list
   useEffect(() => {
     if (course && course.id) {
       fetchMaterials();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course?.id]);
 
   // File management functions
@@ -451,7 +456,6 @@ export default function Course() {
     if (!confirmDelete) return;
 
     try {
-      // 逐个删除选中的文件
       const deletePromises = Array.from(selectedFiles).map(async (fileId) => {
         const response = await authFetch(`${API_BASE}/materials/${fileId}?deleted_by=${user.id}`, {
           method: 'DELETE'
@@ -528,7 +532,7 @@ export default function Course() {
         </Box>
       </Box>
 
-      {/* separator line (same as Dashboard) */}
+      {/* separator line  */}
       <Box
         sx={{
           height: 2,
@@ -573,16 +577,13 @@ export default function Course() {
           </Box>
         ) : course ? (
           <>
-            {/* Course title */}
             <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
               {course.title}
             </Typography>
             
             {/* Main content area - Left and Right sections */}
             <Box sx={{ display: "flex", gap: 3, height: "calc(100% - 100px)", p: 3 }}>
-              {/* Left side - Course info and Student Progress */}
               <Box sx={{ flex: "1 1 60%", display: "flex", flexDirection: "column" }}>
-                {/* Course basic information */}
                 <Box
                   sx={{
                     p: 3,
@@ -916,7 +917,7 @@ export default function Course() {
               </Select>
             </FormControl>
 
-            {/* Deadline (only for assignment, quiz, lab) */}
+            {/* Deadline for assignment, quiz, lab */}
             {(fileType === 'assignment' || fileType === 'quiz' || fileType === 'lab') && (
               <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="en">
                 <DateTimePicker
@@ -1008,7 +1009,6 @@ export default function Course() {
                   }
                 }
 
-                // 上传文件
                 const response = await authFetch(`${API_BASE}/materials`, {
                   method: 'POST',
                   body: formData

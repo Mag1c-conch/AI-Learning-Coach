@@ -7,9 +7,9 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 export default function CourseStudentProgress({
   rows = [],
-  pageSize = 8,          // number of rows per page
-  height = 420,          // component fixed height
-  maxWidth = 800,       // maximum width
+  pageSize = 8,          // number of rows 
+  height = 420,          
+  maxWidth = 800,       
   onGiveReward,
 }) {
   const [page, setPage] = useState(1);
@@ -24,7 +24,7 @@ export default function CourseStudentProgress({
     return { total, totalPages, pageRows };
   }, [rows, page, pageSize]);
 
-  // ensure the current page is valid after data changes
+  //  the current page is valid 
   if (page > Math.max(1, Math.ceil(rows.length / pageSize))) {
     setTimeout(() => setPage(1), 0);
   }
@@ -45,7 +45,7 @@ export default function CourseStudentProgress({
     const pointsToAdd = inputRewards[studentId] || 0;
 
     if (pointsToAdd <= 0 || !onGiveReward) {
-      return; // if there is no reward to give or the callback is not provided, do not execute
+      return; 
     }
 
     try {
@@ -73,7 +73,7 @@ export default function CourseStudentProgress({
       style={{
         width: '100%',
         maxWidth,
-        height,                  // fixed overall height
+        height,                  
         border: '1px solid rgba(0,0,0,0.2)',
         borderRadius: 8,
         background: '#fff',
@@ -97,8 +97,8 @@ export default function CourseStudentProgress({
             {pageRows.map((r, i) => {
               // use name as the unique identifier
               const studentKey = r.id ?? r.studentId ?? r.name;
-              const inputValue = inputRewards[studentKey] || 0; // temporary input value
-              const totalPoints = Number(r.reward) || 0; // cumulative reward score returned from backend
+              const inputValue = inputRewards[studentKey] || 0; 
+              const totalPoints = Number(r.reward) || 0; 
               const isSubmitting = !!submitting[studentKey];
               
               return (
@@ -175,7 +175,7 @@ export default function CourseStudentProgress({
                 </tr>
               );
             })}
-            {/* if the last page has less than the number of rows, use empty rows to fill, keep the height consistent */}
+            {/* if the last page has less than the number of rows, use empty rows to fill */}
             {Array.from({ length: Math.max(0, pageSize - pageRows.length) }).map((_, idx) => (
               <tr key={`placeholder-${idx}`} style={{ height: 36 }}>
                 <td style={td} />

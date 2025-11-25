@@ -10,7 +10,7 @@ const http = axios.create({
   withCredentials: false,
 });
 
-// add request interceptor: print log and automatically append Authorization
+// add request interceptor
 http.interceptors.request.use(
   (config) => {
     const token = getAuthToken();
