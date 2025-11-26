@@ -16,11 +16,11 @@ function getCurrentUserId() {
   try {
     const token =
       window.sessionStorage.getItem("token") || window.localStorage.getItem("token");
-    if (!token) return null; // null means not logged in or no user
+    if (!token) return null; 
     const user = JSON.parse(token);
     return user?.id || user?.user_id || null;
   } catch {
-    return null; //any error, return null
+    return null; 
   }
 }
 
@@ -31,7 +31,7 @@ const CALENDAR_KEY = (uid) => `calendar_tasks_v1:${uid || "anon"}`;
 function ttGetEvents(uid) {
   try {
     const raw = localStorage.getItem(TT_KEY(uid));
-    const arr = raw ? JSON.parse(raw) : []; // not valid JSONm return []
+    const arr = raw ? JSON.parse(raw) : []; 
     return Array.isArray(arr) ? arr : [];
   } catch {
     return [];

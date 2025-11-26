@@ -32,25 +32,22 @@ const DEFAULT_GREETING = {
 function autoFormatQA(raw) {
   if (typeof raw !== "string") return raw;
   let t = raw;
-  // Puts question numbers like 1. at the start of a new paragraph
   t = t.replace(/\s*(\d+)\.\s+/g, "\n\n$1. ");
-  // Forces choices A)onto their own lines as markdown list items
   t = t.replace(/\s([A-D])\)\s+/g, "\n- $1) ");
-  // Moves Answer: to a new line and bolds the label
   t = t.replace(/\s*Answer:\s*/gi, "\n**Answer:** ");
 
   return t.trim();
 }
 
 export default function AiAssistance() {
-  const [conversationId, setConversationId] = useState(null); // current chat
-  const [messages, setMessages] = useState([DEFAULT_GREETING]); // chat history
-  const [inputValue, setInputValue] = useState(""); // current input
-  const [loading, setLoading] = useState(false); // waiting for response
-  const [initialLoading, setInitialLoading] = useState(true); // loading history
-  const [error, setError] = useState(null); // error message
-  const messagesEndRef = useRef(null); // for scrolling
-  const inputRef = useRef(null); // input field ref
+  const [conversationId, setConversationId] = useState(null); 
+  const [messages, setMessages] = useState([DEFAULT_GREETING]); 
+  const [inputValue, setInputValue] = useState(""); 
+  const [loading, setLoading] = useState(false); 
+  const [initialLoading, setInitialLoading] = useState(true); 
+  const [error, setError] = useState(null); 
+  const messagesEndRef = useRef(null); 
+  const inputRef = useRef(null); 
   const [conversationTitle, setConversationTitle] = useState(
     "AI Teaching Assistant"
   );
@@ -167,10 +164,10 @@ export default function AiAssistance() {
           // if request ok, parse Json
           const data = await resp.json();
           if (Array.isArray(data) && data.length > 0) {
-            const conversation = data[0]; // take the first one
-            resolvedConversationId = conversation.id; // Save its id as the resolvedConversationId
-            setMessages(mapMessages(conversation.messages)); // Put its messages into state (mapping them to your UI schema)
-            setConversationTitle(conversation.title || "AI Teaching Assistant"); // Set the title
+            const conversation = data[0]; 
+            resolvedConversationId = conversation.id; 
+            setMessages(mapMessages(conversation.messages)); 
+            setConversationTitle(conversation.title || "AI Teaching Assistant"); 
             if (conversationStorageKey) {
               // Persist id to localStorage if you have a key defined
               localStorage.setItem(
@@ -221,13 +218,13 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
         conversation_id: conversationId,
         user_id: userId,
         messages: [{ role: "user", content: userMessage }],
-        system_prompt: systemPrompt, // send to backend
+        system_prompt: systemPrompt, 
       };
 
       if (!conversationId) {
-        const generatedTitle = userMessage.slice(0, 80); // take first 80 chars
-        payload.conversation_title = generatedTitle; // send to backend to save
-        setConversationTitle(generatedTitle || "AI Teaching Assistant"); // optimistic title
+        const generatedTitle = userMessage.slice(0, 80); 
+        payload.conversation_title = generatedTitle; 
+        setConversationTitle(generatedTitle || "AI Teaching Assistant"); 
       }
 
       const res = await authFetch(`${API_BASE}/assistant/chat`, {
@@ -268,7 +265,7 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault(); // stop newline
-      handleSend(); // send message
+      handleSend(); 
     }
   };
 
@@ -282,8 +279,8 @@ Always answer in **GitHub Flavored Markdown (GFM)** with clear line breaks:
 
     return (
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]} // support GFM syntax
-        rehypePlugins={[rehypeHighlight]} // syntax highlighting
+        remarkPlugins={[remarkGfm]} 
+        rehypePlugins={[rehypeHighlight]} 
         components={{
           p: ({ node, ...props }) => (
             <Typography

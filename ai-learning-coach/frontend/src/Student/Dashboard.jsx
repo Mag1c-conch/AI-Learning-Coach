@@ -40,26 +40,26 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
         ref={slidingRef}
         sx={{
           display: "flex",
-          gap: 2, // space between cards
-          overflowX: "auto", // horizontal scroll when content overflows
+          gap: 2, 
+          overflowX: "auto", 
           scrollSnapType: "x mandatory",
           px: { xs: 1, md: 2 },
           py: 1,
           scrollbarWidth: "none",
-          "&::-webkit-scrollbar": { display: "none" }, //hides the scrollbar in Chrome/Safari
+          "&::-webkit-scrollbar": { display: "none" }, 
         }}
       >
-        {courses.map((course) => ( // each course will get one card
+        {courses.map((course) => ( 
           <Box
             key={course.id ?? course.code}
             sx={{ flex: "0 0 auto", width: { xs: 260, sm: 300, md: 340 }, scrollSnapAlign: "start" }}
           >
             <Box 
-              component={Link} // whole card clickable and be a link to course page
+              component={Link} 
               to={
                 Number.isInteger(course.id)
                   ? `/course/${course.id}`
-                  : `/course/${encodeURIComponent(course.code || "")}` // protects codes with spaces/special characters
+                  : `/course/${encodeURIComponent(course.code || "")}` 
               }
               sx={{ textDecoration: "none", color: "inherit" }}
             >
@@ -125,14 +125,14 @@ function CoursesSlider({ courses = [], progressMap = {} }) {
       </Box>
 
       <IconButton
-        onClick={() => scrollingCards(-1)} // when clicking left button, scroll left
+        onClick={() => scrollingCards(-1)} 
         size="small"
         sx={{
-          display: { xs: "none", sm: "flex" }, // hidden on extra-small screens (phones)
+          display: { xs: "none", sm: "flex" }, 
           position: "absolute",
           left: 4,
           top: "50%",
-          transform: "translateY(-50%)", // center vertically
+          transform: "translateY(-50%)", 
           bgcolor: "background.paper",
           boxShadow: 2,
           "&:hover": { bgcolor: "background.paper" },
@@ -185,7 +185,7 @@ function ProgressSlider({ items = [], onOpen }) {
           "&::-webkit-scrollbar": { display: "none" },
         }}
       >
-        {items.map((item) => ( // one card per course progress item
+        {items.map((item) => ( 
           <Card
             key={item.courseKey}
             elevation={3}
@@ -193,9 +193,9 @@ function ProgressSlider({ items = [], onOpen }) {
             role="button"
             tabIndex={0}
             sx={{
-              flex: "0 0 auto", // fixed-width flex item
+              flex: "0 0 auto", 
               width: { xs: 240, sm: 280, md: 300 },
-              scrollSnapAlign: "start", // stop scrolling, left edge aligns
+              scrollSnapAlign: "start", 
               borderRadius: 2,
               cursor: "pointer",
             }}
@@ -222,7 +222,7 @@ function ProgressSlider({ items = [], onOpen }) {
           transform: "translateY(-50%)",
           bgcolor: "background.paper",
           boxShadow: 2,
-          "&:hover": { bgcolor: "background.paper" }, // keep the same background on hover
+          "&:hover": { bgcolor: "background.paper" }, 
         }}
       >
         <ChevronLeftIcon />
@@ -258,8 +258,8 @@ function ProgressCircular({ value = 80, size = 150, thickness = 7 }) {
         size={size}
         thickness={thickness}
         sx={{
-          color: "#f6c6d1", // inner ring color
-          [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" }, //makes arc ends rounded
+          color: "#f6c6d1", 
+          [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" }, 
           transform: "rotate(-110deg)",
         }}
       />
@@ -269,7 +269,7 @@ function ProgressCircular({ value = 80, size = 150, thickness = 7 }) {
         size={size}
         thickness={thickness}
         sx={{
-          color: "#ea9cb0", // outer ring color
+          color: "#ea9cb0", 
           position: "absolute",
           left: 0,
           [`& .${circularProgressClasses.circle}`]: { strokeLinecap: "round" },
@@ -321,7 +321,7 @@ const courseProgressKey = (uid, courseKey) =>
 // Creates a unique key for study-plan data, namespaced by user, course, and date
 const planStorageKey = (uid, courseKey, dateStr) =>
   `studyPlan:${uid || "anon"}:${courseKey || "course"}:${dateStr}`;
-const todayStr = () => new Date().toISOString().slice(0, 10); // get today date y-m-d
+const todayStr = () => new Date().toISOString().slice(0, 10); 
 
 // load today's todo for all courses
 function loadTodayTodosForUser(uid, courseList = []) {
@@ -330,8 +330,8 @@ function loadTodayTodosForUser(uid, courseList = []) {
   for (const c of courseList) { 
     const key = courseKeyFromCourse(c); 
     const raw = localStorage.getItem(planStorageKey(uid, key, t)); 
-    const items = raw ? JSON.parse(raw) : []; // parse JSON or empty array
-    if (Array.isArray(items) && items.length) { // if there are items
+    const items = raw ? JSON.parse(raw) : []; 
+    if (Array.isArray(items) && items.length) { 
       out.push({
         courseKey: key,
         courseLabel: c.code || c.name || key,
@@ -339,7 +339,7 @@ function loadTodayTodosForUser(uid, courseList = []) {
       });
     }
   }
-  return out; // list of all courses that have to-dos today
+  return out; 
 }
 
 // converts an enrollment object e into a card-friendly data shape
@@ -360,7 +360,7 @@ function mapEnrollmentToCard(e) {
 
 // merges two course lists so that all enrolled cards come first, and any remaining base courses
 function mergeCourses(base, enrolledCards) {
-  const identifiers = new Set( // Set of unique keys for quick lookup of what’s already included
+  const identifiers = new Set( 
     enrolledCards.map((c) =>
       Number.isInteger(Number(c.id)) ? `id:${Number(c.id)}` : `code:${c.code}`
     )
@@ -434,9 +434,9 @@ function todayTodosFromAIEvents(uid, courses = []) {
   const events = ttGetEvents(uid);
   if (!events.length || !Array.isArray(courses) || !courses.length) return [];
 
-  const today = todayISO(); // today’s local date
+  const today = todayISO(); 
 
-  const courseMap = new Map(); // lookup for courses by both ID and code
+  const courseMap = new Map(); 
   for (const c of courses) {
     const key = c.code ?? (c.id != null ? String(c.id) : "course");
     const label = c.code || c.name || key;
@@ -522,7 +522,7 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
   const openStudyProgress = (courseKey) =>
-    navigate(`/progress/${encodeURIComponent(courseKey)}`); // routes to a progress page for a given course key
+    navigate(`/progress/${encodeURIComponent(courseKey)}`); 
 
   // Auth / storage listeners
   useEffect(() => {

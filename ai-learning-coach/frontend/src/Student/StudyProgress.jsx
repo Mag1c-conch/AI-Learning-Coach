@@ -335,7 +335,7 @@ function StudyProgress() {
     (currentCourse?.id != null ? String(currentCourse.id) : "course");
 
   // fetch tasks
-  const [tasks, setTasks] = useState([]); // {id,title,type,percent}
+  const [tasks, setTasks] = useState([]); 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -509,7 +509,7 @@ function StudyProgress() {
 
   const [snackOpen, setSnackOpen] = useState(false);
   const [snackMsg, setSnackMsg] = useState("");
-  const [snackSev, setSnackSev] = useState("success"); // success | info | warning | error
+  const [snackSev, setSnackSev] = useState("success"); 
 
   // Update the progress percentage of the tasks selected by the students, save it locally and synchronize it to the back end.
   const setTaskPercent = (id, percent) => {
