@@ -16,6 +16,7 @@ services:
       - SKIP_DB_CREATE_ALL=0
     volumes:
       - ./backend/instance:/app/instance
+      - ./backend/migrations:/app/migrations
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/test"]
