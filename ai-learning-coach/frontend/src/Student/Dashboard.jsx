@@ -325,11 +325,11 @@ const todayStr = () => new Date().toISOString().slice(0, 10); // get today date 
 
 // load today's todo for all courses
 function loadTodayTodosForUser(uid, courseList = []) {
-  const t = todayStr(); // today's date
-  const out = []; // results array
-  for (const c of courseList) { // loop each couese
-    const key = courseKeyFromCourse(c); // build course key
-    const raw = localStorage.getItem(planStorageKey(uid, key, t)); // read from localstorage
+  const t = todayStr(); 
+  const out = []; 
+  for (const c of courseList) { 
+    const key = courseKeyFromCourse(c); 
+    const raw = localStorage.getItem(planStorageKey(uid, key, t)); 
     const items = raw ? JSON.parse(raw) : []; // parse JSON or empty array
     if (Array.isArray(items) && items.length) { // if there are items
       out.push({
@@ -348,11 +348,11 @@ function mapEnrollmentToCard(e) {
   const description = e?.description || "";
   const reward = Number(e?.reward) || 0;
   return {
-    id: Number.isInteger(id) ? id : undefined, // Only keep id if it’s a valid integer; otherwise omit it (undefined)
+    id: Number.isInteger(id) ? id : undefined,
     code: e?.code || "",
     name: e.name || e.title || e.code,
     dueText: "Enrolled",
-    meta: description ? `· ${description}` : "", // ptional “meta” text: a middle dot + description if provided, otherwise empty
+    meta: description ? `· ${description}` : "", 
     badges: reward,
     reward,
   };
@@ -377,13 +377,13 @@ function mergeCourses(base, enrolledCards) {
 function readLocalEnrollments(userId) {
   if (!userId) return [];
   try {
-    const key = `enrolledCourses:${userId}`; // builds a per-user storage key like enrolledCourses:42
-    const list = JSON.parse(localStorage.getItem(key) || "[]"); // reads JSON from localStorage; if missing, uses "[]"
-    if (!Array.isArray(list)) return []; // If the parsed value isn’t an array, bail out with []
+    const key = `enrolledCourses:${userId}`; 
+    const list = JSON.parse(localStorage.getItem(key) || "[]"); 
+    if (!Array.isArray(list)) return []; 
     const normalized = list
       .map((c) => {
-        const id = Number(c?.id); // coerces c.id to a numbe
-        if (!Number.isInteger(id)) return null; // Drops entries with non-integer IDs
+        const id = Number(c?.id); 
+        if (!Number.isInteger(id)) return null; 
         return { ...c, id };
       })
       .filter(Boolean);
@@ -474,16 +474,16 @@ function todayTodosFromAIEvents(uid, courses = []) {
 
 // 1. merges “today’s to-dos” from two sources
 // 2. grouped by course and de-duplicated by item title
-function mergeTodayTodos(uid, courses = []) { // takes a user id and a course list (default empty)
-  const localTodos = loadTodayTodosForUser(uid, courses); // from localStorage (manual plans)
-  const aiTodos = todayTodosFromAIEvents(uid, courses); // from AI events (timetable)
+function mergeTodayTodos(uid, courses = []) { 
+  const localTodos = loadTodayTodosForUser(uid, courses); 
+  const aiTodos = todayTodosFromAIEvents(uid, courses); 
 
   const map = new Map();
   for (const g of [...localTodos, ...aiTodos]) {
     const existed =
       map.get(g.courseKey) || { courseKey: g.courseKey, courseLabel: g.courseLabel, items: [] };
     const seen = new Set(existed.items.map((x) => x.title));
-    for (const it of g.items) { // quick lookup of already-added titles for this course to avoid duplicates
+    for (const it of g.items) { 
       if (!seen.has(it.title)) {
         existed.items.push(it);
         seen.add(it.title);
@@ -497,7 +497,7 @@ function mergeTodayTodos(uid, courses = []) { // takes a user id and a course li
 }
 
 // computes a sorted list of unique dates
-function computeMarkedDates(uid) { // load this user’s saved events from localStorage
+function computeMarkedDates(uid) { 
   const events = ttGetEvents(uid);
   const validDays = new Set();
   for (const e of events) {
@@ -506,15 +506,15 @@ function computeMarkedDates(uid) { // load this user’s saved events from local
     if (!d.isValid()) continue;
     validDays.add(d.format("YYYY-MM-DD"));
   }
-  return Array.from(validDays).sort((a, b) => a.localeCompare(b)); // convert the set to an array and sort lexicographically.
+  return Array.from(validDays).sort((a, b) => a.localeCompare(b)); 
 }
 
-// ===== Dashboard =====
+// Dashboard 
 const Dashboard = () => {
   const [sliderCourses, setSliderCourses] = useState(defaultCoursesData);
-  const [uid, setUid] = useState(getCurrentUserId()); // current user ID, read from storage via getCurrentUserId()
-  const [todosByCourse, setTodosByCourse] = useState([]); // today’s to-dos grouped by course
-  const [exercises] = useState(exerciseData); // exercise list; read-only here
+  const [uid, setUid] = useState(getCurrentUserId()); 
+  const [todosByCourse, setTodosByCourse] = useState([]); 
+  const [exercises] = useState(exerciseData); 
   const [courses, setCourses] = useState([]);
   const [progressMap, setProgressMap] = useState({});
   const [progressItems, setProgressItems] = useState([]);

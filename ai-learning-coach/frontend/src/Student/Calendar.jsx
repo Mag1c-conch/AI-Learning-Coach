@@ -129,19 +129,19 @@ export default function TimeTable() {
   // listen to timetable update events
   useEffect(() => {
     const onUpdated = () => {
-      const events = ttGetEvents(uid); // read raw events for this user from localstorage
-      const delta = aiEventsToCalendarDelta(events); // normalize & group by day
-      setTasks((prev) => mergeCalendarTasks(prev, delta)); // merge into state (dedupe by id)
+      const events = ttGetEvents(uid); 
+      const delta = aiEventsToCalendarDelta(events); 
+      setTasks((prev) => mergeCalendarTasks(prev, delta)); 
       message.success("Imported study plan to calendar");
     };
-    window.addEventListener("timetable:updated", onUpdated); // subscribe
-    return () => window.removeEventListener("timetable:updated", onUpdated); // unsubscribe
+    window.addEventListener("timetable:updated", onUpdated);
+    return () => window.removeEventListener("timetable:updated", onUpdated); 
   }, [uid]);
 
   // manual impot Ai plan
   const handleManualImport = () => {
-    const events = ttGetEvents(uid); // read raw events for this user
-    const delta = aiEventsToCalendarDelta(events); // normalize & group by day
+    const events = ttGetEvents(uid); 
+    const delta = aiEventsToCalendarDelta(events); 
     if (!Object.keys(delta).length) {
       message.info("No AI plan events to import");
       return;
@@ -152,9 +152,9 @@ export default function TimeTable() {
 
   // when click date in calendar
   const handleSelectDate = (value) => {
-    setSelectedDate(value); // remember which day user clicked
-    setModalOpen(true); // open modal
-    form.resetFields(); // clear old inputs
+    setSelectedDate(value); 
+    setModalOpen(true); 
+    form.resetFields(); 
     form.setFieldsValue({ 
       type: "success", 
       // use hour/minute to avoid needing customParseFormat plugin
@@ -166,11 +166,11 @@ export default function TimeTable() {
   const handleAddTask = async () => {
     try {
       const values = await form.validateFields();
-      const key = toKey(selectedDate); // compute day bucket key
-      const newTask = { // build new task object
+      const key = toKey(selectedDate); 
+      const newTask = { 
         id: `${key}:${Date.now()}`,
         title: values.title.trim(),
-        type: values.type // "success" | "warning" | "error"
+        type: values.type 
         ,
         time: values.time ? values.time.format("HH:mm") : undefined,
         desc: values.desc?.trim() || undefined,
@@ -179,7 +179,7 @@ export default function TimeTable() {
         const prevList = prev[key] || [];
         return { ...prev, [key]: [...prevList, newTask] };
       });
-      setModalOpen(false); // close modal + toast
+      setModalOpen(false);
       message.success("Task added");
     } catch {
       /* ignore */
@@ -212,9 +212,9 @@ export default function TimeTable() {
 
   // single day cell
   const dateCellRender = (value) => {
-    const key = toKey(value); // compute the day key
-    const list = tasks[key] || []; // tasks for that day
-    if (!list.length) return null; // no tasks, keep default cell
+    const key = toKey(value); 
+    const list = tasks[key] || []; 
+    if (!list.length) return null; 
 
     return (
       <ul className="events" style={{ textAlign: "left", paddingLeft: 0, margin: 0 }}>
@@ -345,18 +345,18 @@ export default function TimeTable() {
         </Box>
         {/* add task model */}
         <Modal
-          title={`Add Task · ${toKey(selectedDate)}`} // shows the selected day as text
-          open={modalOpen} // controls visibility
-          okText="Add" // ok button text
-          onOk={handleAddTask} // click ok to add task
-          onCancel={() => setModalOpen(false)} // close without saving
+          title={`Add Task · ${toKey(selectedDate)}`} 
+          open={modalOpen} 
+          okText="Add" 
+          onOk={handleAddTask} 
+          onCancel={() => setModalOpen(false)} 
           destroyOnClose
         >
           <Form
             form={form}
-            layout="vertical" // labels om top of fields
-            requiredMark={false} // don't show red star
-            initialValues={{ type: "success" }} // default value
+            layout="vertical" 
+            requiredMark={false} 
+            initialValues={{ type: "success" }} 
           >
             {/* title */}
             <Form.Item
