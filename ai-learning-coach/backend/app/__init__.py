@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from flask import Flask
 from flask_cors import CORS
+from flasgger import Swagger
 from dotenv import load_dotenv
 import os
 
@@ -60,6 +61,29 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+
+    # Initialize Flasgger for API documentation
+    swagger = Swagger(app, template={
+        "swagger": "3.0.0",
+        "info": {
+            "title": "AI Learning Coach API",
+            "description": "Full-stack teaching platform with AI-driven grading and personalized feedback",
+            "contact": {"email": "support@ailearningcoach.com"},
+            "version": "1.0.0",
+        },
+        "host": "localhost:5001",
+        "basePath": "/",
+        "schemes": ["http", "https"],
+        "securityDefinitions": {
+            "Bearer": {
+                "type": "apiKey",
+                "name": "Authorization",
+                "in": "header",
+                "description": "JWT token with Bearer prefix"
+            }
+        }
+    })
+
     from . import models
 
     redis_client = None

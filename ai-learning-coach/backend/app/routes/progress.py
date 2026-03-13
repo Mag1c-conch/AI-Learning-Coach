@@ -103,6 +103,43 @@ def normalize_items(payload):
 @bp.route("/study/<int:student_id>/<int:course_id>", methods=["GET"])
 @jwt_required()
 def get_study_progress(student_id, course_id):
+    """
+    Get student's learning progress for a course
+    ---
+    tags:
+      - Progress
+    parameters:
+      - name: student_id
+        in: path
+        type: integer
+        required: true
+      - name: course_id
+        in: path
+        type: integer
+        required: true
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Student progress for the course
+        schema:
+          type: object
+          properties:
+            student_id:
+              type: integer
+            course_id:
+              type: integer
+            overall_percent:
+              type: integer
+            items:
+              type: array
+      401:
+        description: Unauthorized
+      403:
+        description: Students can only view their own progress
+      404:
+        description: Student, course not found or student not enrolled
+    """
     student = pick_student(student_id)
     course = Course.query.get_or_404(course_id)
     ensure_enrolled(course.id, student.id)

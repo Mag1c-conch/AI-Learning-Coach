@@ -77,6 +77,42 @@ def ensure_student_enrolled(course_id, student_id):
 
 @bp.route("", methods=["GET"])
 def list_materials():
+    """
+    List course materials (optionally filter by course)
+    ---
+    tags:
+      - Materials
+    parameters:
+      - name: course_id
+        in: query
+        type: integer
+        description: Filter by course ID
+      - name: include_submissions
+        in: query
+        type: string
+        enum: ["true", "false"]
+        description: Include student submissions
+    responses:
+      200:
+        description: List of materials
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              course_id:
+                type: integer
+              file_name:
+                type: string
+              file_type:
+                type: string
+              uploaded_at:
+                type: string
+      404:
+        description: Course not found
+    """
 
     course_id = request.args.get("course_id", type=int)
     include_submissions = request.args.get("include_submissions", "false").lower() in {"true", "1", "yes"}
@@ -118,6 +154,52 @@ def list_materials():
 # upload new material to a course (only admin)
 @bp.route("", methods=["POST"])
 def upload_material():
+    """
+    Upload material/file to a course (admin only)
+    ---
+    tags:
+      - Materials
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: file
+        in: formData
+        type: file
+        required: true
+        description: File to upload
+      - name: course_id
+        in: formData
+        type: integer
+        required: true
+      - name: uploaded_by
+        in: formData
+        type: integer
+        required: true
+      - name: file_type
+        in: formData
+        type: string
+        enum: ["assignment", "quiz", "lab", "lecture_slide", "learning_material", "practice"]
+      - name: custom_name
+        in: formData
+        type: string
+      - name: assignment_id
+        in: formData
+        type: integer
+      - name: week_number
+        in: formData
+        type: integer
+    responses:
+      201:
+        description: Material uploaded successfully
+      400:
+        description: Missing file or invalid parameters
+      403:
+        description: User is not administrator
+      404:
+        description: Course, user, or assignment not found
+      500:
+        description: Upload failed
+    """
 
     if "file" not in request.files:
         abort(400, description="No file part in the request")
