@@ -9,6 +9,41 @@ bp = Blueprint("feedback", __name__, url_prefix="/feedback")
 
 @bp.route("", methods=["POST"])
 def create_feedback():
+    """
+    Create feedback from teacher to student
+    ---
+    tags:
+      - Feedback
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            teacher_id:
+              type: integer
+            student_id:
+              type: integer
+            course_id:
+              type: integer
+              description: Optional course context
+            content:
+              type: string
+          required:
+            - teacher_id
+            - student_id
+            - content
+    responses:
+      201:
+        description: Feedback created successfully
+      400:
+        description: Invalid parameters or empty content
+      403:
+        description: User is not a teacher or teacher doesn't own course
+      404:
+        description: Teacher, student or course not found
+    """
 
     data = request.get_json(silent=True)
     if data is None:
@@ -68,6 +103,34 @@ def create_feedback():
 
 @bp.route("", methods=["GET"])
 def list_feedback():
+    """
+    List feedback (filter by teacher, student, or course)
+    ---
+    tags:
+      - Feedback
+    parameters:
+      - name: teacher_id
+        in: query
+        type: integer
+      - name: student_id
+        in: query
+        type: integer
+      - name: course_id
+        in: query
+        type: integer
+      - name: include_related
+        in: query
+        type: string
+        enum: ["true", "false"]
+      - name: limit
+        in: query
+        type: integer
+    responses:
+      200:
+        description: List of feedback entries
+      400:
+        description: At least one filter parameter required
+    """
 
     query = Feedback.query
 
@@ -104,6 +167,39 @@ def list_feedback():
 
 @bp.route("/<int:feedback_id>/read", methods=["PATCH"])
 def mark_feedback_read(feedback_id):
+    """
+    Mark feedback as read or unread
+    ---
+    tags:
+      - Feedback
+    parameters:
+      - name: feedback_id
+        in: path
+        type: integer
+        required: true
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            student_id:
+              type: integer
+            is_read:
+              type: boolean
+              default: true
+          required:
+            - student_id
+    responses:
+      200:
+        description: Feedback status updated
+      400:
+        description: student_id required
+      403:
+        description: Can only update your own feedback
+      404:
+        description: Feedback not found
+    """
 
     data = request.get_json(silent=True)
     if data is None:
@@ -149,6 +245,30 @@ def mark_feedback_read(feedback_id):
 
 @bp.route("/<int:feedback_id>", methods=["DELETE"])
 def delete_feedback(feedback_id):
+    """
+    Delete feedback
+    ---
+    tags:
+      - Feedback
+    parameters:
+      - name: feedback_id
+        in: path
+        type: integer
+        required: true
+      - name: student_id
+        in: query
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Feedback deleted successfully
+      400:
+        description: student_id required
+      403:
+        description: Can only delete your own feedback
+      404:
+        description: Feedback not found
+    """
 
     student_id = request.args.get("student_id", type=int)
     if not student_id:

@@ -6,6 +6,60 @@ bp=Blueprint('course', __name__, url_prefix='/courses')
 # Create a new course (only admin)
 @bp.route("",methods=['POST'])
 def create_course():
+    """
+    Create a new course (admin only)
+    ---
+    tags:
+      - Courses
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            course_name:
+              type: string
+              example: "Introduction to Computer Science"
+            course_code:
+              type: string
+              example: "COMP101"
+            description:
+              type: string
+              example: "Foundational concepts of CS"
+            image_url:
+              type: string
+              example: "https://example.com/image.jpg"
+            created_by:
+              type: integer
+              example: 1
+          required:
+            - course_name
+            - course_code
+            - created_by
+    responses:
+      201:
+        description: Course created successfully
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            code:
+              type: string
+            description:
+              type: string
+      400:
+        description: Missing required fields
+      403:
+        description: User is not an administrator
+      409:
+        description: Course code already exists
+      500:
+        description: Internal server error
+    """
     data=request.json
     course_name=data.get('course_name')
     course_code=data.get('course_code')
@@ -95,6 +149,44 @@ def build_course_payload(course):
 # list all courses
 @bp.route("", methods=['GET'])
 def list_courses():
+    """
+    List all courses (optionally filter by creator)
+    ---
+    tags:
+      - Courses
+    parameters:
+      - name: created_by
+        in: query
+        type: integer
+        required: false
+        description: Filter by course creator (admin) ID
+    responses:
+      200:
+        description: List of courses
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              code:
+                type: string
+              description:
+                type: string
+              creator_name:
+                type: string
+              student_count:
+                type: integer
+      400:
+        description: Invalid created_by parameter
+      403:
+        description: created_by must reference an administrator
+      404:
+        description: Creator not found
+    """
     created_by_param = request.args.get("created_by")
 
     query = Course.query
@@ -116,6 +208,41 @@ def list_courses():
 # Enroll a student in a course
 @bp.route("/<int:course_id>/enroll",methods=['POST'])
 def enroll_student(course_id):
+    """
+    Enroll a student in a course
+    ---
+    tags:
+      - Courses
+    parameters:
+      - name: course_id
+        in: path
+        type: integer
+        required: true
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            student_id:
+              type: integer
+              example: 2
+          required:
+            - student_id
+    responses:
+      201:
+        description: Student enrolled successfully
+      400:
+        description: Missing student_id
+      403:
+        description: User is not a student
+      404:
+        description: Course or student not found
+      409:
+        description: Student already enrolled in this course
+      500:
+        description: Internal server error
+    """
     data=request.json
     student_id=data.get('student_id')
     # validate input
@@ -177,6 +304,37 @@ def give_extra_points(course_id):
 # Get course details
 @bp.route("/<int:course_id>", methods=["GET"])
 def get_course(course_id):
+    """
+    Get course details by ID
+    ---
+    tags:
+      - Courses
+    parameters:
+      - name: course_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Course details
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            code:
+              type: string
+            description:
+              type: string
+            creator_name:
+              type: string
+            student_count:
+              type: integer
+      404:
+        description: Course not found
+    """
     course = Course.query.get_or_404(course_id)
     data = course.to_dict()
     creator = User.query.get(course.created_by) if course.created_by else None

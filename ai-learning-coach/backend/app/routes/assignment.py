@@ -17,6 +17,37 @@ def ensure_student_enrolled(course_id, student_id):
 
 @bp.route("", methods=["GET"])
 def list_assignments():
+    """
+    List assignments (optionally filter by course)
+    ---
+    tags:
+      - Assignments
+    parameters:
+      - name: course_id
+        in: query
+        type: integer
+        description: Filter by course ID
+    responses:
+      200:
+        description: List of assignments
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              title:
+                type: string
+              description:
+                type: string
+              due_date:
+                type: string
+              course_id:
+                type: integer
+      404:
+        description: Course not found (if course_id provided)
+    """
     course_id = request.args.get("course_id", type=int)
 
     query = Assignment.query
@@ -31,6 +62,51 @@ def list_assignments():
 @bp.route("", methods=["POST"])
 @jwt_required(optional=True)
 def create_assignment():
+    """
+    Create a new assignment (admin only)
+    ---
+    tags:
+      - Assignments
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            course_id:
+              type: integer
+            title:
+              type: string
+            description:
+              type: string
+            due_date:
+              type: string
+              format: date-time
+              example: "2025-12-31T23:59:59"
+            teacher_id:
+              type: integer
+            optional:
+              type: boolean
+              default: false
+          required:
+            - course_id
+            - title
+            - description
+            - due_date
+            - teacher_id
+    responses:
+      201:
+        description: Assignment created successfully
+      400:
+        description: Missing required fields or invalid date format
+      403:
+        description: User is not an administrator or doesn't own course
+      404:
+        description: Course or teacher not found
+      500:
+        description: Internal server error
+    """
     data = request.get_json(silent=True) or {}
 
     course_id = data.get("course_id")
@@ -73,6 +149,49 @@ def create_assignment():
 @bp.route("/<int:assignment_id>/grades", methods=["POST"])
 @jwt_required(optional=True)
 def upsert_assignment_grade(assignment_id):
+    """
+    Create or update assignment grade for a student
+    ---
+    tags:
+      - Assignments
+    parameters:
+      - name: assignment_id
+        in: path
+        type: integer
+        required: true
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            teacher_id:
+              type: integer
+            student_id:
+              type: integer
+            score:
+              type: number
+              example: 85.5
+            comment:
+              type: string
+          required:
+            - teacher_id
+            - student_id
+            - score
+    responses:
+      201:
+        description: Grade created
+      200:
+        description: Grade updated
+      400:
+        description: Invalid parameters
+      403:
+        description: User doesn't own this assignment or student is not a student
+      404:
+        description: Assignment, teacher, or student not found
+      500:
+        description: Internal server error
+    """
 
     assignment = Assignment.query.get_or_404(assignment_id)
 
@@ -150,6 +269,53 @@ def upsert_assignment_grade(assignment_id):
 @bp.route("/<int:assignment_id>/grades", methods=["GET"])
 @jwt_required(optional=True)
 def list_assignment_grades(assignment_id):
+    """
+    List grades for an assignment
+    ---
+    tags:
+      - Assignments
+    parameters:
+      - name: assignment_id
+        in: path
+        type: integer
+        required: true
+      - name: viewer_id
+        in: query
+        type: integer
+      - name: student_id
+        in: query
+        type: integer
+        description: Filter by student (teachers only)
+      - name: include_related
+        in: query
+        type: string
+        enum: ["true", "false"]
+        description: Include related user and assignment data
+    responses:
+      200:
+        description: List of grades
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              student_id:
+                type: integer
+              score:
+                type: number
+              comment:
+                type: string
+              graded_at:
+                type: string
+      401:
+        description: Authentication required
+      403:
+        description: Insufficient permissions
+      404:
+        description: Assignment not found
+    """
 
     assignment = Assignment.query.get_or_404(assignment_id)
 

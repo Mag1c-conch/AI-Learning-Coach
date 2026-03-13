@@ -44,6 +44,59 @@ _STUDY_PLAN_PROMPT_TEMPLATE = (
 @bp.route("/assistant/chat", methods=["POST", "OPTIONS"])
 @jwt_required(optional=True)
 def chat():
+    """
+    AI assistant multi-turn chat
+    ---
+    tags:
+      - AI Assistant
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            messages:
+              type: array
+              items:
+                type: object
+                properties:
+                  role:
+                    type: string
+                    enum: ["user", "model"]
+                  content:
+                    type: string
+            conversation_id:
+              type: integer
+              description: "Continue existing conversation; if null, create new"
+            user_id:
+              type: integer
+            conversation_title:
+              type: string
+              description: "Title for new conversation"
+    responses:
+      200:
+        description: Chat response
+        schema:
+          type: object
+          properties:
+            text:
+              type: string
+            conversation_id:
+              type: integer
+            messages:
+              type: array
+      400:
+        description: Invalid request
+      401:
+        description: Authentication required
+      403:
+        description: Forbidden - conversation access denied
+      404:
+        description: Conversation not found
+      500:
+        description: Internal server error
+    """
     if request.method == "OPTIONS":
         return "", 200
 
@@ -105,6 +158,37 @@ def chat():
 @bp.route("/assistant/conversations", methods=["GET"])
 @jwt_required(optional=True)
 def list_conversations():
+    """
+    List all conversations for a user
+    ---
+    tags:
+      - AI Assistant
+    parameters:
+      - name: user_id
+        in: query
+        type: integer
+        description: User ID (uses JWT if not provided)
+      - name: limit
+        in: query
+        type: integer
+        description: Maximum number of conversations to return
+      - name: include_messages
+        in: query
+        type: string
+        enum: ["true", "false"]
+        description: Include message history
+      - name: message_limit
+        in: query
+        type: integer
+        description: Maximum messages per conversation
+    responses:
+      200:
+        description: List of conversations
+      401:
+        description: Authentication required
+      403:
+        description: Forbidden
+    """
     user_id_param = request.args.get("user_id", type=int)
     user = resolve_user(user_id_param, allow_token=True, require=True)
     user_id = user.id
@@ -124,6 +208,30 @@ def list_conversations():
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["GET"])
 @jwt_required(optional=True)
 def get_conversation(conversation_id):
+    """
+    Get a specific conversation with message history
+    ---
+    tags:
+      - AI Assistant
+    parameters:
+      - name: conversation_id
+        in: path
+        type: integer
+        required: true
+      - name: message_limit
+        in: query
+        type: integer
+        description: Maximum messages to return
+    responses:
+      200:
+        description: Conversation with message history
+      401:
+        description: Authentication required
+      403:
+        description: Forbidden - conversation access denied
+      404:
+        description: Conversation not found
+    """
     user_id_param = request.args.get("user_id", type=int)
     message_limit = request.args.get("message_limit", type=int)
 
@@ -143,6 +251,30 @@ def get_conversation(conversation_id):
 @bp.route("/assistant/conversations/<int:conversation_id>", methods=["DELETE"])
 @jwt_required(optional=True)
 def delete_conversation_route(conversation_id):
+    """
+    Delete a conversation
+    ---
+    tags:
+      - AI Assistant
+    parameters:
+      - name: conversation_id
+        in: path
+        type: integer
+        required: true
+      - name: user_id
+        in: query
+        type: integer
+        description: User ID (uses JWT if not provided)
+    responses:
+      200:
+        description: Conversation deleted successfully
+      401:
+        description: Authentication required
+      403:
+        description: Forbidden
+      404:
+        description: Conversation not found
+    """
     user_id_param = request.args.get("user_id", type=int)
     user = resolve_user(user_id_param, allow_token=True, require=True)
 
@@ -173,6 +305,53 @@ def parse_json_reply(text):
 @bp.route("/assistant/grade_submission", methods=["POST"])
 @jwt_required(optional=True)
 def grade_submission():
+    """
+    AI auto-grading for student assignment submission
+    ---
+    tags:
+      - AI Assistant
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            material_id:
+              type: integer
+              example: 1
+            teacher_id:
+              type: integer
+              example: 1
+            rubric:
+              type: string
+              example: "Grading rubric: Clarity (10%), Correctness (50%), Completeness (20%), Creativity (20%)"
+            instructions:
+              type: string
+              example: "Additional grading instructions"
+            max_score:
+              type: integer
+              default: 100
+              example: 100
+          required:
+            - material_id
+    responses:
+      200:
+        description: AI grading result
+        schema:
+          type: object
+          properties:
+            score:
+              type: number
+            feedback:
+              type: string
+            suggestions:
+              type: string
+      400:
+        description: Invalid parameters
+      500:
+        description: Grading failed
+    """
     data = request.get_json(silent=True) or {}
 
     material_id_raw = data.get("material_id")

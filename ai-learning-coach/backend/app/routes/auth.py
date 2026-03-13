@@ -11,6 +11,63 @@ bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 @bp.route("/register", methods=["POST"])
 def register():
+    """
+    User registration (student or admin)
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            first_name:
+              type: string
+              example: "John"
+            last_name:
+              type: string
+              example: "Doe"
+            username:
+              type: string
+              example: "john.doe@example.com"
+            password:
+              type: string
+              example: "securePassword123"
+            role:
+              type: string
+              enum: ["student", "admin"]
+              example: "student"
+          required:
+            - first_name
+            - last_name
+            - username
+            - password
+            - role
+    responses:
+      201:
+        description: User registered successfully
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+            token:
+              type: string
+            username:
+              type: string
+            first_name:
+              type: string
+            last_name:
+              type: string
+            role:
+              type: string
+      400:
+        description: Bad request - missing fields or user already exists
+      500:
+        description: Internal server error
+    """
     try:
         data = request.get_json(silent=True) or {}
 
@@ -81,6 +138,55 @@ def register():
 
 @bp.route("/login", methods=["POST"])
 def login():
+    """
+    User login
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            username:
+              type: string
+              example: "john.doe@example.com"
+            password:
+              type: string
+              example: "securePassword123"
+            role:
+              type: string
+              enum: ["student", "admin"]
+              example: "student"
+          required:
+            - username
+            - password
+            - role
+    responses:
+      200:
+        description: Login successful
+        schema:
+          type: object
+          properties:
+            token:
+              type: string
+            id:
+              type: integer
+            username:
+              type: string
+            first_name:
+              type: string
+            last_name:
+              type: string
+            role:
+              type: string
+      400:
+        description: Bad request - missing fields or invalid role
+      401:
+        description: Invalid credentials
+    """
     data = request.get_json(silent=True) or {}
     username = data.get("username")
     role_str = data.get("role")
@@ -125,6 +231,32 @@ def login():
 @bp.route("/me", methods=["GET"])
 @jwt_required()
 def me():
+    """
+    Get current user information
+    ---
+    tags:
+      - Authentication
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Current user information
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+            first_name:
+              type: string
+            last_name:
+              type: string
+            role:
+              type: string
+      401:
+        description: Unauthorized - invalid or missing JWT token
+    """
     user = current_user_from_token()
     payload = {
         "id": user.id,
