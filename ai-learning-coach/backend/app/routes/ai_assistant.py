@@ -10,6 +10,8 @@ from ..services import chat_storage
 from ..services.assistant import read_material_text, process_assistant_request
 from ..services.ai import generate_reply
 from ..auth_utils import resolve_user
+from ..services.vector_store import get_chroma_adapter
+from ..services.intent_router import route_request, IntentType
 
 bp = Blueprint("ai_assistant", __name__)
 
@@ -139,6 +141,38 @@ def chat():
                 raise ValueError("latest message must be from user with non-empty content")
             chat_storage.append_message(conversation_id, role, content)
             prompt_messages.append({"role": role, "content": content})
+
+        # Intent routing: automatically detect user intent and apply RAG if applicable
+        user_text = latest_user_message.get("content", "") if latest_user_message else ""
+        explicit_rag = data.get("use_rag")  # Explicit override if provided
+        
+        routing_result = route_request(user_text, enable_rag=True)
+        intent_type = routing_result["intent_type"]
+        use_rag = explicit_rag if explicit_rag is not None else routing_result["use_rag"]
+        
+        # Apply intent-specific system prompt
+        if routing_result["system_prompt"] and prompt_messages:
+            prompt_messages.insert(0, {
+                "role": "system",
+                "content": routing_result["system_prompt"]
+            })
+        
+        # Perform RAG retrieval if enabled for this intent
+        if use_rag and latest_user_message:
+            try:
+                rag_top_k = int(data.get("rag_top_k", 5))
+            except (TypeError, ValueError):
+                rag_top_k = 5
+            try:
+                adapter = get_chroma_adapter()
+                resp = adapter.query(user_text, top_k=rag_top_k)
+                docs = resp.get("documents") or []
+                if docs:
+                    retrieved_text = "\n\n--- Retrieved course materials: ---\n" + "\n\n".join(docs)
+                    prompt_messages.append({"role": "user", "content": retrieved_text})
+                    current_app.logger.debug("RAG retrieval returned %d documents for intent: %s", len(docs), routing_result["intent"])
+            except Exception as exc:
+                current_app.logger.warning("RAG retrieval failed (intent=%s): %s", routing_result["intent"], exc)
 
         result = process_assistant_request(prompt_messages)
         reply_text = result.get("text")
@@ -423,6 +457,24 @@ def grade_submission():
     submission_block = f"Student submission (truncated to 4000 chars):\n{submission_text}"
 
     user_message = f"{grading_context}\n\n{submission_block}"
+    # Optional RAG: include retrieved docs to provide evidence/context for grading
+    use_rag = bool(data.get("use_rag", False))
+    if use_rag:
+        try:
+            rag_top_k = int(data.get("rag_top_k", 5))
+        except (TypeError, ValueError):
+            rag_top_k = 5
+        try:
+            adapter = get_chroma_adapter()
+            # use rubric + submission text as the retrieval query to surface relevant materials
+            query_text = "".join([rubric or "", "\n\n", submission_text])
+            resp = adapter.query(query_text, top_k=rag_top_k)
+            docs = resp.get("documents") or []
+            if docs:
+                retrieved_text = "\n\n--- Retrieved relevant documents (RAG) ---\n" + "\n\n".join(docs)
+                user_message = f"{grading_context}\n\n{retrieved_text}\n\n{submission_block}"
+        except Exception as exc:
+            current_app.logger.warning("RAG retrieval for grading failed: %s", exc)
 
     system_prompt = (
         "Grade the submission using the details provided. Reply with JSON only, no markdown, using this shape:\n"

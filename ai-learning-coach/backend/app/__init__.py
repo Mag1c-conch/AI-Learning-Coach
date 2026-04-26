@@ -43,6 +43,10 @@ def create_app():
     app.config["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY", "")
     app.config["GEMINI_MODEL"] = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     app.config["CHAT_HISTORY_TTL"] = int(os.getenv("CHAT_HISTORY_TTL", 60 * 60 * 24 * 7))
+    # RAG / Vector DB defaults
+    app.config["CHROMA_DB_DIR"] = os.getenv("CHROMA_DB_DIR", os.path.join(instance_dir, "chroma_db"))
+    app.config["EMBEDDING_PROVIDER"] = os.getenv("EMBEDDING_PROVIDER", "sentence-transformers")
+    app.config["EMBEDDING_MODEL"] = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
     # JWT / auth configuration
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
@@ -61,6 +65,12 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+
+    # ensure chroma directory exists for local persistence
+    try:
+        os.makedirs(app.config.get("CHROMA_DB_DIR", os.path.join(instance_dir, "chroma_db")), exist_ok=True)
+    except Exception:
+        app.logger.warning("Could not create CHROMA_DB_DIR: %s", app.config.get("CHROMA_DB_DIR"))
 
     # Initialize Flasgger for API documentation
     swagger = Swagger(app, template={

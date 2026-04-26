@@ -9,6 +9,7 @@ services:
     environment:
       - FLASK_ENV=production
       - DATABASE_URL=sqlite:////app/instance/app.db
+      - CHROMA_DB_DIR=/app/instance/chroma_db
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
@@ -16,6 +17,7 @@ services:
       - SKIP_DB_CREATE_ALL=0
     volumes:
       - ./backend/instance:/app/instance
+      - ./backend/instance/chroma_db:/app/instance/chroma_db
       - ./backend/migrations:/app/migrations
     restart: unless-stopped
     healthcheck:
